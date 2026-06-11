@@ -13,7 +13,6 @@ export const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,79 +66,27 @@ export const LoginScreen: React.FC = () => {
       <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-r from-amber-500/10 to-orange-550/0 blur-[130px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-l from-indigo-500/10 to-purple-550/0 blur-[130px] pointer-events-none" />
 
-      {/* Grid Alignment */}
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch z-10 relative">
-        
-        {/* Left Card: Beautiful Splash / Info Inspired by Premium Videography */}
-        <div className="md:col-span-5 bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 border border-zinc-800/80 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden">
-          {/* Subtle color grade stripe */}
-          <div className="absolute top-0 inset-x-0 color-grade-stripe" />
-          
-          <div className="space-y-6 pt-4">
-            <div className="relative inline-flex p-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl">
-              <Aperture className="w-6 h-6 text-amber-400 rotate-45" />
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
-            
-            <div>
-              <span className="text-[10px] uppercase font-mono font-black tracking-[0.25em] text-amber-450 block">
-                CREATIVE STUDIO SUITE
-              </span>
-              <h1 className="text-xl sm:text-2xl font-black text-white mt-1 tracking-tight">
-                PHOTO CREW ERP
-              </h1>
-              <p className="text-xs text-zinc-300 mt-2 leading-relaxed">
-                A secure, premium workspace handling customer enquiries, crew schedule cards, drone operator dispatch, post-production pipelines, and master ledger clearances.
-              </p>
-            </div>
+      {/* Unified Centered Layout Container */}
+      <div className="max-w-xl w-full flex flex-col gap-6 z-10 relative">
 
-            <div className="border-t border-zinc-850 pt-5 space-y-4">
-              <span className="text-[10px] uppercase font-mono font-black tracking-widest text-zinc-400 block">
-                CAMERA RANGE STAGES //
-              </span>
-              <ul className="space-y-3.5 text-xs text-zinc-400">
-                <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold mt-0.5">•</span>
-                  <span><strong>Focal State Gateways:</strong> Distinct role desks for sales, operations, editing and finance.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold mt-0.5">•</span>
-                  <span><strong>Capture Audit Ledger:</strong> Real-time logging of customer contracts and raw footage ingests.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold mt-0.5">•</span>
-                  <span><strong>Stability Confirmed:</strong> Integrated sandbox with pre-loaded leads, payments, and timeline logs.</span>
-                </li>
-              </ul>
-            </div>
+        {/* Branding Header to preserve aesthetic styling and identity */}
+        <div className="text-center space-y-3 mb-2">
+          <div className="relative inline-flex p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
+            <Aperture className="w-7 h-7 text-amber-400 rotate-45" />
+            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
-
-          <div className="mt-8 border-t border-zinc-850/80 pt-4 flex items-center justify-between">
-            <span className="text-[10px] text-zinc-500 font-mono tracking-wider">SECURE NODE // v3.4</span>
-            <button 
-              onClick={() => {
-                if (confirmReset) {
-                  resetAllData();
-                  setConfirmReset(false);
-                } else {
-                  setConfirmReset(true);
-                }
-              }}
-              onMouseLeave={() => setConfirmReset(false)}
-              className={`text-[10px] font-mono font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                confirmReset
-                  ? 'text-amber-400 bg-amber-500/20 border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                  : 'text-zinc-400 hover:text-amber-400 bg-zinc-950 border-zinc-900 hover:border-zinc-800'
-              }`}
-            >
-              <Hammer className="w-3.5 h-3.5 text-amber-500" />
-              <span>{confirmReset ? 'Confirm Reset Sandbox?' : 'Hard Reset Sandbox'}</span>
-            </button>
+          <div>
+            <span className="text-[10px] uppercase font-mono font-black tracking-[0.25em] text-amber-400 block">
+              CREATIVE STUDIO SUITE
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black text-white mt-1 tracking-tight">
+              PHOTO CREW ERP
+            </h1>
           </div>
         </div>
-
-        {/* Right Card: Login Card & Demo Directory */}
-        <div className="md:col-span-7 flex flex-col gap-5">
+        
+        {/* Login Card & Demo Directory */}
+        <div className="flex flex-col gap-5">
           
           {/* Main Log in Box */}
           <div className="bg-zinc-900/40 backdrop-blur-md border border-zinc-900 rounded-3xl p-6 sm:p-8 shadow-2xl relative">
