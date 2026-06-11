@@ -1,0 +1,6 @@
+{
+  "name": "Photo Crew ERP",
+  "description": "An end-to-end ERP system for professional photography and videography crews, featuring lead follow-up, operations tracking, production pipelines, payments, and a detailed CEO dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
