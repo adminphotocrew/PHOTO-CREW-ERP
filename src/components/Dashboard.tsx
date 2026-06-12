@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRole } from './RoleContext';
 import { 
   Users, Calendar, FileText, CheckCircle, Landmark, TrendingUp, AlertCircle, Clock, ShieldAlert, Sparkles, Filter, Sliders, ChevronRight
 } from 'lucide-react';
 import { CurrentStage } from '../types';
 import { formatINR, formatTime12Hour } from '../utils';
+import { ProjectDetailModal } from './ProjectDetailModal';
+import { AppLogo } from './AppLogo';
 
 export const Dashboard: React.FC = () => {
-  const { leads, orders, production, payments, logs } = useRole();
+  const { leads, orders, production, payments, logs, operations, rawFootage } = useRole();
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  const handleOpenDetailModal = (orderId: string) => {
+    setSelectedProjectId(orderId);
+    setIsDetailModalOpen(true);
+  };
 
   // 1. Total Leads
   const totalLeads = leads.length;
@@ -81,9 +91,12 @@ export const Dashboard: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
             </div>
             
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white font-sans uppercase flex items-center gap-2">
-              Studio Executive Console
-            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <AppLogo size="sm" showTextOnFallback={false} className="self-start sm:self-auto" />
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white font-sans uppercase flex items-center gap-2">
+                Studio Executive Console
+              </h1>
+            </div>
             
             <p className="text-xs text-zinc-400 max-w-2xl leading-relaxed">
               Real-time analytics engine tracking inbound wedding & event leads, live camera squads, editing pipelines, and secure ledger balance clearance.
@@ -407,6 +420,142 @@ export const Dashboard: React.FC = () => {
         </div>
 
       </div>
+
+
+      {/* ALL PROJECTS MASTER WORKFLOW LEDGER */}
+      <div className="bg-zinc-900/40 rounded-xl border border-zinc-900 shadow-xl overflow-hidden shadow-2xl">
+        <div className="p-4 border-b border-zinc-900 bg-zinc-900/60 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></div>
+            <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-widest font-mono">
+              ALL DEPARTMENTS MASTER WORKFLOW PIPELINE
+            </h3>
+          </div>
+          <span className="text-[9.5px] bg-zinc-950 text-amber-400 px-3 py-1 rounded font-mono border border-zinc-850 tracking-widest font-medium">
+            OWNER_OVERSIGHT // LIVE FEED
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="bg-zinc-950/80 text-zinc-400 font-bold border-b border-zinc-900 text-[10px] uppercase font-mono tracking-wider">
+                <th className="p-3 pl-5">Order ID</th>
+                <th className="p-3">Customer & Package</th>
+                <th className="p-3">current stage</th>
+                <th className="p-3">Ops / Crew Assignments</th>
+                <th className="p-3">Post-production edits</th>
+                <th className="p-3">billings status</th>
+                <th className="p-3">Revenue (₹)</th>
+                <th className="p-3 text-right pr-5">action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-900/60 font-sans text-zinc-300">
+              {orders.map((order) => {
+                const operation = operations?.find(op => op.order_id === order.order_id);
+                const footage = rawFootage?.find(f => f.order_id === order.order_id);
+                const prd = footage ? production.find(p => p.tracking_id === footage.tracking_id) : undefined;
+                const payment = payments.find(py => py.order_id === order.order_id);
+
+                return (
+                  <tr key={order.order_id} className="hover:bg-zinc-900/35 transition-all">
+                    {/* Order ID */}
+                    <td className="p-3 pl-5 font-mono text-[11px] text-zinc-400 font-bold">
+                      {order.order_id}
+                    </td>
+
+                    {/* Customer & Package */}
+                    <td className="p-3">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-zinc-150 text-[13px]">{order.customer_name}</span>
+                        <span className="text-[10px] text-amber-500 font-mono tracking-wide">{order.package_name || 'Shoot'}</span>
+                        <span className="text-[9px] text-zinc-550 font-mono">Date: {order.event_date}</span>
+                      </div>
+                    </td>
+
+                    {/* Current Stage */}
+                    <td className="p-3 font-mono">
+                      <span className="px-2 py-0.5 rounded text-[9.5px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        {order.current_stage}
+                      </span>
+                    </td>
+
+                    {/* Crew Assignments */}
+                    <td className="p-3 font-mono text-[10px]">
+                      {operation ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-zinc-400"><strong className="text-zinc-500">Photo:</strong> {operation.photographer_assigned || 'Unassigned'}</span>
+                          <span className="text-zinc-400"><strong className="text-zinc-500">Video:</strong> {operation.videographer_assigned || 'Unassigned'}</span>
+                          <span className="text-emerald-450 font-semibold">{operation.event_status || 'Scheduled'}</span>
+                        </div>
+                      ) : (
+                        <span className="text-rose-500/70 italic text-[10px]">Roster Pending</span>
+                      )}
+                    </td>
+
+                    {/* Post production edits */}
+                    <td className="p-3 font-mono text-[10px]">
+                      {prd ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-zinc-400"><strong className="text-zinc-500">Editor:</strong> {prd.editor_assigned || 'Unassigned'}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase w-fit ${
+                            prd.editing_status === 'Delivered' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/10' :
+                            'bg-indigo-500/15 text-indigo-400 border border-indigo-500/10'
+                          }`}>
+                            {prd.editing_status || 'Pending'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-550 italic text-[10px]">Post Gated</span>
+                      )}
+                    </td>
+
+                    {/* Billing Status */}
+                    <td className="p-3 font-mono">
+                      {payment ? (
+                        <div className="flex flex-col text-[10px]">
+                          <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-black w-fit uppercase ${
+                            payment.payment_status === 'Fully Paid' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}>
+                            {payment.payment_status}
+                          </span>
+                          <span className="text-[10px] text-rose-455 font-bold mt-0.5">Due: {formatINR(payment.balance_due)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-650 italic">N/A</span>
+                      )}
+                    </td>
+
+                    {/* Revenue */}
+                    <td className="p-3 font-mono text-zinc-100 font-extrabold text-[12px]">
+                      {formatINR(order.quotation_amount)}
+                    </td>
+
+                    {/* Action button */}
+                    <td className="p-3 text-right pr-5">
+                      <button
+                        onClick={() => handleOpenDetailModal(order.order_id)}
+                        className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-900 text-amber-400 hover:text-white border border-zinc-850 hover:border-zinc-700 font-bold rounded text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                      >
+                        <span>Open Dossier</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <ProjectDetailModal 
+        isOpen={isDetailModalOpen} 
+        onClose={() => setIsDetailModalOpen(false)} 
+        orderId={selectedProjectId} 
+      />
 
       {/* Audit Log Overview */}
       <div className="bg-zinc-900/40 rounded-xl border border-zinc-900 shadow-xl overflow-hidden">

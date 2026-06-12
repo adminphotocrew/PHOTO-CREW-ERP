@@ -18,6 +18,10 @@ DROP TABLE IF EXISTS public.production CASCADE;
 DROP TABLE IF EXISTS public.raw_footage CASCADE;
 DROP TABLE IF EXISTS public.operations CASCADE;
 DROP TABLE IF EXISTS public.orders CASCADE;
+DROP TABLE IF EXISTS public.follow_ups CASCADE;
+DROP TABLE IF EXISTS public.quotations CASCADE;
+DROP TABLE IF EXISTS public.notifications CASCADE;
+DROP TABLE IF EXISTS public.analytics_snapshots CASCADE;
 DROP TABLE IF EXISTS public.leads CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
 
@@ -63,6 +67,36 @@ CREATE TABLE public.leads (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- FOLLOW-UPS TABLE (Granular Follow-Up Interactions Tracking list)
+CREATE TABLE public.follow_ups (
+    follow_up_id VARCHAR(50) PRIMARY KEY,
+    lead_id VARCHAR(50) NOT NULL REFERENCES public.leads(lead_id) ON DELETE CASCADE,
+    follow_up_status VARCHAR(50) NOT NULL CHECK (follow_up_status IN ('Pending', 'Completed', 'Scheduled')),
+    follow_up_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    next_follow_up_date DATE,
+    call_notes TEXT,
+    negotiation_notes TEXT,
+    conducted_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- QUOTATIONS TABLE (Granular Proposed Prices/Packages Tracking details)
+CREATE TABLE public.quotations (
+    quotation_id VARCHAR(50) PRIMARY KEY,
+    lead_id VARCHAR(50) NOT NULL REFERENCES public.leads(lead_id) ON DELETE CASCADE,
+    quotation_number VARCHAR(100) UNIQUE NOT NULL,
+    quotation_amount NUMERIC NOT NULL CHECK (quotation_amount >= 0),
+    discount_amount NUMERIC NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+    tax_amount NUMERIC NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
+    final_amount NUMERIC NOT NULL CHECK (final_amount >= 0),
+    quotation_status VARCHAR(50) NOT NULL CHECK (quotation_status IN ('Draft', 'Sent', 'Approved', 'Rejected', 'Expired')),
+    valid_until DATE,
+    terms_conditions TEXT,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ORDERS TABLE
 CREATE TABLE public.orders (
     order_id VARCHAR(50) PRIMARY KEY,
@@ -80,7 +114,7 @@ CREATE TABLE public.orders (
     order_status VARCHAR(50) NOT NULL CHECK (order_status IN ('Confirmed', 'Completed', 'Delivered', 'Paid', 'Closed')),
     current_stage VARCHAR(50) NOT NULL CHECK (current_stage IN (
         'New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 
-        'Operations Assigned', 'Event Completed', 'Raw Footage Received', 
+        'Operations Assigned', 'Event Scheduled', 'Event Completed', 'Raw Footage Received', 
         'Editing Started', 'Customer Review', 'Approved', 'Delivered', 
         'Payment Pending', 'Closed'
     )),
@@ -157,9 +191,41 @@ CREATE TABLE public.activity_logs (
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- NOTIFICATIONS TABLE (ERP Internal System Notifications and Alerts)
+CREATE TABLE public.notifications (
+    notification_id VARCHAR(50) PRIMARY KEY,
+    recipient_role VARCHAR(50) NOT NULL CHECK (recipient_role IN ('Business Owner', 'Sales Team', 'Operations Team', 'Production Team', 'All')),
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    action_url VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    user_id VARCHAR(100),
+    project_id VARCHAR(100),
+    task_id VARCHAR(100),
+    notification_type VARCHAR(100),
+    read_status BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- ANALYTICS TABLE (Consolidated Business Metric Performance Snapshots)
+CREATE TABLE public.analytics_snapshots (
+    snapshot_id VARCHAR(50) PRIMARY KEY,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    lead_count INTEGER NOT NULL DEFAULT 0,
+    active_order_count INTEGER NOT NULL DEFAULT 0,
+    total_revenue NUMERIC NOT NULL DEFAULT 0 CHECK (total_revenue >= 0),
+    pending_payments NUMERIC NOT NULL DEFAULT 0 CHECK (pending_payments >= 0),
+    conversion_rate NUMERIC DEFAULT 0,
+    ops_completed_count INTEGER DEFAULT 0,
+    production_pending_count INTEGER DEFAULT 0,
+    created_by VARCHAR(255) DEFAULT 'System'
+);
+
 -- 3. CREATE PERFORMANCE OPTIMIZING INDEXES
 CREATE INDEX idx_leads_status ON public.leads(status);
 CREATE INDEX idx_leads_event_date ON public.leads(event_date);
+CREATE INDEX idx_follow_ups_lead_id ON public.follow_ups(lead_id);
+CREATE INDEX idx_quotations_lead_id ON public.quotations(lead_id);
 CREATE INDEX idx_orders_lead_id ON public.orders(lead_id);
 CREATE INDEX idx_orders_current_stage ON public.orders(current_stage);
 CREATE INDEX idx_operations_order_id ON public.operations(order_id);
@@ -169,6 +235,8 @@ CREATE INDEX idx_payments_order_id ON public.payments(order_id);
 CREATE INDEX idx_activity_logs_timestamp ON public.activity_logs(timestamp DESC);
 CREATE INDEX idx_users_username ON public.users(username);
 CREATE INDEX idx_users_role ON public.users(role);
+CREATE INDEX idx_notifications_recipient_role ON public.notifications(recipient_role);
+CREATE INDEX idx_analytics_snapshots_recorded_at ON public.analytics_snapshots(recorded_at DESC);
 
 
 -- 4. UTILITY FUNCTION FOR ROLE DETERMINATION
@@ -182,12 +250,16 @@ $$ LANGUAGE sql SECURITY DEFINER;
 -- 5. ENABLE ROW LEVEL SECURITY (RLS) ON ALL TABLES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.follow_ups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quotations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.raw_footage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.analytics_snapshots ENABLE ROW LEVEL SECURITY;
 
 
 -- 6. GENERATE SECURE RLS POLICIES FOR SECURING ROLE-BASED ACCESS
@@ -211,80 +283,95 @@ CREATE POLICY anon_insert_users_policy ON public.users
     FOR INSERT WITH CHECK (true);
 
 -- B. LEADS POLICIES
-DROP POLICY IF EXISTS owner_leads_all ON public.leads;
-DROP POLICY IF EXISTS sales_leads_all ON public.leads;
 DROP POLICY IF EXISTS leads_select_policy ON public.leads;
-DROP POLICY IF EXISTS leads_write_policy ON public.leads;
-
 CREATE POLICY leads_select_policy ON public.leads
     FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team', 'Operations Team'));
+
+DROP POLICY IF EXISTS leads_write_policy ON public.leads;
 CREATE POLICY leads_write_policy ON public.leads
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
 
--- C. ORDERS POLICIES
-DROP POLICY IF EXISTS owner_orders_all ON public.orders;
-DROP POLICY IF EXISTS sales_orders_all ON public.orders;
-DROP POLICY IF EXISTS ops_orders_read ON public.orders;
-DROP POLICY IF EXISTS orders_select_policy ON public.orders;
-DROP POLICY IF EXISTS orders_write_policy ON public.orders;
+-- C. FOLLOW-UPS POLICIES
+DROP POLICY IF EXISTS follow_ups_select_policy ON public.follow_ups;
+CREATE POLICY follow_ups_select_policy ON public.follow_ups
+    FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team', 'Operations Team'));
 
+DROP POLICY IF EXISTS follow_ups_write_policy ON public.follow_ups;
+CREATE POLICY follow_ups_write_policy ON public.follow_ups
+    FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
+
+-- D. QUOTATIONS POLICIES
+DROP POLICY IF EXISTS quotations_select_policy ON public.quotations;
+CREATE POLICY quotations_select_policy ON public.quotations
+    FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team', 'Operations Team'));
+
+DROP POLICY IF EXISTS quotations_write_policy ON public.quotations;
+CREATE POLICY quotations_write_policy ON public.quotations
+    FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
+
+-- E. ORDERS POLICIES
+DROP POLICY IF EXISTS orders_select_policy ON public.orders;
 CREATE POLICY orders_select_policy ON public.orders
     FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team', 'Operations Team', 'Production Team'));
+
+DROP POLICY IF EXISTS orders_write_policy ON public.orders;
 CREATE POLICY orders_write_policy ON public.orders
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
 
--- D. OPERATIONS POLICIES
-DROP POLICY IF EXISTS owner_operations_all ON public.operations;
-DROP POLICY IF EXISTS ops_operations_all ON public.operations;
+-- F. OPERATIONS POLICIES
 DROP POLICY IF EXISTS operations_select_policy ON public.operations;
-DROP POLICY IF EXISTS operations_write_policy ON public.operations;
-
 CREATE POLICY operations_select_policy ON public.operations
     FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team', 'Sales Team'));
+
+DROP POLICY IF EXISTS operations_write_policy ON public.operations;
 CREATE POLICY operations_write_policy ON public.operations
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team'));
 
--- E. RAW FOOTAGE POLICIES
-DROP POLICY IF EXISTS owner_raw_footage_all ON public.raw_footage;
-DROP POLICY IF EXISTS ops_raw_footage_all ON public.raw_footage;
-DROP POLICY IF EXISTS prod_raw_footage_read ON public.raw_footage;
+-- G. RAW FOOTAGE POLICIES
 DROP POLICY IF EXISTS raw_footage_select_policy ON public.raw_footage;
-DROP POLICY IF EXISTS raw_footage_write_policy ON public.raw_footage;
-
 CREATE POLICY raw_footage_select_policy ON public.raw_footage
     FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team', 'Production Team'));
+
+DROP POLICY IF EXISTS raw_footage_write_policy ON public.raw_footage;
 CREATE POLICY raw_footage_write_policy ON public.raw_footage
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team'));
 
--- F. PRODUCTION POLICIES
-DROP POLICY IF EXISTS owner_production_all ON public.production;
-DROP POLICY IF EXISTS prod_production_all ON public.production;
+-- H. PRODUCTION POLICIES
 DROP POLICY IF EXISTS production_select_policy ON public.production;
-DROP POLICY IF EXISTS production_write_policy ON public.production;
-
 CREATE POLICY production_select_policy ON public.production
     FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Production Team', 'Operations Team', 'Sales Team'));
+
+DROP POLICY IF EXISTS production_write_policy ON public.production;
 CREATE POLICY production_write_policy ON public.production
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Production Team'));
 
--- G. PAYMENTS POLICIES
-DROP POLICY IF EXISTS owner_payments_all ON public.payments;
-DROP POLICY IF EXISTS sales_payments_all ON public.payments;
+-- I. PAYMENTS POLICIES
 DROP POLICY IF EXISTS payments_select_policy ON public.payments;
-DROP POLICY IF EXISTS payments_write_policy ON public.payments;
-
 CREATE POLICY payments_select_policy ON public.payments
     FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
+
+DROP POLICY IF EXISTS payments_write_policy ON public.payments;
 CREATE POLICY payments_write_policy ON public.payments
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
 
--- H. ACTIVITY LOGS POLICIES
-DROP POLICY IF EXISTS owner_activity_logs_all ON public.activity_logs;
-DROP POLICY IF EXISTS auth_activity_logs_insert ON public.activity_logs;
+-- J. ACTIVITY LOGS POLICIES
 DROP POLICY IF EXISTS activity_logs_all_policy ON public.activity_logs;
-
 CREATE POLICY activity_logs_all_policy ON public.activity_logs
     FOR ALL USING (true);
+
+-- K. NOTIFICATIONS POLICIES
+DROP POLICY IF EXISTS notifications_all_policy ON public.notifications;
+CREATE POLICY notifications_all_policy ON public.notifications
+    FOR ALL USING (true);
+
+-- L. ANALYTICS POLICIES
+DROP POLICY IF EXISTS analytics_select_policy ON public.analytics_snapshots;
+CREATE POLICY analytics_select_policy ON public.analytics_snapshots
+    FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team', 'Operations Team'));
+
+DROP POLICY IF EXISTS analytics_write_policy ON public.analytics_snapshots;
+CREATE POLICY analytics_write_policy ON public.analytics_snapshots
+    FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner'));
 
 
 -- 7. SUPABASE PROFILE SYNCING TRIGGER, REALTIME PUBLICATION, AND AUTOMATED CHANGE AUDITING LOGGERS
@@ -308,7 +395,9 @@ BEGIN
     name = EXCLUDED.name,
     mobile = EXCLUDED.mobile,
     role = EXCLUDED.role,
-    active = EXCLUDED.active;
+    active = EXCLUDED.active,
+    username = EXCLUDED.username,
+    password = EXCLUDED.password;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -357,6 +446,10 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'production' THEN v_record_id := NEW.production_id;
         ELSIF TG_TABLE_NAME = 'payments' THEN v_record_id := NEW.payment_id;
         ELSIF TG_TABLE_NAME = 'users' THEN v_record_id := NEW.id::text;
+        ELSIF TG_TABLE_NAME = 'follow_ups' THEN v_record_id := NEW.follow_up_id;
+        ELSIF TG_TABLE_NAME = 'quotations' THEN v_record_id := NEW.quotation_id;
+        ELSIF TG_TABLE_NAME = 'notifications' THEN v_record_id := NEW.notification_id;
+        ELSIF TG_TABLE_NAME = 'analytics_snapshots' THEN v_record_id := NEW.snapshot_id;
         ELSE v_record_id := 'UNKNOWN';
         END IF;
     ELSIF (TG_OP = 'UPDATE') THEN
@@ -368,6 +461,10 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'production' THEN v_record_id := OLD.production_id;
         ELSIF TG_TABLE_NAME = 'payments' THEN v_record_id := OLD.payment_id;
         ELSIF TG_TABLE_NAME = 'users' THEN v_record_id := OLD.id::text;
+        ELSIF TG_TABLE_NAME = 'follow_ups' THEN v_record_id := OLD.follow_up_id;
+        ELSIF TG_TABLE_NAME = 'quotations' THEN v_record_id := OLD.quotation_id;
+        ELSIF TG_TABLE_NAME = 'notifications' THEN v_record_id := OLD.notification_id;
+        ELSIF TG_TABLE_NAME = 'analytics_snapshots' THEN v_record_id := OLD.snapshot_id;
         ELSE v_record_id := 'UNKNOWN';
         END IF;
     ELSIF (TG_OP = 'DELETE') THEN
@@ -379,6 +476,10 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'production' THEN v_record_id := OLD.production_id;
         ELSIF TG_TABLE_NAME = 'payments' THEN v_record_id := OLD.payment_id;
         ELSIF TG_TABLE_NAME = 'users' THEN v_record_id := OLD.id::text;
+        ELSIF TG_TABLE_NAME = 'follow_ups' THEN v_record_id := OLD.follow_up_id;
+        ELSIF TG_TABLE_NAME = 'quotations' THEN v_record_id := OLD.quotation_id;
+        ELSIF TG_TABLE_NAME = 'notifications' THEN v_record_id := OLD.notification_id;
+        ELSIF TG_TABLE_NAME = 'analytics_snapshots' THEN v_record_id := OLD.snapshot_id;
         ELSE v_record_id := 'UNKNOWN';
         END IF;
     END IF;
@@ -403,6 +504,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 DROP TRIGGER IF EXISTS audit_leads ON public.leads;
 CREATE TRIGGER audit_leads AFTER INSERT OR UPDATE OR DELETE ON public.leads FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
 
+DROP TRIGGER IF EXISTS audit_follow_ups ON public.follow_ups;
+CREATE TRIGGER audit_follow_ups AFTER INSERT OR UPDATE OR DELETE ON public.follow_ups FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
+
+DROP TRIGGER IF EXISTS audit_quotations ON public.quotations;
+CREATE TRIGGER audit_quotations AFTER INSERT OR UPDATE OR DELETE ON public.quotations FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
+
 DROP TRIGGER IF EXISTS audit_orders ON public.orders;
 CREATE TRIGGER audit_orders AFTER INSERT OR UPDATE OR DELETE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
 
@@ -420,6 +527,12 @@ CREATE TRIGGER audit_payments AFTER INSERT OR UPDATE OR DELETE ON public.payment
 
 DROP TRIGGER IF EXISTS audit_users ON public.users;
 CREATE TRIGGER audit_users AFTER INSERT OR UPDATE OR DELETE ON public.users FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
+
+DROP TRIGGER IF EXISTS audit_notifications ON public.notifications;
+CREATE TRIGGER audit_notifications AFTER INSERT OR UPDATE OR DELETE ON public.notifications FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
+
+DROP TRIGGER IF EXISTS audit_analytics_snapshots ON public.analytics_snapshots;
+CREATE TRIGGER audit_analytics_snapshots AFTER INSERT OR UPDATE OR DELETE ON public.analytics_snapshots FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
 
 
 -- 8. SEED MOCK DEMO VALUES
@@ -439,6 +552,18 @@ INSERT INTO public.leads (lead_id, created_date, lead_source, customer_name, mob
 ('LD-9010', '2026-04-28', 'Referral', 'Bruce Wayne', '+1 (555) 911-3948', 'bruce@waynecorp.com', 'Charity Elite Gala', '2026-05-18', '19:00:00', 'Wayne Manor Ball Room', 20000, 'Sarah Jenkins', 'Delivered', 'Delivered final albums and prints. Payment pending confirmation.', 'Sarah Jenkins'),
 ('LD-9011', '2026-04-10', 'Website Form', 'Gerd Muller', '+1 (555) 711-2092', 'gerd@munich.de', 'Real Estate Reel', '2026-05-02', '15:00:00', 'Beverly Hills Mansion 304', 2500, 'Sarah Jenkins', 'Closed', 'Project successfully completed, fully paid, closed and archived in system.', 'Sarah Jenkins')
 ON CONFLICT (lead_id) DO NOTHING;
+
+INSERT INTO public.follow_ups (follow_up_id, lead_id, follow_up_status, follow_up_date, next_follow_up_date, call_notes, negotiation_notes, conducted_by) VALUES
+('FLW-7001', 'LD-9002', 'Completed', '2026-06-09', '2026-06-16', 'Discussed premium pricing for corporate package. Client is reviewing other agencies.', 'Offering up to 10% volume discount for repeating bookings.', 'Sarah Jenkins'),
+('FLW-7002', 'LD-9003', 'Completed', '2026-06-05', '2026-06-12', 'Sent quote of $2100 with drone photography. Client asked for photo book sample.', 'Sample physical book being dispatched.', 'Sarah Jenkins'),
+('FLW-7003', 'LD-9004', 'Scheduled', '2026-06-11', '2026-06-15', 'Will call again to finalize budget. Negotiating between $1500 and $1800.', 'Targeting final handshake at $1650.', 'Sarah Jenkins')
+ON CONFLICT (follow_up_id) DO NOTHING;
+
+INSERT INTO public.quotations (quotation_id, lead_id, quotation_number, quotation_amount, discount_amount, tax_amount, final_amount, quotation_status, valid_until, terms_conditions, created_by) VALUES
+('QT-8001', 'LD-9003', 'QT-2026-001', 2200, 100, 105, 2205, 'Sent', '2026-07-05', '50% advance to secure event booking; balance due on draft approval.', 'Sarah Jenkins'),
+('QT-8002', 'LD-9004', 'QT-2026-002', 1800, 150, 82.5, 1732.5, 'Draft', '2026-07-12', 'Full payment terms specified on contract sign-off.', 'Sarah Jenkins'),
+('QT-8003', 'LD-9005', 'QT-2026-003', 12500, 500, 600, 12600, 'Approved', '2026-08-01', 'Standard premium destination bridal shoots contract guidelines.', 'Sarah Jenkins')
+ON CONFLICT (quotation_id) DO NOTHING;
 
 INSERT INTO public.orders (order_id, lead_id, customer_name, mobile, event_type, event_date, event_time, event_location, package_name, quotation_amount, advance_received, balance_amount, order_status, current_stage, sales_person, created_at) VALUES
 ('ORD-1005', 'LD-9005', 'Victoria & Albert', '+1 (555) 434-2211', 'Destination Wedding', '2026-09-01', '16:00:00', 'Udaipur Palace Resort', 'Royal Destination Platinum', 12500, 6250, 6250, 'Confirmed', 'Order Confirmed', 'Sarah Jenkins', '2026-06-01 10:00:00+00'),
@@ -484,6 +609,17 @@ INSERT INTO public.payments (payment_id, order_id, quotation_amount, advance_rec
 ('PAY-3011', 'ORD-1011', 2500, 2500, 0, 0, '2026-05-02', 'https://photocrew-receipts.s3.amazonaws.com/rec-31942.pdf', 'Fully Paid')
 ON CONFLICT (payment_id) DO NOTHING;
 
+INSERT INTO public.notifications (notification_id, recipient_role, title, message, is_read, action_url) VALUES
+('NTF-6001', 'Business Owner', 'New Booking Confirmed', 'The Royal Destination Wedding for Victoria & Albert has been successfully confirmed.', FALSE, '/orders'),
+('NTF-6002', 'Operations Team', 'Pre-Wedding Shoot Prepped', 'New crew requirements uploaded for Marcus Aurelius shoot at Sunrise Mountain.', FALSE, '/operations'),
+('NTF-6003', 'Production Team', 'Raw Footage Received', 'Natasha Romanoff uploaded 47GB of UHD slow-motion tunnel files.', TRUE, '/production')
+ON CONFLICT (notification_id) DO NOTHING;
+
+INSERT INTO public.analytics_snapshots (snapshot_id, lead_count, active_order_count, total_revenue, pending_payments, conversion_rate, ops_completed_count, production_pending_count, created_by) VALUES
+('ANL-2026-W22', 11, 7, 65900, 36250, 63.6, 5, 2, 'Rupand Das'),
+('ANL-2026-W23', 12, 7, 72500, 39500, 65.5, 6, 1, 'Rupand Das')
+ON CONFLICT (snapshot_id) DO NOTHING;
+
 INSERT INTO public.activity_logs (log_id, user_name, role, action, module, record_id, timestamp) VALUES
 ('LOG-001', 'Sarah Jenkins', 'Sales Team', 'Created New Lead', 'Sales', 'LD-9001', '2026-06-10 05:00:00+00'),
 ('LOG-002', 'Sarah Jenkins', 'Sales Team', 'Updated Follow-Up Status', 'Sales', 'LD-9002', '2026-06-09 14:30:00+00'),
@@ -491,6 +627,44 @@ INSERT INTO public.activity_logs (log_id, user_name, role, action, module, recor
 ('LOG-004', 'Emily Watson', 'Production Team', 'Started Editing Project', 'Production', 'PRD-4008', '2026-06-05 09:30:00+00'),
 ('LOG-005', 'Rupand Das', 'Business Owner', 'Reviewed CEO Dashboard', 'Admin', 'ALL', '2026-06-10 05:05:00+00')
 ON CONFLICT (log_id) DO NOTHING;
+
+-- Production Staff Management Table
+CREATE TABLE IF NOT EXISTS public.production_staff (
+    staff_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    mobile VARCHAR(50) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(100) NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive')),
+    joining_date DATE NOT NULL,
+    profile_photo TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS for production_staff
+ALTER TABLE public.production_staff ENABLE ROW LEVEL SECURITY;
+
+-- Select policy: Business Owner and Production Team can view staff
+CREATE POLICY select_production_staff_policy ON public.production_staff
+    FOR SELECT TO authenticated
+    USING (TRUE);
+
+-- Write policy: Business Owner and Production Team can write/delete staff
+CREATE POLICY write_production_staff_policy ON public.production_staff
+    FOR ALL TO authenticated
+    USING (TRUE)
+    WITH CHECK (TRUE);
+
+-- Seed production_staff
+INSERT INTO public.production_staff (staff_id, name, mobile, email, role, department, status, joining_date, profile_photo, notes) VALUES
+('STF-001', 'Emily Watson', '+1 (555) 234-5678', 'emily@photocrew.com', 'Production Manager', 'Management', 'Active', '2025-01-10', '', 'Orchestrates chief editing operations and delivery workflows.'),
+('STF-002', 'Alan Cole', '+1 (555) 876-5432', 'alan@photocrew.com', 'Senior Editor', 'Editing', 'Active', '2025-03-15', '', 'Specialist in cinematic narration and commercial overlays.'),
+('STF-003', 'Sarah Connor', '+1 (555) 456-7890', 'sarah.c@photocrew.com', 'Color Grading Artist', 'Post-Production', 'Active', '2025-06-01', '', 'Expert in DaVinci Resolve color pipelines and HDR calibration.'),
+('STF-004', 'Dennis Nedry', '+1 (555) 304-9021', 'dennis@photocrew.com', 'VFX & Motion Graphics Designer', 'Design', 'Active', '2025-09-12', '', 'Handles high-fidelity typography animation.'),
+('STF-005', 'Jimmy Woo', '+1 (555) 607-1122', 'jimmy@photocrew.com', 'Delivery Coordinator', 'Operations', 'Active', '2026-02-20', '', 'Manages physical and cloud master releases.')
+ON CONFLICT (staff_id) DO NOTHING;
 
 COMMIT;
 -- =========================================================================

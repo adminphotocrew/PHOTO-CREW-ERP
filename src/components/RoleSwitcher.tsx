@@ -2,10 +2,19 @@ import React, { useState } from 'react';
 import { useRole } from './RoleContext';
 import { Aperture, UserCircle, RefreshCw, LogOut, Film, Shield } from 'lucide-react';
 import { UserRole } from '../types';
+import { AppLogo } from './AppLogo';
 
 export const RoleSwitcher: React.FC = () => {
-  const { currentRole, currentUser, logout, resetAllData } = useRole();
-  const [confirmReset, setConfirmReset] = useState(false);
+  const { currentRole, currentUser, logout, refreshData } = useRole();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    refreshData();
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 600);
+  };
 
   if (!currentUser) return null;
 
@@ -41,16 +50,8 @@ export const RoleSwitcher: React.FC = () => {
         
         {/* Left Side: Stunning Studio Logo & Active Login Context */}
         <div className="flex items-center gap-3.5">
-          <div className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <div className="relative p-2.5 bg-zinc-955 rounded-xl border border-zinc-800 flex items-center justify-center bg-black">
-              <Aperture className="w-5.5 h-5.5 text-amber-400 animate-[spin_60s_linear_infinite]" />
-            </div>
-            {/* Viewfinder crosshairs */}
-            <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-amber-400/50" />
-            <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-amber-400/50" />
-            <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-b border-l border-amber-400/50" />
-            <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-amber-400/50" />
+          <div className="flex items-center justify-center">
+            <AppLogo size="sm" showTextOnFallback={false} />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -78,8 +79,19 @@ export const RoleSwitcher: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Side: Secure Sign-out */}
-        <div className="flex items-center justify-end gap-3.5">
+        {/* Right Side: Secure Actions */}
+        <div className="flex items-center justify-end gap-3">
+          {/* Refresh Data */}
+          <button
+            id="btn_refresh_data_header"
+            onClick={handleRefresh}
+            className="flex items-center gap-2 px-4 py-1.5 text-[11px] font-bold transition-all duration-200 cursor-pointer shadow-md rounded-xl bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/35"
+            title="Refresh Displayed Data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-450 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+
           {/* Log out */}
           <button
             id="btn_logout"

@@ -4,6 +4,7 @@ import {
   Users, Briefcase, Camera, Video, Compass, HelpCircle, HardDrive, Clock, Clipboard, FileCheck, CheckCircle, Ban
 } from 'lucide-react';
 import { Order, CurrentStage } from '../types';
+import { ProjectDetailModal } from './ProjectDetailModal';
 
 export const OperationsModule: React.FC = () => {
   const { currentRole, orders, operations, assignOperations, markEventCompleted, confirmRawFootageReceived } = useRole();
@@ -14,6 +15,8 @@ export const OperationsModule: React.FC = () => {
   // Toggle selected order
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [formStage, setFormStage] = useState<CurrentStage>('Order Confirmed');
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [masterOrderIdForDetail, setMasterOrderIdForDetail] = useState<string | null>(null);
 
   // Assignment Form State
   const [form, setForm] = useState({
@@ -253,9 +256,19 @@ export const OperationsModule: React.FC = () => {
                       <span className="text-[10px] bg-slate-800 px-2 py-0.5 border border-slate-700 rounded font-mono font-bold text-slate-400">
                         {order.order_id}
                       </span>
-                      <h3 className="text-sm font-bold text-slate-100 mt-2">
+                      <h3 className="text-sm font-bold text-slate-100 mt-2 font-display">
                         Crew Dispatch for {order.customer_name}
                       </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMasterOrderIdForDetail(order.order_id);
+                          setIsDetailModalOpen(true);
+                        }}
+                        className="mt-2 text-[10px] font-bold text-amber-400 hover:text-amber-300 font-mono tracking-wider flex items-center gap-1 cursor-pointer bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 rounded-lg hover:bg-amber-500/25 transition-all w-fit"
+                      >
+                        <span>📋 VIEW SEAMLESS WORKFLOW DOSSIER</span>
+                      </button>
                     </div>
                     <span className="text-xs text-slate-400">
                       Loc: <strong className="text-slate-200">{order.event_location}</strong>
@@ -514,6 +527,17 @@ export const OperationsModule: React.FC = () => {
                         <h3 className="text-sm font-bold text-slate-100 mt-2">
                           Crew Dispatch for {order.customer_name}
                         </h3>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrderId(null);
+                            setMasterOrderIdForDetail(order.order_id);
+                            setIsDetailModalOpen(true);
+                          }}
+                          className="mt-2 text-[10px] font-bold text-amber-405 hover:text-amber-300 font-mono tracking-wider flex items-center gap-1 cursor-pointer bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 rounded-lg hover:bg-amber-500/25 transition-all w-fit"
+                        >
+                          <span>📋 VIEW SEAMLESS WORKFLOW DOSSIER</span>
+                        </button>
                       </div>
                       <span className="text-xs text-slate-400">
                         Loc: <strong className="text-slate-205">{order.event_location}</strong>
@@ -754,6 +778,12 @@ export const OperationsModule: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ProjectDetailModal 
+        isOpen={isDetailModalOpen} 
+        onClose={() => setIsDetailModalOpen(false)} 
+        orderId={masterOrderIdForDetail} 
+      />
 
     </div>
   );

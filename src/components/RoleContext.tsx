@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Lead, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus } from '../types';
+import { User, Lead, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS } from '../data';
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
 
@@ -19,6 +19,13 @@ interface RoleContextType {
   production: Production[];
   payments: Payment[];
   logs: ActivityLog[];
+  staff: Staff[];
+  addStaff: (member: Omit<Staff, 'staff_id'>) => Promise<void>;
+  updateStaff: (staffId: string, updates: Partial<Staff>) => Promise<void>;
+  deleteStaff: (staffId: string) => Promise<void>;
+  notifications: Notification[];
+  addNotification: (payload: Omit<Notification, 'notification_id' | 'created_at' | 'read_status'> & { notification_id?: string; read_status?: boolean }) => Promise<void>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
   
   // Master flow operations
   addLead: (lead: Omit<Lead, 'lead_id' | 'status' | 'created_by' | 'sales_person' | 'created_date'>) => string;
@@ -98,6 +105,88 @@ const mapFromDbUserId = (uuid: string): string => {
   return uuid;
 };
 
+const mapNotificationFromDb = (notif: any): Notification => {
+  let user_id = notif.user_id;
+  let project_id = notif.project_id;
+  let task_id = notif.task_id;
+  let notification_type = notif.notification_type || 'System Notification';
+  let read_status = notif.read_status !== undefined ? notif.read_status : notif.is_read;
+
+  if (notif.action_url && notif.action_url.startsWith('extra:')) {
+    try {
+      const extraData = JSON.parse(notif.action_url.substring(6));
+      user_id = extraData.user_id || user_id;
+      project_id = extraData.project_id || project_id;
+      task_id = extraData.task_id || task_id;
+      notification_type = extraData.notification_type || notification_type;
+      if (extraData.read_status !== undefined) {
+        read_status = extraData.read_status;
+      }
+    } catch (e) {
+      console.error("Failed to parse extra notification info:", e);
+    }
+  }
+
+  return {
+    notification_id: notif.notification_id,
+    user_id,
+    project_id,
+    task_id,
+    notification_type,
+    title: notif.title,
+    message: notif.message,
+    read_status: !!read_status,
+    is_read: !!read_status,
+    created_at: notif.created_at,
+    recipient_role: notif.recipient_role
+  };
+};
+
+const saveNotificationToSupabase = async (notif: Notification) => {
+  if (!supabaseClient) return;
+  
+  const payload = {
+    notification_id: notif.notification_id,
+    recipient_role: notif.recipient_role || 'All',
+    title: notif.title,
+    message: notif.message,
+    is_read: notif.read_status,
+    user_id: notif.user_id,
+    project_id: notif.project_id,
+    task_id: notif.task_id,
+    notification_type: notif.notification_type,
+    read_status: notif.read_status,
+    created_at: notif.created_at || new Date().toISOString()
+  };
+
+  const { error } = await supabaseClient.from('notifications').insert(payload);
+  
+  if (error) {
+    console.warn("Failed inserting notification with all fields, trying fallback:", error);
+    const encodedExtra = JSON.stringify({
+      user_id: notif.user_id,
+      project_id: notif.project_id,
+      task_id: notif.task_id,
+      notification_type: notif.notification_type,
+      read_status: notif.read_status
+    });
+    
+    const fallbackPayload = {
+      notification_id: notif.notification_id,
+      recipient_role: notif.recipient_role || 'All',
+      title: notif.title,
+      message: notif.message,
+      is_read: notif.read_status,
+      action_url: `extra:${encodedExtra}`
+    };
+    
+    const { error: fallbackError } = await supabaseClient.from('notifications').insert(fallbackPayload);
+    if (fallbackError) {
+      console.error("Fallback insert failed too:", fallbackError);
+    }
+  }
+};
+
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialize state arrays as empty so data is always loaded directly from Supabase (the single source of truth) without relying on cached or stale demo data
   const [users, setUsers] = useState<User[]>([]);
@@ -122,6 +211,76 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [production, setProduction] = useState<Production[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [staff, setStaff] = useState<Staff[]>(() => {
+    const saved = localStorage.getItem('erp_production_staff');
+    return saved ? JSON.parse(saved) : [
+      {
+        staff_id: 'STF-001',
+        name: 'Emily Watson',
+        mobile: '+1 (555) 234-5678',
+        email: 'emily@photocrew.com',
+        role: 'Production Manager',
+        department: 'Management',
+        status: 'Active',
+        joining_date: '2025-01-10',
+        profile_photo: '',
+        notes: 'Orchestrates chief editing operations and delivery workflows.'
+      },
+      {
+        staff_id: 'STF-002',
+        name: 'Alan Cole',
+        mobile: '+1 (555) 876-5432',
+        email: 'alan@photocrew.com',
+        role: 'Senior Editor',
+        department: 'Editing',
+        status: 'Active',
+        joining_date: '2025-03-15',
+        profile_photo: '',
+        notes: 'Specialist in cinematic narration and commercial overlays.'
+      },
+      {
+        staff_id: 'STF-003',
+        name: 'Sarah Connor',
+        mobile: '+1 (555) 456-7890',
+        email: 'sarah.c@photocrew.com',
+        role: 'Color Grading Artist',
+        department: 'Post-Production',
+        status: 'Active',
+        joining_date: '2025-06-01',
+        profile_photo: '',
+        notes: 'Expert in DaVinci Resolve color pipelines and HDR calibration.'
+      },
+      {
+        staff_id: 'STF-004',
+        name: 'Dennis Nedry',
+        mobile: '+1 (555) 304-9021',
+        email: 'dennis@photocrew.com',
+        role: 'VFX & Motion Graphics Designer',
+        department: 'Design',
+        status: 'Active',
+        joining_date: '2025-09-12',
+        profile_photo: '',
+        notes: 'Handles high-fidelity typography animation.'
+      },
+      {
+        staff_id: 'STF-005',
+        name: 'Jimmy Woo',
+        mobile: '+1 (555) 607-1122',
+        email: 'jimmy@photocrew.com',
+        role: 'Delivery Coordinator',
+        department: 'Operations',
+        status: 'Active',
+        joining_date: '2026-02-20',
+        profile_photo: '',
+        notes: 'Manages physical and cloud master releases.'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('erp_production_staff', JSON.stringify(staff));
+  }, [staff]);
 
   // Track session/auth state in localStorage to keep developer/user logged-in across refreshes
   useEffect(() => {
@@ -229,6 +388,23 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchFromDb = async () => {
     if (!supabaseClient) return;
     try {
+      const dbOperationsPromise = supabaseClient.from('operations').select('*');
+      const dbRawFootagePromise = supabaseClient.from('raw_footage').select('*');
+      const dbProductionPromise = supabaseClient.from('production').select('*');
+      const dbPaymentsPromise = supabaseClient.from('payments').select('*');
+      const dbLogsPromise = supabaseClient.from('activity_logs').select('*').order('timestamp', { ascending: false });
+      const dbStaffPromise = supabaseClient.from('production_staff').select('*').order('created_at', { ascending: false }).then(
+        (res) => res,
+        () => ({ data: null, error: null })
+      );
+      const dbNotificationsPromise = supabaseClient.from('notifications').select('*').order('created_at', { ascending: false }).then(
+        (res) => res,
+        (err) => {
+          console.warn('Could not read notifications from Supabase:', err);
+          return { data: null, error: null };
+        }
+      );
+
       const [
         { data: dbUsers, error: uErr },
         { data: dbLeads, error: ldErr },
@@ -237,16 +413,20 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { data: dbRawFootage, error: rfErr },
         { data: dbProduction, error: prodErr },
         { data: dbPayments, error: payErr },
-        { data: dbLogs, error: logErr }
+        { data: dbLogs, error: logErr },
+        staffRes,
+        notifRes
       ] = await Promise.all([
         supabaseClient.from('users').select('*'),
         supabaseClient.from('leads').select('*').order('created_date', { ascending: false }),
         supabaseClient.from('orders').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('operations').select('*'),
-        supabaseClient.from('raw_footage').select('*'),
-        supabaseClient.from('production').select('*'),
-        supabaseClient.from('payments').select('*'),
-        supabaseClient.from('activity_logs').select('*').order('timestamp', { ascending: false })
+        dbOperationsPromise,
+        dbRawFootagePromise,
+        dbProductionPromise,
+        dbPaymentsPromise,
+        dbLogsPromise,
+        dbStaffPromise,
+        dbNotificationsPromise
       ]);
 
       if (uErr || ldErr || ordErr || opErr || rfErr || prodErr || payErr || logErr) {
@@ -272,6 +452,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (dbProduction) setProduction(dbProduction as any);
       if (dbPayments) setPayments(dbPayments as any);
       if (dbLogs) setLogs(dbLogs as any);
+      if (notifRes && notifRes.data) {
+        setNotifications(notifRes.data.map(mapNotificationFromDb));
+      }
+      if (staffRes && staffRes.data && staffRes.data.length > 0) {
+        setStaff(staffRes.data);
+      }
 
       updateDiagnosticMetric('read', 'ok');
       updateDiagnosticMetric('connection', 'connected');
@@ -295,7 +481,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { table: 'raw_footage', key: 'tracking_id', setter: setRawFootage },
       { table: 'production', key: 'production_id', setter: setProduction },
       { table: 'payments', key: 'payment_id', setter: setPayments },
-      { table: 'activity_logs', key: 'log_id', setter: setLogs }
+      { table: 'production_staff', key: 'staff_id', setter: setStaff },
+      { table: 'activity_logs', key: 'log_id', setter: setLogs },
+      { table: 'notifications', key: 'notification_id', setter: setNotifications }
     ].map(({ table, key, setter }) => {
       return supabaseClient
         .channel(`rt-${table}`)
@@ -307,7 +495,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (payload.eventType === 'INSERT') {
               setter((prev: any[]) => {
                 const item = payload.new;
-                const mappedItem = table === 'users' ? { ...item, id: mapFromDbUserId(item.id) } : item;
+                let mappedItem = table === 'users' ? { ...item, id: mapFromDbUserId(item.id) } : item;
+                if (table === 'notifications') {
+                  mappedItem = mapNotificationFromDb(item);
+                }
                 const exists = prev.some(x => x[key] === mappedItem[key]);
                 if (exists) return prev;
                 return [mappedItem, ...prev];
@@ -315,7 +506,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else if (payload.eventType === 'UPDATE') {
               setter((prev: any[]) => {
                 const item = payload.new;
-                const mappedItem = table === 'users' ? { ...item, id: mapFromDbUserId(item.id) } : item;
+                let mappedItem = table === 'users' ? { ...item, id: mapFromDbUserId(item.id) } : item;
+                if (table === 'notifications') {
+                  mappedItem = mapNotificationFromDb(item);
+                }
                 return prev.map(x => (x[key] === mappedItem[key] ? mappedItem : x));
               });
             } else if (payload.eventType === 'DELETE') {
@@ -340,6 +534,99 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       channels.forEach(ch => supabaseClient.removeChannel(ch));
     };
   }, []);
+
+  const runAutomatedChecks = async () => {
+    if (production.length === 0) return;
+    
+    const localTime = new Date();
+    const todayStr = localTime.toISOString().split('T')[0];
+    const tomorrow = new Date(localTime);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    for (const prod of production) {
+      if (prod.editing_status === 'Delivered') continue;
+
+      const rf = rawFootage.find((f) => f.tracking_id === prod.tracking_id);
+      const linkedOrder = rf ? orders.find((o) => o.order_id === rf.order_id) : undefined;
+      const orderName = linkedOrder?.package_name || 'Project';
+      const oId = linkedOrder?.order_id || '';
+
+      // Check expected_delivery_date
+      if (prod.expected_delivery_date) {
+        if (prod.expected_delivery_date === todayStr) {
+          const notifId = `NTF-DUE-TODAY-${prod.production_id}-${todayStr}`;
+          const exists = notifications.some(n => n.notification_id === notifId);
+          if (!exists) {
+            await addNotification({
+              notification_id: notifId,
+              user_id: prod.editor_assigned,
+              project_id: prod.production_id,
+              task_id: 'Editing',
+              notification_type: 'Due Date Alert',
+              title: 'Task Due Today',
+              message: `The project "${orderName}" (Order: ${oId}) is due today!`,
+              recipient_role: 'Production Team'
+            });
+          }
+        } else if (prod.expected_delivery_date === tomorrowStr) {
+          const notifId = `NTF-DUE-TOMORROW-${prod.production_id}-${tomorrowStr}`;
+          const exists = notifications.some(n => n.notification_id === notifId);
+          if (!exists) {
+            await addNotification({
+              notification_id: notifId,
+              user_id: prod.editor_assigned,
+              project_id: prod.production_id,
+              task_id: 'Editing',
+              notification_type: 'Due Date Alert',
+              title: 'Task Due Tomorrow',
+              message: `Project "${orderName}" (Order: ${oId}) editing is due tomorrow.`,
+              recipient_role: 'Production Team'
+            });
+          }
+        } else if (prod.expected_delivery_date < todayStr) {
+          const notifId = `NTF-OVERDUE-${prod.production_id}-${todayStr}`;
+          const exists = notifications.some(n => n.notification_id === notifId);
+          if (!exists) {
+            await addNotification({
+              notification_id: notifId,
+              user_id: prod.editor_assigned,
+              project_id: prod.production_id,
+              task_id: 'Editing',
+              notification_type: 'Due Date Alert',
+              title: 'Task Overdue / Delivery Crossed',
+              message: `Project "${orderName}" (Order: ${oId}) expected delivery date (${prod.expected_delivery_date}) was crossed!`,
+              recipient_role: 'All'
+            });
+          }
+        }
+      }
+
+      // Check pending customer review
+      if (prod.customer_review_status === 'Pending Review') {
+        const notifId = `NTF-PENDING-REV-${prod.production_id}-${todayStr}`;
+        const exists = notifications.some(n => n.notification_id === notifId);
+        if (!exists) {
+          await addNotification({
+            notification_id: notifId,
+            user_id: prod.editor_assigned,
+            project_id: prod.production_id,
+            task_id: 'Review',
+            notification_type: 'Due Date Alert',
+            title: 'Pending Customer Review',
+            message: `Project "${orderName}" (Order: ${oId}) has been pending customer review.`,
+            recipient_role: 'Operations Team'
+          });
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (production.length > 0 && notifications.length > 0) {
+      runAutomatedChecks();
+    }
+  }, [production, notifications]);
 
   // Handle auto-logout if user is deactivated
   useEffect(() => {
@@ -811,8 +1098,101 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (targetProd) {
       const rf = rawFootage.find((f) => f.tracking_id === targetProd.tracking_id);
       const linkedOrder = rf ? orders.find((o) => o.order_id === rf.order_id) : undefined;
+      const orderName = linkedOrder?.package_name || 'Project';
+      const oId = linkedOrder?.order_id || '';
+      
       if (linkedOrder) {
         previousStage = linkedOrder.current_stage;
+      }
+
+      // 1. Task Assigned & Reassigned
+      if (updates.editor_assigned && updates.editor_assigned !== 'Unassigned') {
+        const oldEditor = targetProd.editor_assigned;
+        if (!oldEditor || oldEditor === 'Unassigned' || oldEditor === '') {
+          addNotification({
+            user_id: updates.editor_assigned,
+            project_id: productionId,
+            task_id: 'Editing',
+            notification_type: 'Task Assigned',
+            title: 'Editing Task Assigned',
+            message: `A new editing task for "${orderName}" (Order: ${oId}) has been assigned to ${updates.editor_assigned}.`,
+            recipient_role: 'Production Team'
+          });
+        } else if (oldEditor !== updates.editor_assigned) {
+          addNotification({
+            user_id: updates.editor_assigned,
+            project_id: productionId,
+            task_id: 'Editing',
+            notification_type: 'Task Reassigned',
+            title: 'Editing Task Reassigned',
+            message: `Editing task for "${orderName}" (Order: ${oId}) has been reassigned from ${oldEditor} to ${updates.editor_assigned}.`,
+            recipient_role: 'Production Team'
+          });
+        }
+      }
+
+      // 2. Status Updates & Task Completed
+      if (updates.editing_status && updates.editing_status !== targetProd.editing_status) {
+        const status = updates.editing_status;
+        if (status === 'Customer Review') {
+          addNotification({
+            user_id: targetProd.editor_assigned,
+            project_id: productionId,
+            task_id: 'Editing',
+            notification_type: 'Task Completed',
+            title: 'Editing Task Completed',
+            message: `Editing completed by ${targetProd.editor_assigned || 'Editor'} for "${orderName}" (Order: ${oId}). Sent for customer review.`,
+            recipient_role: 'Operations Team'
+          });
+        } else if (status === 'Revision Required') {
+          addNotification({
+            user_id: targetProd.editor_assigned,
+            project_id: productionId,
+            task_id: 'Review',
+            notification_type: 'Revision Requested',
+            title: 'Project Revision Requested',
+            message: `Revision was requested for "${orderName}" (Order: ${oId}). Status updated to Revision Required.`,
+            recipient_role: 'Production Team'
+          });
+        } else if (status === 'Approved') {
+          addNotification({
+            user_id: targetProd.editor_assigned,
+            project_id: productionId,
+            task_id: 'Review',
+            notification_type: 'Project Approved',
+            title: 'Project Customer Approved',
+            message: `Project "${orderName}" (Order: ${oId}) was approved by the customer.`,
+            recipient_role: 'All'
+          });
+          addNotification({
+            user_id: targetProd.editor_assigned,
+            project_id: productionId,
+            task_id: 'Review',
+            notification_type: 'Task Completed',
+            title: 'Review Task Completed',
+            message: `Review completed. "${orderName}" (Order: ${oId}) was approved by the client.`,
+            recipient_role: 'Production Team'
+          });
+        } else if (status === 'Delivered') {
+          addNotification({
+            user_id: targetProd.editor_assigned,
+            project_id: productionId,
+            task_id: 'Delivery',
+            notification_type: 'Project Delivered',
+            title: 'Project Delivered to Client',
+            message: `Project "${orderName}" (Order: ${oId}) has been successfully delivered and completed.`,
+            recipient_role: 'All'
+          });
+          addNotification({
+            user_id: targetProd.editor_assigned,
+            project_id: productionId,
+            task_id: 'Delivery',
+            notification_type: 'Task Completed',
+            title: 'Delivery Task Completed',
+            message: `Delivery completed for "${orderName}" (Order: ${oId}).`,
+            recipient_role: 'Production Team'
+          });
+        }
       }
     }
 
@@ -992,6 +1372,30 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const payment = payments.find((p) => p.order_id === orderId);
     const balanceDue = payment ? payment.balance_due : 1;
     const targetStage: CurrentStage = balanceDue === 0 ? 'Closed' : 'Payment Pending';
+
+    const targetProd = production.find((p) => p.tracking_id === trackingId);
+    if (targetProd) {
+      const linkedOrder = orders.find((o) => o.order_id === orderId);
+      const orderName = linkedOrder?.package_name || 'Project';
+      addNotification({
+        user_id: targetProd.editor_assigned,
+        project_id: targetProd.production_id,
+        task_id: 'Delivery',
+        notification_type: 'Project Delivered',
+        title: 'Project Delivered to Client',
+        message: `Project "${orderName}" (Order: ${orderId}) has been successfully delivered and completed.`,
+        recipient_role: 'All'
+      });
+      addNotification({
+        user_id: targetProd.editor_assigned,
+        project_id: targetProd.production_id,
+        task_id: 'Delivery',
+        notification_type: 'Task Completed',
+        title: 'Delivery Task Completed',
+        message: `Delivery completed for "${orderName}" (Order: ${orderId}).`,
+        recipient_role: 'Production Team'
+      });
+    }
 
     // Update production status
     setProduction((prev) =>
@@ -1377,6 +1781,61 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const addStaff = async (member: Omit<Staff, "staff_id">) => {
+    const staffId = `STF-${Math.floor(100 + Math.random() * 900)}`;
+    const newStaff: Staff = {
+      ...member,
+      staff_id: staffId,
+      created_at: new Date().toISOString()
+    };
+    setStaff((prev) => [newStaff, ...prev]);
+    await pushInsert('production_staff', newStaff);
+    logActivity(`Added Staff Member: ${newStaff.name}`, 'StaffManagement', staffId);
+  };
+
+  const updateStaff = async (staffId: string, updates: Partial<Staff>) => {
+    setStaff((prev) => prev.map((s) => s.staff_id === staffId ? { ...s, ...updates } : s));
+    await pushUpdate('production_staff', 'staff_id', staffId, updates);
+    logActivity(`Updated Staff Member details: ${staffId}`, 'StaffManagement', staffId);
+  };
+
+  const deleteStaff = async (staffId: string) => {
+    setStaff((prev) => prev.filter((s) => s.staff_id !== staffId));
+    await pushDelete('production_staff', 'staff_id', staffId);
+    logActivity(`Removed Staff Member: ${staffId}`, 'StaffManagement', staffId);
+  };
+
+  const addNotification = async (payload: Omit<Notification, 'notification_id' | 'created_at' | 'read_status'> & { notification_id?: string; read_status?: boolean }) => {
+    const notification_id = payload.notification_id || `NTF-${6001 + Math.floor(Math.random() * 10000)}`;
+    const newNotif: Notification = {
+      ...payload,
+      notification_id,
+      created_at: new Date().toISOString(),
+      read_status: payload.read_status ?? false
+    };
+    
+    // Optimistic UI update
+    setNotifications((prev) => {
+      const exists = prev.some(n => n.notification_id === notification_id);
+      if (exists) return prev;
+      return [newNotif, ...prev];
+    });
+    
+    // Save to database
+    await saveNotificationToSupabase(newNotif);
+  };
+
+  const markNotificationRead = async (notificationId: string) => {
+    setNotifications((prev) => prev.map((n) => n.notification_id === notificationId ? { ...n, read_status: true, is_read: true } : n));
+    if (!supabaseClient) return;
+    
+    const { error } = await supabaseClient.from('notifications').update({ read_status: true, is_read: true }).eq('notification_id', notificationId);
+    if (error) {
+      console.warn("Failed updating notification with all fields, trying fallback:", error);
+      await supabaseClient.from('notifications').update({ is_read: true }).eq('notification_id', notificationId);
+    }
+  };
+
   return (
     <RoleContext.Provider
       value={{
@@ -1395,6 +1854,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         production,
         payments,
         logs,
+        staff,
+        addStaff,
+        updateStaff,
+        deleteStaff,
+        notifications,
+        addNotification,
+        markNotificationRead,
         addLead,
         updateLeadFollowUp,
         confirmOrder,

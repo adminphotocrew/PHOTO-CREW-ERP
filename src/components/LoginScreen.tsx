@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { createClient } from '@supabase/supabase-js';
+import { AppLogo } from './AppLogo';
 
 export const LoginScreen: React.FC = () => {
   const { login, users, resetAllData, signUpUser } = useRole();
@@ -373,9 +374,8 @@ export const LoginScreen: React.FC = () => {
 
         {/* Branding Header to preserve aesthetic styling and identity */}
         <div className="text-center space-y-3 mb-2">
-          <div className="relative inline-flex p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
-            <Aperture className="w-7 h-7 text-amber-400 rotate-45" />
-            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="relative inline-flex justify-center items-center">
+            <AppLogo size="lg" showTextOnFallback={false} />
           </div>
           <div>
             <span className="text-[10px] uppercase font-mono font-black tracking-[0.25em] text-amber-400 block">

@@ -125,6 +125,13 @@ export interface Production {
   customer_review_status?: 'Pending Review' | 'Feedback Given' | 'Approved';
   delivery_date?: string;
   remarks?: string;
+  assigned_staff?: string;
+  project_priority?: 'Low' | 'Medium' | 'High' | 'Critical';
+  raw_footage_status?: string;
+  target_delivery_date?: string;
+  actual_delivery_date?: string;
+  production_status?: 'New Project' | 'Footage Received' | 'Editor Assigned' | 'Editing Started' | 'In Progress' | 'Customer Review' | 'Revision Required' | 'Approved' | 'Delivered' | 'Closed';
+  approval_status?: string;
 }
 
 export interface Payment {
@@ -152,3 +159,32 @@ export interface ActivityLog {
   date?: string;
   time?: string;
 }
+
+export interface Staff {
+  staff_id: string;
+  name: string;
+  mobile: string;
+  email: string;
+  role: string;
+  department: string;
+  status: 'Active' | 'Inactive';
+  joining_date: string;
+  profile_photo?: string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface Notification {
+  notification_id: string;
+  user_id?: string | null;
+  project_id?: string | null;
+  task_id?: string | null;
+  notification_type: string;
+  title: string;
+  message: string;
+  read_status: boolean;
+  created_at?: string;
+  is_read?: boolean;
+  recipient_role?: string;
+}
+
