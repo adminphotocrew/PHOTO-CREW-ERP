@@ -40,6 +40,50 @@ export const INITIAL_USERS: User[] = [
     active: true,
     created_at: '2026-05-04T11:00:00Z',
     password: 'prod123'
+  },
+  {
+    id: 'U-005',
+    name: 'Demo Owner',
+    mobile: '+919999999901',
+    email: 'owner@demo.com',
+    username: 'owner',
+    role: 'Business Owner',
+    active: true,
+    created_at: '2026-06-12T00:00:00Z',
+    password: 'demo123'
+  },
+  {
+    id: 'U-006',
+    name: 'Demo Sales',
+    mobile: '+919999999902',
+    email: 'sales@demo.com',
+    username: 'sales',
+    role: 'Sales Team',
+    active: true,
+    created_at: '2026-06-12T00:00:00Z',
+    password: 'demo123'
+  },
+  {
+    id: 'U-007',
+    name: 'Demo Operations',
+    mobile: '+919999999903',
+    email: 'ops@demo.com',
+    username: 'ops',
+    role: 'Operations Team',
+    active: true,
+    created_at: '2026-06-12T00:00:00Z',
+    password: 'demo123'
+  },
+  {
+    id: 'U-008',
+    name: 'Demo Production',
+    mobile: '+919999999904',
+    email: 'prod@demo.com',
+    username: 'prod',
+    role: 'Production Team',
+    active: true,
+    created_at: '2026-06-12T00:00:00Z',
+    password: 'demo123'
   }
 ];
 

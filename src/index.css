@@ -23,6 +23,29 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Fluid responsive typography and spacing system */
+html {
+  font-size: 12.5px; /* Mobile: smaller fonts and compact spacing */
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 14px; /* Tablet: medium font sizes */
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 15.5px; /* Desktop: standard font sizes */
+  }
+}
+
+@media (min-width: 1440px) {
+  html {
+    font-size: 17px; /* Large Screens: slightly larger font sizes and spacing */
+  }
+}
+
 /* Custom premium visual elements */
 .aperture-glow {
   box-shadow: 0 0 50px -5px rgba(245, 158, 11, 0.15);

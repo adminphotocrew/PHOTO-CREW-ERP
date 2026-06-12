@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useRole } from './RoleContext';
-import { Aperture, UserCircle, RefreshCw, LogOut, Film, Shield } from 'lucide-react';
+import { Aperture, UserCircle, RefreshCw, LogOut, Film, Shield, Menu } from 'lucide-react';
 import { UserRole } from '../types';
 import { AppLogo } from './AppLogo';
 
-export const RoleSwitcher: React.FC = () => {
+interface RoleSwitcherProps {
+  sidebarOpen?: boolean;
+  setSidebarOpen?: (open: boolean) => void;
+}
+
+export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({ sidebarOpen, setSidebarOpen }) => {
   const { currentRole, currentUser, logout, refreshData } = useRole();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -50,6 +55,16 @@ export const RoleSwitcher: React.FC = () => {
         
         {/* Left Side: Stunning Studio Logo & Active Login Context */}
         <div className="flex items-center gap-3.5">
+          {setSidebarOpen && (
+            <button
+              id="header_sidebar_toggle"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 mr-1 flex items-center justify-center bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white border border-zinc-800 rounded-xl transition-all cursor-pointer shadow-md select-none"
+              title={sidebarOpen ? "Hide Navigation Sidebar" : "Show Navigation Sidebar"}
+            >
+              <Menu className="w-5 h-5 text-amber-500" />
+            </button>
+          )}
           <div className="flex items-center justify-center">
             <AppLogo size="sm" showTextOnFallback={false} />
           </div>

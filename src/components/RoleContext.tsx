@@ -443,7 +443,30 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (dbUsers) {
-        setUsers(dbUsers.map(u => ({ ...u, id: mapFromDbUserId(u.id) })));
+        // Ensure standard demo accounts always exist in Supabase for convenient tests
+        const demoEmails = ['owner@demo.com', 'sales@demo.com', 'ops@demo.com', 'prod@demo.com'];
+        const existingEmails = dbUsers.map(u => u.email.toLowerCase());
+        const missingDemos = INITIAL_USERS.filter(u => demoEmails.includes(u.email) && !existingEmails.includes(u.email));
+        
+        if (missingDemos.length > 0) {
+          console.log('Detected missing demo accounts, seeding them into Supabase...');
+          for (const u of missingDemos) {
+            await supabaseClient.from('users').upsert({
+              ...u,
+              id: mapToDbUserId(u.id),
+              username: u.username || u.email.split('@')[0]
+            });
+          }
+          // Fetch users again to keep state synced cleanly
+          const { data: refreshedUsers } = await supabaseClient.from('users').select('*');
+          if (refreshedUsers) {
+            setUsers(refreshedUsers.map(u => ({ ...u, id: mapFromDbUserId(u.id) })));
+          } else {
+            setUsers(dbUsers.map(u => ({ ...u, id: mapFromDbUserId(u.id) })));
+          }
+        } else {
+          setUsers(dbUsers.map(u => ({ ...u, id: mapFromDbUserId(u.id) })));
+        }
       }
       if (dbLeads) setLeads(dbLeads);
       if (dbOrders) setOrders(dbOrders as any);
