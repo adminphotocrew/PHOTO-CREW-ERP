@@ -171,6 +171,10 @@ export interface Staff {
   joining_date: string;
   profile_photo?: string;
   notes?: string;
+  phone?: string;
+  commission_rate?: number;
+  rating?: number;
+  bio?: string;
   created_at?: string;
 }
 
@@ -187,4 +191,19 @@ export interface Notification {
   is_read?: boolean;
   recipient_role?: string;
 }
+
+export interface Equipment {
+  equipment_id: string;
+  name: string;
+  type: 'Camera' | 'Lens' | 'Drone' | 'Gimbal' | 'Tripod' | 'Light' | 'Audio Equipment' | 'Memory Cards' | 'Batteries' | 'Other' | string;
+  brand: string;
+  model: string;
+  serial_number: string;
+  quantity: number;
+  status: 'Available' | 'Assigned' | 'In Use' | 'Under Maintenance' | 'Damaged';
+  purchase_date: string;
+  notes?: string;
+  created_at?: string;
+}
+
 

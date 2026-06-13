@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Lead, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification } from '../types';
-import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS } from '../data';
+import { User, Lead, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment } from '../types';
+import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
+
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
 
 interface RoleContextType {
@@ -23,6 +24,10 @@ interface RoleContextType {
   addStaff: (member: Omit<Staff, 'staff_id'>) => Promise<void>;
   updateStaff: (staffId: string, updates: Partial<Staff>) => Promise<void>;
   deleteStaff: (staffId: string) => Promise<void>;
+  equipment: Equipment[];
+  addEquipment: (equip: Omit<Equipment, 'equipment_id'>) => Promise<void>;
+  updateEquipment: (equipmentId: string, updates: Partial<Equipment>) => Promise<void>;
+  deleteEquipment: (equipmentId: string) => Promise<void>;
   notifications: Notification[];
   addNotification: (payload: Omit<Notification, 'notification_id' | 'created_at' | 'read_status'> & { notification_id?: string; read_status?: boolean }) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
@@ -278,9 +283,18 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ];
   });
 
+  const [equipment, setEquipment] = useState<Equipment[]>(() => {
+    const saved = localStorage.getItem('erp_equipment');
+    return saved ? JSON.parse(saved) : INITIAL_EQUIPMENT;
+  });
+
   useEffect(() => {
     localStorage.setItem('erp_production_staff', JSON.stringify(staff));
   }, [staff]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_equipment', JSON.stringify(equipment));
+  }, [equipment]);
 
   // Track session/auth state in localStorage to keep developer/user logged-in across refreshes
   useEffect(() => {
@@ -404,6 +418,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { data: null, error: null };
         }
       );
+      const dbEquipmentPromise = supabaseClient.from('equipment').select('*').then(
+        (res) => res,
+        () => {
+          const cached = localStorage.getItem('erp_equipment');
+          return { data: cached ? JSON.parse(cached) : INITIAL_EQUIPMENT, error: null };
+        }
+      );
 
       const [
         { data: dbUsers, error: uErr },
@@ -415,7 +436,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { data: dbPayments, error: payErr },
         { data: dbLogs, error: logErr },
         staffRes,
-        notifRes
+        notifRes,
+        equipRes
       ] = await Promise.all([
         supabaseClient.from('users').select('*'),
         supabaseClient.from('leads').select('*').order('created_date', { ascending: false }),
@@ -426,7 +448,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dbPaymentsPromise,
         dbLogsPromise,
         dbStaffPromise,
-        dbNotificationsPromise
+        dbNotificationsPromise,
+        dbEquipmentPromise
       ]);
 
       if (uErr || ldErr || ordErr || opErr || rfErr || prodErr || payErr || logErr) {
@@ -481,6 +504,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (staffRes && staffRes.data && staffRes.data.length > 0) {
         setStaff(staffRes.data);
       }
+      if (equipRes && equipRes.data) {
+        setEquipment(equipRes.data);
+      }
 
       updateDiagnosticMetric('read', 'ok');
       updateDiagnosticMetric('connection', 'connected');
@@ -506,7 +532,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { table: 'payments', key: 'payment_id', setter: setPayments },
       { table: 'production_staff', key: 'staff_id', setter: setStaff },
       { table: 'activity_logs', key: 'log_id', setter: setLogs },
-      { table: 'notifications', key: 'notification_id', setter: setNotifications }
+      { table: 'notifications', key: 'notification_id', setter: setNotifications },
+      { table: 'equipment', key: 'equipment_id', setter: setEquipment }
     ].map(({ table, key, setter }) => {
       return supabaseClient
         .channel(`rt-${table}`)
@@ -1828,6 +1855,30 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity(`Removed Staff Member: ${staffId}`, 'StaffManagement', staffId);
   };
 
+  const addEquipment = async (equip: Omit<Equipment, 'equipment_id'>) => {
+    const equipmentId = `EQ-${Math.floor(100 + Math.random() * 900)}`;
+    const newEquip: Equipment = {
+      ...equip,
+      equipment_id: equipmentId,
+      created_at: new Date().toISOString()
+    };
+    setEquipment((prev) => [newEquip, ...prev]);
+    await pushInsert('equipment', newEquip);
+    logActivity(`Added Equipment Item: ${newEquip.name}`, 'EquipmentManagement', equipmentId);
+  };
+
+  const updateEquipment = async (equipmentId: string, updates: Partial<Equipment>) => {
+    setEquipment((prev) => prev.map((e) => e.equipment_id === equipmentId ? { ...e, ...updates } : e));
+    await pushUpdate('equipment', 'equipment_id', equipmentId, updates);
+    logActivity(`Updated Equipment Item: ${equipmentId}`, 'EquipmentManagement', equipmentId);
+  };
+
+  const deleteEquipment = async (equipmentId: string) => {
+    setEquipment((prev) => prev.filter((e) => e.equipment_id !== equipmentId));
+    await pushDelete('equipment', 'equipment_id', equipmentId);
+    logActivity(`Removed Equipment Item: ${equipmentId}`, 'EquipmentManagement', equipmentId);
+  };
+
   const addNotification = async (payload: Omit<Notification, 'notification_id' | 'created_at' | 'read_status'> & { notification_id?: string; read_status?: boolean }) => {
     const notification_id = payload.notification_id || `NTF-${6001 + Math.floor(Math.random() * 10000)}`;
     const newNotif: Notification = {
@@ -1881,6 +1932,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addStaff,
         updateStaff,
         deleteStaff,
+        equipment,
+        addEquipment,
+        updateEquipment,
+        deleteEquipment,
         notifications,
         addNotification,
         markNotificationRead,

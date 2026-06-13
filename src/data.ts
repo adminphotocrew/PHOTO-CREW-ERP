@@ -1,4 +1,4 @@
-import { User, Lead, Order, Operation, RawFootage, Production, Payment, ActivityLog } from './types';
+import { User, Lead, Order, Operation, RawFootage, Production, Payment, ActivityLog, Equipment } from './types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -705,3 +705,91 @@ export const INITIAL_LOGS: ActivityLog[] = [
     timestamp: '2026-06-10T05:05:00Z',
   }
 ];
+
+export const INITIAL_EQUIPMENT: Equipment[] = [
+  {
+    equipment_id: 'EQ-001',
+    name: 'Sony FE 24-70mm f/2.8 GM II',
+    type: 'Lens',
+    brand: 'Sony',
+    model: 'SEL2470GM2',
+    serial_number: 'SN-SNY-289410',
+    quantity: 3,
+    status: 'Available',
+    purchase_date: '2025-01-10',
+    notes: 'Premium standard zoom lens. Extremely sharp.'
+  },
+  {
+    equipment_id: 'EQ-002',
+    name: 'Sony Alpha 7 IV Cinema Rig',
+    type: 'Camera',
+    brand: 'Sony',
+    model: 'ILCE-7M4',
+    serial_number: 'SN-SNY-902148',
+    quantity: 2,
+    status: 'Assigned',
+    purchase_date: '2025-03-24',
+    notes: 'Primary full-frame hybrid camera with Ronin baseplate.'
+  },
+  {
+    equipment_id: 'EQ-003',
+    name: 'RED Komodo 6K Starter Pack',
+    type: 'Camera',
+    brand: 'RED',
+    model: 'Komodo-6K',
+    serial_number: 'SN-RED-112093',
+    quantity: 1,
+    status: 'In Use',
+    purchase_date: '2024-11-15',
+    notes: 'High-end cinema camera for extreme resolutions and grading.'
+  },
+  {
+    equipment_id: 'EQ-004',
+    name: 'DJI Mavic 3 Pro Cine Premium',
+    type: 'Drone',
+    brand: 'DJI',
+    model: 'Mavic-3-Cine',
+    serial_number: 'SN-DJI-503928',
+    quantity: 1,
+    status: 'Available',
+    purchase_date: '2025-05-02',
+    notes: 'Tri-camera drone with Apple ProRes rendering.'
+  },
+  {
+    equipment_id: 'EQ-005',
+    name: 'Aputure LS 600d Pro Light',
+    type: 'Light',
+    brand: 'Aputure',
+    model: 'LS-600D',
+    serial_number: 'SN-APT-748921',
+    quantity: 2,
+    status: 'Under Maintenance',
+    purchase_date: '2024-08-14',
+    notes: 'Very high brightness LED spotlight. Power supply replacement pending.'
+  },
+  {
+    equipment_id: 'EQ-006',
+    name: 'Sennheiser AVX-835 Wireless Mic',
+    type: 'Audio Equipment',
+    brand: 'Sennheiser',
+    model: 'AVX-835-SET',
+    serial_number: 'SN-SEN-419082',
+    quantity: 4,
+    status: 'Available',
+    purchase_date: '2025-02-18',
+    notes: 'Wireless cardioid vocal mic, direct camera receiver.'
+  },
+  {
+    equipment_id: 'EQ-007',
+    name: 'SanDisk Professional 512GB CFexpress',
+    type: 'Memory Cards',
+    brand: 'SanDisk',
+    model: 'CFX-B-512G',
+    serial_number: 'SN-SND-100234',
+    quantity: 8,
+    status: 'Available',
+    purchase_date: '2025-04-10',
+    notes: 'Type B extreme high-speed media card for RED and Nikon.'
+  }
+];
+

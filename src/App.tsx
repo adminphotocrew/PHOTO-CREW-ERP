@@ -34,6 +34,9 @@ const MainAppContent: React.FC = () => {
   // Sub-tab selection state for production suite
   const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'production_leads' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications'>('production_leads');
 
+  // Sub-tab selection state for operations suite
+  const [activeOpSubTab, setActiveOpSubTab] = useState<'operations_leads' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics'>('operations_leads');
+
   // Initialize correct default tab according to user role to avoid visual flashes
   const [activeTab, setActiveTab] = useState<'dashboard' | 'sales' | 'operations' | 'production' | 'staff_management' | 'notifications' | 'payments' | 'search' | 'users' | 'diagnostics'>(() => {
     const savedUser = localStorage.getItem('erp_current_user');
@@ -106,7 +109,76 @@ const MainAppContent: React.FC = () => {
         </button>
       </div>
 
-      {activeTab === 'production' || currentRole === 'Production Team' ? (
+      {activeTab === 'operations' || currentRole === 'Operations Team' ? (
+        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl border border-zinc-850 p-4 space-y-4 shadow-xl relative animate-in fade-in duration-300">
+          {/* Corner calibration tick marks */}
+          <div className="absolute top-2 left-2 w-1 h-1 bg-amber-500/50" />
+          <div className="absolute top-2 right-2 w-1 h-1 bg-amber-500/50" />
+          <div className="absolute bottom-2 left-2 w-1 h-1 bg-amber-500/50" />
+          <div className="absolute bottom-2 right-2 w-1 h-1 bg-amber-500/50" />
+
+          <div className="flex items-center justify-between pb-1 border-b border-zinc-850">
+            <h3 className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-400 font-mono flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-amber-500" />
+              <span>OPERATIONS DESK</span>
+            </h3>
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+          </div>
+
+          {/* Return button for Business Owner */}
+          {currentRole === 'Business Owner' && (
+            <button
+              onClick={() => {
+                handleTabSelect('dashboard');
+              }}
+              className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[10px] font-mono uppercase tracking-wider font-extrabold rounded-xl transition-all duration-200 border cursor-pointer border-zinc-800 text-zinc-400 hover:bg-zinc-900/50 hover:text-white"
+            >
+              <span>←</span>
+              <span>Back to Studio Desks</span>
+            </button>
+          )}
+
+          <nav className="space-y-1.5">
+            {[
+              { id: 'operations_leads', label: 'Operations Leads', icon: Sparkles },
+              { id: 'equipment_management', label: 'Equipment Management', icon: Camera },
+              { id: 'operations_staff', label: 'Staff Management', icon: Users },
+              { id: 'event_scheduling', label: 'Event Scheduling', icon: Clock },
+              { id: 'team_assignments', label: 'Team Assignments', icon: Shield },
+              { id: 'operations_notifications', label: 'Notifications', icon: Bell },
+              { id: 'operations_analytics', label: 'Studio Analytics', icon: BarChart3 }
+            ].map((tab) => {
+              const IconComponent = tab.icon;
+              const isSelected = activeOpSubTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    handleTabSelect('operations');
+                    setActiveOpSubTab(tab.id as any);
+                    if (window.innerWidth < 1024) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2 text-xs font-mono uppercase tracking-wider font-extrabold rounded-xl transition-all cursor-pointer border text-left ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-400 border-amber-500/30 font-bold'
+                      : 'text-zinc-400 bg-transparent border-transparent hover:bg-zinc-900/50 hover:text-white hover:border-zinc-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <IconComponent className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-amber-400' : 'text-zinc-500'}`} />
+                    <span className="tracking-wide">{tab.label}</span>
+                  </div>
+                  {isSelected && (
+                    <span className="text-[10px] text-amber-500">●</span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      ) : activeTab === 'production' || currentRole === 'Production Team' ? (
         <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl border border-zinc-850 p-4 space-y-4 shadow-xl relative">
           {/* Corner calibration tick marks */}
           <div className="absolute top-2 left-2 w-1 h-1 bg-purple-500/50" />
@@ -441,7 +513,9 @@ const MainAppContent: React.FC = () => {
           <div className="bg-transparent rounded-2xl relative">
             {activeTab === 'dashboard' && currentRole === 'Business Owner' && <Dashboard />}
             {activeTab === 'sales' && (currentRole === 'Business Owner' || currentRole === 'Sales Team') && <SalesModule />}
-            {activeTab === 'operations' && (currentRole === 'Business Owner' || currentRole === 'Operations Team') && <OperationsModule />}
+            {activeTab === 'operations' && (currentRole === 'Business Owner' || currentRole === 'Operations Team') && (
+              <OperationsModule activeSubTab={activeOpSubTab} setActiveSubTab={setActiveOpSubTab} />
+            )}
             {activeTab === 'production' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && (
               <ProductionModule activeSubTab={activeSubTab} setActiveSubTab={setActiveSubTab} />
             )}
