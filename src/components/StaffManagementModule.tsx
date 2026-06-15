@@ -20,6 +20,7 @@ export const StaffManagementModule: React.FC = () => {
   // Form State for Adding Staff
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('Editor');
   const [department, setDepartment] = useState('Editing');
@@ -82,6 +83,7 @@ export const StaffManagementModule: React.FC = () => {
     addStaff({
       name,
       mobile,
+      whatsapp_number: whatsappNumber || mobile,
       email,
       role,
       department,
@@ -94,6 +96,7 @@ export const StaffManagementModule: React.FC = () => {
     // Reset Form
     setName('');
     setMobile('');
+    setWhatsappNumber('');
     setEmail('');
     setRole('Editor');
     setDepartment('Editing');
@@ -409,18 +412,31 @@ export const StaffManagementModule: React.FC = () => {
                   )}
 
                   {/* Contact details */}
-                  <div className="grid grid-cols-2 gap-4 mt-4 py-3 border-t border-b border-zinc-900">
+                  <div className="grid grid-cols-3 gap-2 mt-4 py-3 border-t border-b border-zinc-900 text-[10px]">
                     <div className="space-y-1">
-                      <div className="text-[9px] font-mono text-zinc-500 uppercase">Mobile Contact</div>
-                      <a href={`tel:${member.mobile}`} className="text-xs font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>{member.mobile}</span>
+                      <div className="text-[9px] font-mono text-zinc-500 uppercase">Mobile</div>
+                      <a href={`tel:${member.mobile}`} className="font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 truncate" title={member.mobile}>
+                        <Phone className="w-3 h-3 text-zinc-500 shrink-0" />
+                        <span className="truncate">{member.mobile}</span>
                       </a>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-[9px] font-mono text-zinc-500 uppercase">Email Address</div>
-                      <a href={`mailto:${member.email}`} className="text-xs font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 truncate max-w-full">
-                        <Mail className="w-3.5 h-3.5 text-zinc-500" />
+                      <div className="text-[9px] font-mono text-zinc-500 uppercase">WhatsApp</div>
+                      <a 
+                        href={`https://api.whatsapp.com/send?phone=${(member.whatsapp_number || member.mobile || '').replace(/[^0-9]/g, '')}`} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 truncate" 
+                        title={member.whatsapp_number || member.mobile}
+                      >
+                        <span className="text-emerald-450 text-[11px] font-bold shrink-0">💬</span>
+                        <span className="truncate">{member.whatsapp_number || member.mobile}</span>
+                      </a>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[9px] font-mono text-zinc-500 uppercase">Email</div>
+                      <a href={`mailto:${member.email}`} className="font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 truncate" title={member.email}>
+                        <Mail className="w-3 h-3 text-zinc-500 shrink-0" />
                         <span className="truncate">{member.email}</span>
                       </a>
                     </div>
@@ -533,6 +549,20 @@ export const StaffManagementModule: React.FC = () => {
                 placeholder="e.g. +1 (555) 765-4321"
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:border-violet-500 outline-none font-mono"
+              />
+            </div>
+
+            {/* WhatsApp */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-zinc-400 uppercase font-bold flex items-center gap-1">
+                <span>WhatsApp Contact Number</span>
+              </label>
+              <input
+                type="tel"
+                placeholder="e.g. +1 (555) 765-4321"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:border-violet-500 outline-none font-mono"
               />
             </div>

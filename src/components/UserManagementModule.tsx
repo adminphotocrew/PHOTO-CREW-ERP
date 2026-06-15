@@ -204,8 +204,15 @@ export const UserManagementModule: React.FC = () => {
   };
 
   // Helper calculations
-  const totalStaffCount = users.length;
-  const activeStaffCount = users.filter(u => u.active).length;
+  const visibleUsers = users.filter(u => {
+    const isDemo = u.name.toLowerCase().includes('demo') || 
+                   u.email.toLowerCase().includes('demo') || 
+                   u.name.toLowerCase().includes('test') || 
+                   u.email.toLowerCase().includes('test');
+    return !isDemo;
+  });
+  const totalStaffCount = visibleUsers.length;
+  const activeStaffCount = visibleUsers.filter(u => u.active).length;
   const inactiveStaffCount = totalStaffCount - activeStaffCount;
 
   return (
@@ -326,7 +333,7 @@ export const UserManagementModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/40">
-                {users.map((usr) => {
+                {visibleUsers.map((usr) => {
                   const isCurrentUser = usr.id === currentUser?.id;
                   return (
                     <tr 

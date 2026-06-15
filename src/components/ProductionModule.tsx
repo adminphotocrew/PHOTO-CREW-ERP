@@ -1,17 +1,219 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
 import { 
   Play, CheckCircle2, UserCheck, Eye, Calendar, Lock, Layers, AlertCircle, Ban, RefreshCw, Clock,
-  PlusSquare, ArrowRight, CheckSquare, AlertTriangle, Truck, Users, BarChart3, TrendingUp, Sparkles, UserPlus, ChevronRight
+  PlusSquare, ArrowRight, CheckSquare, AlertTriangle, Truck, Users, BarChart3, TrendingUp, Sparkles, UserPlus, ChevronRight,
+  Aperture, Camera, Sliders, ShieldCheck, Image
 } from 'lucide-react';
 import { Production, EditingStatus, Staff } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { ProjectDetailModal } from './ProjectDetailModal';
 import { formatINR } from '../utils';
 import { AppLogo } from './AppLogo';
+import { ProductionCalendar } from './ProductionCalendar';
 import { StaffManagementModule } from './StaffManagementModule';
 import { NotificationsModule } from './NotificationsModule';
 import { Bell } from 'lucide-react';
+
+export const MicroSparkline: React.FC<{ points: number[]; color: string }> = ({ points, color }) => {
+  const width = 120;
+  const height = 18;
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  
+  const widthStep = width / (points.length - 1);
+  const svgPoints = points.map((p, i) => {
+    const x = i * widthStep;
+    const y = height - ((p - min) / range) * (height - 4) - 2;
+    return { x, y };
+  });
+
+  const pathD = svgPoints.reduce((acc, p, i) => {
+    return i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`;
+  }, '');
+
+  const areaD = `${pathD} L ${width} ${height} L 0 ${height} Z`;
+
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible opacity-45 group-hover/card:opacity-90 transition-opacity duration-300">
+      <defs>
+        <linearGradient id={`spark-glow-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#spark-glow-${color.replace('#', '')})`} />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
+export const LiveAnimateCounter: React.FC<{ value: number }> = ({ value }) => {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let start = 0;
+    const end = value;
+    if (end === 0) {
+      setCount(0);
+      return;
+    }
+    const duration = 1200; // ms
+    const increment = Math.max(1, Math.ceil(end / (duration / 16)));
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= end) {
+        setCount(end);
+        clearInterval(timer);
+      } else {
+        setCount(start);
+      }
+    }, 16);
+
+    return () => clearInterval(timer);
+  }, [value]);
+
+  return <span className="font-mono font-black">{count}</span>;
+};
+
+export const CameraLensGraphic: React.FC<{
+  type: 'total_leads' | 'new_projects' | 'in_editing' | 'in_review' | 'approved' | 'delivered' | 'overdue';
+  active?: boolean;
+}> = ({ type, active = true }) => {
+  const spec = {
+    total_leads: { label: 'V-NEON 50mm f/1.2', color: 'text-violet-400', glow: 'shadow-[0_0_20px_rgba(168,85,247,0.35)]', innerGlow: 'from-violet-950/80 via-zinc-950 to-indigo-900/30' },
+    new_projects: { label: 'E-BLUE 85mm f/1.4', color: 'text-blue-400', glow: 'shadow-[0_0_20px_rgba(59,130,246,0.35)]', innerGlow: 'from-blue-950/80 via-zinc-950 to-cyan-900/30' },
+    in_editing: { label: 'V-EDIT 35mm f/1.4', color: 'text-indigo-400', glow: 'shadow-[0_0_20px_rgba(99,102,241,0.35)]', innerGlow: 'from-indigo-950/80 via-zinc-950 to-violet-900/30' },
+    in_review: { label: 'QC-GOLD 24mm f/1.2', color: 'text-amber-400', glow: 'shadow-[0_0_20px_rgba(245,158,11,0.35)]', innerGlow: 'from-amber-950/80 via-zinc-950 to-yellow-950/30' },
+    approved: { label: 'M-GREEN 105mm f/2.8', color: 'text-emerald-400', glow: 'shadow-[0_0_20px_rgba(16,185,129,0.35)]', innerGlow: 'from-teal-950/80 via-zinc-950 to-emerald-900/30' },
+    delivered: { label: 'C-GLASS 70-200mm f/2.8', color: 'text-cyan-400', glow: 'shadow-[0_0_20px_rgba(6,182,212,0.35)]', innerGlow: 'from-cyan-950/80 via-zinc-950 to-teal-900/30' },
+    overdue: { label: 'Ø 77mm WARNING', color: 'text-rose-400', glow: 'shadow-[0_0_20px_rgba(244,63,94,0.45)]', innerGlow: 'from-rose-950/80 via-zinc-950 to-red-900/30' },
+  }[type];
+
+  return (
+    <div className="relative w-18 h-18 flex items-center justify-center select-none group/lens">
+      {/* 3D Camera Lens Outer Barrel */}
+      <div className={`absolute inset-0 rounded-full border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 flex items-center justify-center p-0.5 shadow-xl ring-1 ring-white/5 transition-all duration-700 group-hover/card:scale-105 group-hover/card:border-zinc-700 ${spec.glow}`}>
+        
+        {/* Physical outer focus notched ring elements */}
+        <div className="absolute inset-0.5 rounded-full border border-zinc-800/80 border-dashed animate-[spin_50s_linear_infinite] group-hover/card:rotate-90 group-hover/card:duration-1000 transition-all duration-700" />
+        
+        {/* Core focusing notch ticks */}
+        <div className="absolute inset-1 rounded-full border border-zinc-900/70 opacity-60 flex items-center justify-center">
+          <div className="absolute top-0 w-0.5 h-1 bg-zinc-650" />
+          <div className="absolute bottom-0 w-0.5 h-1 bg-zinc-650" />
+          <div className="absolute left-0 h-0.5 w-1 bg-zinc-650" />
+          <div className="absolute right-0 h-0.5 w-1 bg-zinc-650" />
+        </div>
+
+        {/* Outer Rim Text label scale */}
+        <div className="absolute inset-1 rounded-full overflow-hidden flex items-center justify-center pointer-events-none opacity-0 group-hover/lens:opacity-100 transition-opacity duration-300">
+          <span className="text-[5px] font-mono font-semibold tracking-widest text-zinc-500 scale-95 uppercase">{type === 'overdue' ? 'Ø 58mm' : 'AF CORE'}</span>
+        </div>
+
+        {/* Inner lens element barrel */}
+        <div className="absolute inset-2 rounded-full border border-zinc-900/90 bg-zinc-950/90 flex items-center justify-center overflow-hidden">
+          
+          {/* Aperture Blades */}
+          <div className="absolute inset-0 opacity-[0.22] group-hover/card:opacity-[0.38] transition-all duration-700">
+            <svg viewBox="0 0 100 100" className="w-full h-full text-zinc-650 group-hover/card:rotate-45 group-hover/card:scale-95 transition-all duration-700">
+              <polygon points="50,0 75,25 35,50 15,25" fill="none" stroke="currentColor" strokeWidth="0.8" />
+              <polygon points="75,25 100,50 60,65 50,25" fill="none" stroke="currentColor" strokeWidth="0.8" />
+              <polygon points="100,50 75,100 40,75 50,55" fill="none" stroke="currentColor" strokeWidth="0.8" />
+              <polygon points="75,100 25,100 35,60 50,75" fill="none" stroke="currentColor" strokeWidth="0.8" />
+              <polygon points="25,100 0,50 40,35 50,75" fill="none" stroke="currentColor" strokeWidth="0.8" />
+              <polygon points="0,50 25,0 60,35 50,25" fill="none" stroke="currentColor" strokeWidth="0.8" />
+            </svg>
+          </div>
+
+          {/* Sensor / Glass curvature element with neon gradient themes */}
+          <div className={`absolute inset-2.5 rounded-full bg-gradient-to-br transition-all duration-500 flex items-center justify-center ${spec.innerGlow}`}>
+            
+            {/* Camera Viewfinder Crosshairs */}
+            {type === 'in_review' && (
+              <div className="absolute inset-0 pointer-events-none opacity-30">
+                <div className="absolute top-1/2 left-0 w-full h-[0.5px] bg-amber-400/50" />
+                <div className="absolute left-1/2 top-0 h-full w-[0.5px] bg-amber-400/50" />
+                <div className="absolute inset-2 border border-dashed border-amber-600/20 rounded-full" />
+              </div>
+            )}
+
+            {/* Premium realistic lens reflection overlays */}
+            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-white/15 opacity-80 mix-blend-overlay pointer-events-none group-hover/card:scale-110 group-hover/card:-rotate-12 transition-all duration-1000 ease-out" />
+            
+            {/* Dynamic Flare reflection hot spots */}
+            <div className="absolute top-0.5 left-1.5 w-5 h-2 bg-white/25 blur-[1px] rounded-full rotate-[-25deg] pointer-events-none group-hover/card:translate-x-1 group-hover/card:scale-110 transition-all duration-700" />
+            <div className="absolute bottom-1 right-2 w-3 h-1 bg-white/10 blur-[0.5px] rounded-full rotate-[15deg] pointer-events-none opacity-60" />
+
+            {/* Realistic lens flare horizontal line */}
+            <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
+              <div className="absolute left-[-50%] top-[45%] w-[200%] h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent rotate-[-35deg] blur-[0.5px] group-hover/card:translate-y-1 transition-transform duration-1000" />
+            </div>
+
+            {/* Floating focal details spec labels on hover */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/lens:opacity-90 bg-zinc-950/80 transition-opacity duration-350 rounded-full pointer-events-none overflow-hidden p-0.5">
+              <span className="text-[5.5px] font-mono leading-tight font-bold text-center text-zinc-400 uppercase tracking-widest">{spec.label}</span>
+            </div>
+
+            {/* Core Action Icons */}
+            <span className="relative flex items-center justify-center transition-transform duration-500 group-hover/card:scale-110">
+              {type === 'total_leads' && (
+                <div className="flex flex-col items-center">
+                  <Aperture className="w-5 h-5 text-violet-400 animate-[spin_10s_linear_infinite]" />
+                  <span className="absolute w-6 h-6 rounded-full border border-violet-500/20 scale-75 animate-ping opacity-60 pointer-events-none" />
+                </div>
+              )}
+
+              {type === 'new_projects' && (
+                <div className="flex flex-col items-center relative">
+                  <Camera className="w-5 h-5 text-blue-400" />
+                  <div className="absolute -inset-1.5 bg-white/30 rounded-full opacity-0 group-hover/card:opacity-100 group-hover/card:animate-ping pointer-events-none duration-1000" />
+                </div>
+              )}
+
+              {type === 'in_editing' && (
+                <div className="flex flex-col items-center">
+                  <Sliders className="w-5 h-5 text-indigo-400 animate-pulse" />
+                  <span className="absolute w-5 h-5 rounded-full border-2 border-indigo-400/10 border-t-indigo-400 animate-[spin_2.5s_linear_infinite] pointer-events-none" />
+                </div>
+              )}
+
+              {type === 'in_review' && (
+                <div className="relative flex flex-col items-center justify-center w-5 h-5">
+                  <Eye className="w-4 h-4 text-amber-400" />
+                  <div className="absolute left-[-2px] right-[-2px] h-[1.2px] bg-amber-400 shadow-[0_0_6px_#f59e0b] opacity-80 animate-[bounce_2s_infinite_ease-in-out]" />
+                </div>
+              )}
+
+              {type === 'approved' && (
+                <div className="relative flex flex-col items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  <span className="absolute -right-0.5 -top-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                </div>
+              )}
+
+              {type === 'delivered' && (
+                <div className="flex flex-col items-center">
+                  <Image className="w-5 h-5 text-cyan-400" />
+                  <Sparkles className="absolute -top-1 -right-1 w-2.5 h-2.5 text-cyan-300 animate-bounce" />
+                </div>
+              )}
+
+              {type === 'overdue' && (
+                <div className="relative flex flex-col items-center justify-center">
+                  <Clock className="w-4 h-4 text-rose-400 animate-pulse" />
+                  <div className="absolute inset-[-4px] rounded-full border border-rose-500/25 border-t-rose-500 animate-[spin_3s_linear_infinite]" />
+                </div>
+              )}
+            </span>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export interface ProductionModuleProps {
   activeSubTab: 'pipeline' | 'production_leads' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications';
@@ -235,21 +437,6 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
   return (
     <div id="production_module" className="space-y-6 animate-fade-in font-sans">
       
-      {/* Title Header with Sub-Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-950 border border-zinc-900 p-6 rounded-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl" />
-        
-        <div className="space-y-1 z-10">
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <span className="p-1 px-2 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-mono rounded tracking-widest uppercase font-black">Post-Production</span>
-            <span>Studio Production Suite</span>
-          </h2>
-          <p className="text-xs text-zinc-405 mt-0.5 font-mono">
-            MANAGE POST-PRODUCTION QUEUES, STAFF ASSIGNMENTS, AND TRACK MASTER DELIVERIES
-          </p>
-        </div>
-      </div>
-
       {/* Full width container for active workspace */}
       <div className="w-full space-y-6">
 
@@ -267,6 +454,13 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
       {activeSubTab === 'notifications' && (
         <div className="animate-fade-in-up">
           <NotificationsModule />
+        </div>
+      )}
+
+      {/* PRODUCTION CALENDAR MODULE EMBED */}
+      {activeSubTab === 'production_calendar' && (
+        <div className="animate-fade-in-up flex flex-col gap-6">
+          <ProductionCalendar />
         </div>
       )}
 
@@ -301,22 +495,133 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
               return days !== null && days < 0 && p.editing_status !== 'Delivered';
             }).length;
 
+            const statsCards = [
+              {
+                label: 'Total Leads',
+                val: totalCount,
+                lensType: 'total_leads',
+                glowClass: 'hover:border-purple-500/40 hover:shadow-[0_8px_30px_rgba(168,85,247,0.18)]',
+                borderColor: 'border-zinc-900',
+                statusDot: 'bg-purple-400 animate-pulse',
+                trend: 'Live Queue',
+                sparklineColor: '#a855f7',
+                chartPoints: [10, 18, 14, 25, 20, 31, 35],
+              },
+              {
+                label: 'New Projects',
+                val: newCount,
+                lensType: 'new_projects',
+                glowClass: 'hover:border-blue-500/40 hover:shadow-[0_8px_30px_rgba(59,130,246,0.18)]',
+                borderColor: 'border-zinc-900',
+                statusDot: 'bg-blue-400 animate-pulse',
+                trend: 'Ready Ingest',
+                sparklineColor: '#3b82f6',
+                chartPoints: [4, 12, 8, 16, 12, 22, 19],
+              },
+              {
+                label: 'In Editing',
+                val: inEditingCount,
+                lensType: 'in_editing',
+                glowClass: 'hover:border-indigo-500/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.18)]',
+                borderColor: 'border-zinc-900',
+                statusDot: 'bg-indigo-400 animate-pulse',
+                trend: 'Active Edit',
+                sparklineColor: '#6366f1',
+                chartPoints: [15, 10, 19, 14, 22, 18, 26],
+              },
+              {
+                label: 'In Review',
+                val: inReviewCount,
+                lensType: 'in_review',
+                glowClass: 'hover:border-amber-500/40 hover:shadow-[0_8px_30px_rgba(245,158,11,0.18)]',
+                borderColor: 'border-zinc-900',
+                statusDot: 'bg-amber-400 animate-pulse',
+                trend: 'QC Preview',
+                sparklineColor: '#f59e0b',
+                chartPoints: [5, 9, 7, 14, 11, 16, 15],
+              },
+              {
+                label: 'Approved',
+                val: approvedCount,
+                lensType: 'approved',
+                glowClass: 'hover:border-teal-500/40 hover:shadow-[0_8px_30px_rgba(20,184,166,0.18)]',
+                borderColor: 'border-zinc-900',
+                statusDot: 'bg-teal-400',
+                trend: 'Client Ok',
+                sparklineColor: '#10b981',
+                chartPoints: [8, 15, 12, 20, 16, 25, 24],
+              },
+              {
+                label: 'Delivered',
+                val: deliveredCount,
+                lensType: 'delivered',
+                glowClass: 'hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgba(16,185,129,0.18)]',
+                borderColor: 'border-zinc-900',
+                statusDot: 'bg-emerald-400',
+                trend: 'Gallery Sent',
+                sparklineColor: '#06b6d4',
+                chartPoints: [12, 18, 15, 26, 22, 34, 38],
+              },
+              {
+                label: 'Overdue',
+                val: overdueCount,
+                lensType: 'overdue',
+                glowClass: overdueCount > 0 ? 'hover:border-rose-500/50 hover:shadow-[0_8px_30px_rgba(244,63,94,0.15)]' : 'hover:border-zinc-800',
+                borderColor: overdueCount > 0 ? 'border-rose-950/40' : 'border-zinc-900',
+                statusDot: overdueCount > 0 ? 'bg-red-500 animate-ping' : 'bg-zinc-600',
+                trend: overdueCount > 0 ? 'Urgent Attention' : 'All Clear',
+                sparklineColor: '#f43f5e',
+                chartPoints: [2, 4, 1, 5, 3, 6, 2],
+              }
+            ];
+
             return (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                {[
-                  { label: 'Total Leads', val: totalCount, color: 'text-zinc-105', glow: 'border-zinc-800 bg-zinc-950/40 text-zinc-100' },
-                  { label: 'New', val: newCount, color: 'text-blue-400', glow: 'border-blue-500/20 text-blue-400 bg-blue-500/5' },
-                  { label: 'In Editing', val: inEditingCount, color: 'text-indigo-400', glow: 'border-indigo-500/20 text-indigo-400 bg-indigo-500/5' },
-                  { label: 'In Review', val: inReviewCount, color: 'text-amber-400', glow: 'border-amber-500/20 text-amber-400 bg-amber-500/5' },
-                  { label: 'Approved', val: approvedCount, color: 'text-teal-400', glow: 'border-teal-500/20 text-teal-400 bg-teal-500/5' },
-                  { label: 'Delivered', val: deliveredCount, color: 'text-emerald-400', glow: 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' },
-                  { label: 'Overdue', val: overdueCount, color: overdueCount > 0 ? 'text-red-400 animate-pulse' : 'text-zinc-500', glow: overdueCount > 0 ? 'border-red-500/40 bg-red-500/10' : 'border-zinc-900 bg-zinc-950/40' }
-                ].map((wedg, i) => (
-                  <div key={i} className={`p-3 rounded-xl border flex flex-col justify-between backdrop-blur-sm transition-all hover:scale-[1.02] ${wedg.glow}`}>
-                    <span className="text-[10px] font-mono tracking-wider font-extrabold text-zinc-450 uppercase">{wedg.label}</span>
-                    <span className={`text-xl font-bold font-mono tracking-tight mt-1 ${wedg.color}`}>{wedg.val}</span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                {statsCards.map((card, idx) => {
+                  return (
+                    <div 
+                      key={idx} 
+                      style={{ animationDelay: `${idx * 80}ms`, animationFillMode: 'both' }}
+                      className={`bg-zinc-950/65 backdrop-blur-xl border ${card.borderColor} rounded-2xl p-4 flex flex-col justify-between transition-all duration-500 hover:-translate-y-1.5 select-none ${card.glowClass} group/card animate-fade-in-up relative overflow-hidden`}
+                    >
+                      {/* Premium subtle glass light strike overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.01] to-white/[0.04] opacity-50 pointer-events-none" />
+                      
+                      {/* Interactive underlying neon spot glow */}
+                      <div className="absolute -right-6 -bottom-6 w-20 h-20 rounded-full blur-[24px] pointer-events-none opacity-10 transition-all duration-500 group-hover/card:scale-150 group-hover/card:opacity-20" style={{ backgroundColor: card.sparklineColor }} />
+
+                      {/* Top Segment: Lens Graphic Container & Status Flag */}
+                      <div className="flex items-center justify-between z-10">
+                        <CameraLensGraphic type={card.lensType as any} />
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-1.5 bg-zinc-900/40 px-2 py-0.5 rounded-lg border border-zinc-900/60 shadow-inner">
+                            <span className={`w-1.5 h-1.5 rounded-full ${card.statusDot}`} />
+                            <span className="text-[9px] font-mono font-medium text-zinc-400 uppercase tracking-widest">{card.trend}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Middle Segment: Title, Count, Details */}
+                      <div className="mt-5 space-y-2 z-10">
+                        <p className="text-[10px] font-bold font-sans tracking-widest text-zinc-500 uppercase group-hover/card:text-zinc-300 transition-colors duration-300">{card.label}</p>
+                        <div className="flex items-baseline justify-between select-none">
+                          <span className="text-2xl sm:text-3xl font-black text-white group-hover/card:scale-105 transition-transform duration-500 origin-left">
+                            <LiveAnimateCounter value={card.val} />
+                          </span>
+                          <span className="text-[9px] font-mono tracking-wider font-extrabold uppercase" style={{ color: card.sparklineColor }}>AF ISO</span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Segment: Micro Sparkline Performance Graph */}
+                      <div className="mt-4 pt-1.5 border-t border-zinc-900/40 flex items-center justify-between gap-4 z-10">
+                        <div className="flex-1">
+                          <MicroSparkline points={card.chartPoints} color={card.sparklineColor} />
+                        </div>
+                        <span className="text-[8px] font-mono text-zinc-550 group-hover/card:text-zinc-455">60 FPS</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })()}

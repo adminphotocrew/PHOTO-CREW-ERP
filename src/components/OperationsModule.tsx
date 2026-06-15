@@ -6,10 +6,11 @@ import { EventScheduling } from './operations/EventScheduling';
 import { TeamAssignments } from './operations/TeamAssignments';
 import { OperationsNotifications } from './operations/OperationsNotifications';
 import { OperationsAnalytics } from './operations/OperationsAnalytics';
+import { OperationsCalendar } from './OperationsCalendar';
 import { Briefcase } from 'lucide-react';
 
 interface OperationsModuleProps {
-  activeSubTab?: 'operations_leads' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics';
+  activeSubTab?: 'operations_leads' | 'operations_calendar' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics';
   setActiveSubTab?: (tab: any) => void;
 }
 
@@ -24,6 +25,12 @@ export const OperationsModule: React.FC<OperationsModuleProps> = ({
           badge: 'Operations Leads',
           title: 'Confirmed Project Directives',
           desc: 'Monitor booked events, coordinate lead photographer/videographer staff, register safety logs, and advance workflows.'
+        };
+      case 'operations_calendar':
+        return {
+          badge: 'Operations Calendar',
+          title: 'Squad Roster & Dispatch Calendar',
+          desc: 'Monitor physical shoot event dates, reporting countdown timetables, photography teams, and custom site coordinates.'
         };
       case 'equipment_management':
         return {
@@ -90,6 +97,7 @@ export const OperationsModule: React.FC<OperationsModuleProps> = ({
       {/* Render sub-modules based on selection state */}
       <div className="w-full">
         {activeSubTab === 'operations_leads' && <OperationsLeads />}
+        {activeSubTab === 'operations_calendar' && <OperationsCalendar />}
         {activeSubTab === 'equipment_management' && <EquipmentManagement />}
         {activeSubTab === 'operations_staff' && <OperationsStaffManagement />}
         {activeSubTab === 'event_scheduling' && <EventScheduling />}

@@ -12,6 +12,7 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 DROP FUNCTION IF EXISTS public.get_user_role() CASCADE;
 
+DROP TABLE IF EXISTS public.staff_assignments CASCADE;
 DROP TABLE IF EXISTS public.activity_logs CASCADE;
 DROP TABLE IF EXISTS public.payments CASCADE;
 DROP TABLE IF EXISTS public.production CASCADE;
@@ -20,6 +21,8 @@ DROP TABLE IF EXISTS public.operations CASCADE;
 DROP TABLE IF EXISTS public.orders CASCADE;
 DROP TABLE IF EXISTS public.follow_ups CASCADE;
 DROP TABLE IF EXISTS public.quotations CASCADE;
+DROP TABLE IF EXISTS public.lead_packages CASCADE;
+DROP TABLE IF EXISTS public.packages CASCADE;
 DROP TABLE IF EXISTS public.notifications CASCADE;
 DROP TABLE IF EXISTS public.analytics_snapshots CASCADE;
 DROP TABLE IF EXISTS public.leads CASCADE;
@@ -97,6 +100,35 @@ CREATE TABLE public.quotations (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- PACKAGES MASTER TABLE (Stores service packages catalog)
+CREATE TABLE public.packages (
+    package_id VARCHAR(50) PRIMARY KEY,
+    package_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    price NUMERIC NOT NULL CHECK (price >= 0),
+    status VARCHAR(50) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive')),
+    deliverables TEXT,
+    team_members TEXT,
+    seasonal_offer TEXT,
+    terms_conditions TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- LEAD PACKAGES TABLE (Stores package line-items for single customer leads)
+CREATE TABLE public.lead_packages (
+    lead_package_id VARCHAR(50) PRIMARY KEY,
+    lead_id VARCHAR(50) NOT NULL REFERENCES public.leads(lead_id) ON DELETE CASCADE,
+    package_id VARCHAR(50) NOT NULL,
+    package_name VARCHAR(255) NOT NULL,
+    package_cost NUMERIC NOT NULL CHECK (package_cost >= 0),
+    quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+    total_amount NUMERIC NOT NULL CHECK (total_amount >= 0),
+    discount NUMERIC NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    final_amount NUMERIC NOT NULL CHECK (final_amount >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ORDERS TABLE
 CREATE TABLE public.orders (
     order_id VARCHAR(50) PRIMARY KEY,
@@ -137,6 +169,17 @@ CREATE TABLE public.operations (
     event_status VARCHAR(50) NOT NULL CHECK (event_status IN ('Assigned', 'Completed')),
     remarks TEXT,
     updated_by VARCHAR(255) NOT NULL
+);
+
+-- STAFF ASSIGNMENTS TABLE
+CREATE TABLE public.staff_assignments (
+    assignment_id VARCHAR(50) PRIMARY KEY,
+    order_id VARCHAR(50) NOT NULL REFERENCES public.orders(order_id) ON DELETE CASCADE,
+    staff_role VARCHAR(100) NOT NULL,
+    staff_id VARCHAR(50) NOT NULL,
+    staff_name VARCHAR(255) NOT NULL,
+    assignment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    assignment_status VARCHAR(50) NOT NULL DEFAULT 'Assigned' CHECK (assignment_status IN ('Assigned', 'Completed', 'Cancelled'))
 );
 
 -- RAW FOOTAGE TABLE
@@ -229,6 +272,8 @@ CREATE INDEX idx_quotations_lead_id ON public.quotations(lead_id);
 CREATE INDEX idx_orders_lead_id ON public.orders(lead_id);
 CREATE INDEX idx_orders_current_stage ON public.orders(current_stage);
 CREATE INDEX idx_operations_order_id ON public.operations(order_id);
+CREATE INDEX idx_staff_assignments_order_id ON public.staff_assignments(order_id);
+CREATE INDEX idx_staff_assignments_staff_id ON public.staff_assignments(staff_id);
 CREATE INDEX idx_raw_footage_order_id ON public.raw_footage(order_id);
 CREATE INDEX idx_production_tracking_id ON public.production(tracking_id);
 CREATE INDEX idx_payments_order_id ON public.payments(order_id);
@@ -254,12 +299,15 @@ ALTER TABLE public.follow_ups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quotations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.raw_footage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lead_packages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.packages ENABLE ROW LEVEL SECURITY;
 
 
 -- 6. GENERATE SECURE RLS POLICIES FOR SECURING ROLE-BASED ACCESS
@@ -309,6 +357,24 @@ DROP POLICY IF EXISTS quotations_write_policy ON public.quotations;
 CREATE POLICY quotations_write_policy ON public.quotations
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
 
+-- PACKAGES POLICIES
+DROP POLICY IF EXISTS packages_select_policy ON public.packages;
+CREATE POLICY packages_select_policy ON public.packages
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS packages_write_policy ON public.packages;
+CREATE POLICY packages_write_policy ON public.packages
+    FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
+
+-- LEAD PACKAGES POLICIES
+DROP POLICY IF EXISTS lead_packages_select_policy ON public.lead_packages;
+CREATE POLICY lead_packages_select_policy ON public.lead_packages
+    FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team', 'Operations Team'));
+
+DROP POLICY IF EXISTS lead_packages_write_policy ON public.lead_packages;
+CREATE POLICY lead_packages_write_policy ON public.lead_packages
+    FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Sales Team'));
+
 -- E. ORDERS POLICIES
 DROP POLICY IF EXISTS orders_select_policy ON public.orders;
 CREATE POLICY orders_select_policy ON public.orders
@@ -325,6 +391,15 @@ CREATE POLICY operations_select_policy ON public.operations
 
 DROP POLICY IF EXISTS operations_write_policy ON public.operations;
 CREATE POLICY operations_write_policy ON public.operations
+    FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team'));
+
+-- STAFF ASSIGNMENTS POLICIES
+DROP POLICY IF EXISTS staff_assignments_select_policy ON public.staff_assignments;
+CREATE POLICY staff_assignments_select_policy ON public.staff_assignments
+    FOR SELECT USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team', 'Sales Team', 'Production Team'));
+
+DROP POLICY IF EXISTS staff_assignments_write_policy ON public.staff_assignments;
+CREATE POLICY staff_assignments_write_policy ON public.staff_assignments
     FOR ALL USING (auth.uid() IS NULL OR get_user_role() IN ('Business Owner', 'Operations Team'));
 
 -- G. RAW FOOTAGE POLICIES
@@ -450,6 +525,7 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'quotations' THEN v_record_id := NEW.quotation_id;
         ELSIF TG_TABLE_NAME = 'notifications' THEN v_record_id := NEW.notification_id;
         ELSIF TG_TABLE_NAME = 'analytics_snapshots' THEN v_record_id := NEW.snapshot_id;
+        ELSIF TG_TABLE_NAME = 'lead_packages' THEN v_record_id := NEW.lead_package_id;
         ELSE v_record_id := 'UNKNOWN';
         END IF;
     ELSIF (TG_OP = 'UPDATE') THEN
@@ -465,6 +541,7 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'quotations' THEN v_record_id := OLD.quotation_id;
         ELSIF TG_TABLE_NAME = 'notifications' THEN v_record_id := OLD.notification_id;
         ELSIF TG_TABLE_NAME = 'analytics_snapshots' THEN v_record_id := OLD.snapshot_id;
+        ELSIF TG_TABLE_NAME = 'lead_packages' THEN v_record_id := OLD.lead_package_id;
         ELSE v_record_id := 'UNKNOWN';
         END IF;
     ELSIF (TG_OP = 'DELETE') THEN
@@ -480,6 +557,7 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'quotations' THEN v_record_id := OLD.quotation_id;
         ELSIF TG_TABLE_NAME = 'notifications' THEN v_record_id := OLD.notification_id;
         ELSIF TG_TABLE_NAME = 'analytics_snapshots' THEN v_record_id := OLD.snapshot_id;
+        ELSIF TG_TABLE_NAME = 'lead_packages' THEN v_record_id := OLD.lead_package_id;
         ELSE v_record_id := 'UNKNOWN';
         END IF;
     END IF;
@@ -533,6 +611,9 @@ CREATE TRIGGER audit_notifications AFTER INSERT OR UPDATE OR DELETE ON public.no
 
 DROP TRIGGER IF EXISTS audit_analytics_snapshots ON public.analytics_snapshots;
 CREATE TRIGGER audit_analytics_snapshots AFTER INSERT OR UPDATE OR DELETE ON public.analytics_snapshots FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
+
+DROP TRIGGER IF EXISTS audit_lead_packages ON public.lead_packages;
+CREATE TRIGGER audit_lead_packages AFTER INSERT OR UPDATE OR DELETE ON public.lead_packages FOR EACH ROW EXECUTE FUNCTION public.log_table_change();
 
 
 -- 8. SEED MOCK DEMO VALUES

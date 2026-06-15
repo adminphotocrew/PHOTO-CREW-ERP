@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
 import { 
-  Users, Calendar, FileText, CheckCircle, Landmark, TrendingUp, AlertCircle, Clock, ShieldAlert, Sparkles, Filter, Sliders, ChevronRight
+  Users, Calendar, FileText, CheckCircle, Landmark, TrendingUp, AlertCircle, Clock, ShieldAlert, Sparkles, Filter, Sliders, ChevronRight,
+  Aperture, Camera, FolderOpen, Image, ShieldCheck
 } from 'lucide-react';
 import { CurrentStage } from '../types';
-import { formatINR, formatTime12Hour } from '../utils';
+import { CameraLensGraphic, LiveAnimateCounter, MicroSparkline } from './ProductionModule';
+import { formatINR, formatTime12Hour, getCustomers } from '../utils';
 import { ProjectDetailModal } from './ProjectDetailModal';
 import { AppLogo } from './AppLogo';
+import { BusinessOwnerCalendar } from './BusinessOwnerCalendar';
 
 export const Dashboard: React.FC = () => {
   const { leads, orders, production, payments, logs, operations, rawFootage } = useRole();
@@ -121,171 +124,316 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
-
       {/* Grid: 11 Primary Metrics in Elegant Bento Style */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        
-        {/* KPI 1 - Customer Leads */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-indigo-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-indigo-700" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Customer Leads</span>
-            <Users className="w-4 h-4 text-indigo-400" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-white tracking-tight">{totalLeads}</span>
-            <span className="text-[9px] px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded font-mono font-bold">
-              ALL TIME
-            </span>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {(() => {
+          const kpiCards = [
+            {
+              label: "Total Leads",
+              val: totalLeads,
+              lensType: "total_leads" as any,
+              trend: "Live Queue",
+              subText: "All Time",
+              sparklineColor: "#a855f7",
+              glowClass: "hover:border-purple-500/40 hover:shadow-[0_8px_30px_rgba(168,85,247,0.18)]",
+              chartPoints: [10, 18, 14, 25, 20, 31, 35],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Today's Inflow",
+              val: todaysLeads,
+              lensType: "new_projects" as any,
+              trend: "+12% growth",
+              subText: "Today",
+              sparklineColor: "#3b82f6",
+              glowClass: "hover:border-blue-500/40 hover:shadow-[0_8px_30px_rgba(59,130,246,0.18)]",
+              chartPoints: [3, 8, 5, 12, 10, 15, 12],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "June Leads",
+              val: thisMonthLeads,
+              lensType: "in_editing" as any,
+              trend: "June Active",
+              subText: "Campaign",
+              sparklineColor: "#6366f1",
+              glowClass: "hover:border-indigo-500/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.18)]",
+              chartPoints: [15, 10, 19, 14, 22, 18, 26],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Signed Orders",
+              val: confirmedOrdersNum,
+              lensType: "approved" as any,
+              trend: "Verified",
+              subText: "Contracts",
+              sparklineColor: "#10b981",
+              glowClass: "hover:border-teal-500/40 hover:shadow-[0_8px_30px_rgba(20,184,166,0.18)]",
+              chartPoints: [8, 15, 12, 20, 16, 25, 24],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Pending Shoots",
+              val: pendingOrders,
+              lensType: "overdue" as any,
+              trend: "In Queue",
+              subText: "Outstanding",
+              sparklineColor: "#f43f5e",
+              glowClass: "hover:border-rose-500/40 hover:shadow-[0_8px_30px_rgba(244,63,94,0.18)]",
+              chartPoints: [2, 4, 1, 5, 3, 6, 2],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Events Prepped",
+              val: eventsScheduled,
+              lensType: "in_review" as any,
+              trend: "Squad Ready",
+              subText: "Pre-pro",
+              sparklineColor: "#f59e0b",
+              glowClass: "hover:border-amber-500/40 hover:shadow-[0_8px_30px_rgba(245,158,11,0.18)]",
+              chartPoints: [5, 9, 7, 14, 11, 16, 15],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Editing Suite",
+              val: editingPending,
+              lensType: "in_editing" as any,
+              trend: "Active CC",
+              subText: "Lightroom",
+              sparklineColor: "#6366f1",
+              glowClass: "hover:border-indigo-500/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.18)]",
+              chartPoints: [11, 14, 12, 18, 15, 20, 17],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Delivered Reels",
+              val: deliveredProjects,
+              lensType: "delivered" as any,
+              trend: "Released",
+              subText: "Galleries",
+              sparklineColor: "#06b6d4",
+              glowClass: "hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgba(16,185,129,0.18)]",
+              chartPoints: [12, 18, 15, 26, 22, 34, 38],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Settled Ledger Balance",
+              val: totalCollected,
+              isCurrency: true,
+              lensType: "approved" as any,
+              trend: "Settled Ledger",
+              subText: "CLEARED FUNDS",
+              sparklineColor: "#fbbf24",
+              glowClass: "hover:border-amber-400/40 hover:shadow-[0_8px_30px_rgba(245,158,11,0.18)]",
+              chartPoints: [20, 35, 28, 45, 52, 60, 75],
+              colSpan: "col-span-2"
+            },
+            {
+              label: "Receivables",
+              val: totalOutstanding,
+              isCurrency: true,
+              lensType: "overdue" as any,
+              trend: "Pending",
+              subText: "Balance",
+              sparklineColor: "#f43f5e",
+              glowClass: "hover:border-rose-500/40 hover:shadow-[0_8px_30px_rgba(244,63,94,0.18)]",
+              chartPoints: [45, 38, 42, 30, 25, 28, 22],
+              colSpan: "col-span-1"
+            },
+            {
+              label: "Lead Conversion",
+              val: conversionPct,
+              isPercentage: true,
+              lensType: "total_leads" as any,
+              trend: "CR Target",
+              subText: "Win Rate",
+              sparklineColor: "#10b981",
+              glowClass: "hover:border-teal-400/40 hover:shadow-[0_8px_30px_rgba(20,184,166,0.18)]",
+              chartPoints: [35, 45, 40, 55, 48, 62, 58],
+              colSpan: "col-span-1"
+            }
+          ];
 
-        {/* KPI 2 - Today's Inflow */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-emerald-500 to-teal-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Today's Inflow</span>
-            <Calendar className="w-4 h-4 text-emerald-400 animate-pulse" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-emerald-400 tracking-tight">{todaysLeads}</span>
-            <span className="text-[9px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded font-mono font-bold">
-              2026-06-10
-            </span>
-          </div>
-        </div>
+          return kpiCards.map((card, idx) => {
+            const displayVal = card.isCurrency 
+              ? formatINR(card.val)
+              : card.isPercentage 
+                ? `${card.val}%` 
+                : card.val;
 
-        {/* KPI 3 - June Leads */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-amber-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-amber-500 to-orange-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>June Leads</span>
-            <FileText className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-white tracking-tight">{thisMonthLeads}</span>
-            <span className="text-[9px] font-mono text-zinc-500 font-bold uppercase">
-              REVENUE MONTH
-            </span>
-          </div>
-        </div>
+            return (
+              <div 
+                key={idx} 
+                style={{ animationDelay: `${idx * 60}ms`, animationFillMode: 'both' }}
+                className={`bg-zinc-950/65 backdrop-blur-xl border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between transition-all duration-500 hover:-translate-y-1.5 select-none ${card.glowClass} ${card.colSpan} group/card animate-fade-in-up relative overflow-hidden`}
+              >
+                {/* Premium subtle glass light strike overlay */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.01] to-white/[0.04] opacity-50 pointer-events-none" />
+                
+                {/* Interactive underlying neon spot glow */}
+                <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-[28px] pointer-events-none opacity-10 transition-all duration-500 group-hover/card:scale-150 group-hover/card:opacity-20" style={{ backgroundColor: card.sparklineColor }} />
 
-        {/* KPI 4 - Signed Orders */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-cyan-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-cyan-500 to-sky-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Signed Orders</span>
-            <CheckCircle className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-zinc-100 tracking-tight">{confirmedOrdersNum}</span>
-            <span className="text-[9px] px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded font-mono font-bold">
-              ACTIVE CONTRACTS
-            </span>
-          </div>
-        </div>
+                {/* Top Segment: DSLR Lens Graphic & Status Badge */}
+                <div className="flex items-center justify-between z-10">
+                  <CameraLensGraphic type={card.lensType} />
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1.5 bg-zinc-905/40 px-2.5 py-0.5 rounded-lg border border-zinc-900/60 shadow-inner">
+                      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: card.sparklineColor }} />
+                      <span className="text-[9px] font-mono font-medium text-zinc-400 uppercase tracking-widest">{card.trend}</span>
+                    </div>
+                  </div>
+                </div>
 
-        {/* KPI 5 - Pending Shoots */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-rose-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-rose-500 to-pink-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Pending Shoots</span>
-            <AlertCircle className="w-4 h-4 text-rose-400" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-zinc-100 tracking-tight">{pendingOrders}</span>
-            <span className="text-[9px] text-zinc-500 font-mono font-bold">IN QUEUE</span>
-          </div>
-        </div>
+                {/* Middle Segment: Metric label and Large value */}
+                <div className="mt-5 space-y-2 z-10">
+                  <p className="text-[10px] font-bold font-sans tracking-widest text-zinc-500 uppercase group-hover/card:text-zinc-300 transition-colors duration-300">{card.label}</p>
+                  <div className="flex items-baseline justify-between select-none">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight group-hover/card:scale-105 transition-transform duration-500 origin-left">
+                      {card.isCurrency || card.isPercentage ? (
+                        <span>{displayVal}</span>
+                      ) : (
+                        <LiveAnimateCounter value={card.val} />
+                      )}
+                    </span>
+                    <span className="text-[9px] font-mono tracking-wider font-extrabold uppercase" style={{ color: card.sparklineColor }}>{card.subText}</span>
+                  </div>
+                </div>
 
-        {/* KPI 6 - Events Prepped */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-orange-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-orange-500 to-amber-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Events Prepped</span>
-            <Clock className="w-4 h-4 text-orange-400" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-zinc-100 tracking-tight">{eventsScheduled}</span>
-            <span className="text-[9px] px-2 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono font-bold">
-              READY SQUADS
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 7 - Editing Suite */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-purple-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-purple-500 to-violet-600" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Editing Suite</span>
-            <AlertCircle className="w-4 h-4 text-purple-400" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-zinc-100 tracking-tight">{editingPending}</span>
-            <span className="text-[9px] text-zinc-500 font-mono font-bold">EDIT TIMELINES</span>
-          </div>
-        </div>
-
-        {/* KPI 8 - Delivered Reels */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl relative overflow-hidden group hover:border-teal-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-teal-500 to-emerald-400" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Delivered Reels</span>
-            <CheckCircle className="w-4 h-4 text-teal-400" />
-          </div>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-zinc-100 tracking-tight">{deliveredProjects}</span>
-            <span className="text-[9px] px-2 py-0.5 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded font-mono font-bold">
-              RELEASED MASTER
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 9 - Settled Ledger */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl col-span-2 relative overflow-hidden group hover:border-amber-400/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-amber-400 via-amber-500 to-orange-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Settled Ledger Balance</span>
-            <Landmark className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-5 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-amber-400 font-mono tracking-tight">
-              {formatINR(totalCollected)}
-            </span>
-            <span className="text-[9px] px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded font-mono font-bold">
-              CLEARED FUNDS
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 10 - Receivables */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl col-span-1 relative overflow-hidden group hover:border-rose-500/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-rose-500 to-red-600" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Receivables</span>
-            <AlertCircle className="w-4 h-4 text-rose-450" />
-          </div>
-          <div className="mt-5 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-rose-400 font-mono tracking-tight">
-              {formatINR(totalOutstanding)}
-            </span>
-            <span className="text-[9.5px] font-mono text-zinc-550 font-bold uppercase">UNPAID</span>
-          </div>
-        </div>
-
-        {/* KPI 11 - Lead Conversion */}
-        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 p-5 rounded-2xl border border-zinc-850 shadow-xl col-span-1 relative overflow-hidden group hover:border-teal-400/30 transition-all duration-300">
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-teal-400 to-emerald-500" />
-          <div className="flex items-center justify-between text-zinc-400 text-[10px] font-extrabold uppercase tracking-widest font-mono">
-            <span>Lead Conversion</span>
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="mt-5 flex items-baseline justify-between">
-            <span className="text-3xl font-black text-white tracking-tight">{conversionPct}%</span>
-            <span className="text-[9.5px] font-mono text-zinc-550 font-bold uppercase">WIN RATE</span>
-          </div>
-        </div>
+                {/* Bottom Segment: Sparkline element */}
+                <div className="mt-4 pt-2 border-t border-zinc-900/40 flex items-center justify-between gap-4 z-10">
+                  <div className="flex-1">
+                    <MicroSparkline points={card.chartPoints} color={card.sparklineColor} />
+                  </div>
+                  <span className="text-[8px] font-mono text-zinc-550 group-hover/card:text-zinc-455">AF EXP</span>
+                </div>
+              </div>
+            );
+          });
+        })()}
       </div>
+
+      {/* SECTION: Repeat Customer & Lifetime Value Analytics */}
+      {(() => {
+        const parsedCustomers = getCustomers(leads, orders, payments);
+        const newCustomers = parsedCustomers.filter(c => c.totalOrders <= 1);
+        const repeatCustomers = parsedCustomers.filter(c => c.totalOrders >= 2);
+        const totalRepeatRevenue = repeatCustomers.reduce((sum, c) => sum + c.totalRevenue, 0);
+        const totalCustomersCount = parsedCustomers.length;
+        const averageCLV = totalCustomersCount > 0 
+          ? Math.round(parsedCustomers.reduce((sum, c) => sum + c.totalRevenue, 0) / totalCustomersCount)
+          : 0;
+        const totalRetentionRate = totalCustomersCount > 0 
+          ? Math.round((repeatCustomers.length / totalCustomersCount) * 100) 
+          : 0;
+
+        return (
+          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 p-6 rounded-2xl border border-zinc-900 shadow-2xl space-y-6 relative overflow-hidden animate-fade-in">
+            <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-violet-600/[0.02] blur-[150px] pointer-events-none" />
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-4 relative z-10">
+              <div>
+                <h3 className="text-xs font-black text-white flex items-center gap-2 tracking-widest font-mono">
+                  <span className="p-1 px-2.5 bg-violet-500/15 text-violet-400 border border-violet-500/20 text-[9px] rounded font-black font-mono">CRM DATA COGNITION</span>
+                  <span>RETENTION ANALYSIS & CUSTOMER LIFETIME VALUE (CLV)</span>
+                </h3>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Loyalty rate modeling, repeat-buyer cohorts tracking, and cumulative lifetime billing clearances.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/20 font-black text-[10px] tracking-widest">
+                  LOYALTY RETENTION RATE: {totalRetentionRate}%
+                </span>
+              </div>
+            </div>
+
+            {/* Metric Blocks */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
+              <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-900/60 hover:border-zinc-850 transition-all duration-300 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">New Customers</span>
+                <div className="text-xl font-black text-white">{newCustomers.length}</div>
+                <p className="text-[10px] text-zinc-500">Single shoot transaction records</p>
+              </div>
+              
+              <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-900/60 hover:border-zinc-850 transition-all duration-300 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">Repeat Customers</span>
+                <div className="text-xl font-black text-orange-400">{repeatCustomers.length}</div>
+                <p className="text-[10px] text-zinc-500">Multi-booking brand loyalists</p>
+              </div>
+
+              <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-900/60 hover:border-zinc-850 transition-all duration-300 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">Average CLV</span>
+                <div className="text-xl font-black text-emerald-400">{formatINR(averageCLV)}</div>
+                <p className="text-[10px] text-zinc-500">Arithmetic mean spend per customer</p>
+              </div>
+
+              <div className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-900/60 hover:border-zinc-850 transition-all duration-300 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest text-zinc-505 uppercase">Repeat Cohort Spend</span>
+                <div className="text-xl font-black text-violet-400">{formatINR(totalRepeatRevenue)}</div>
+                <p className="text-[10px] text-zinc-500">Total volume generated by retention</p>
+              </div>
+            </div>
+
+            {/* Leaderboard */}
+            <div className="space-y-3 relative z-10">
+              <div className="text-[10px] font-bold text-zinc-400 tracking-widest font-mono uppercase text-left">
+                👥 HIGH RETENTION CUSTOMER LEADERBOARD
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-zinc-900 bg-zinc-950/20">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-zinc-950/80 border-b border-zinc-850 text-zinc-500 uppercase tracking-widest text-[9px] font-mono">
+                      <th className="p-3 pl-4">Customer ID</th>
+                      <th className="p-3">Customer Full Name</th>
+                      <th className="p-3">Contact Details</th>
+                      <th className="p-3 text-center">Inquiries Logged</th>
+                      <th className="p-3 text-center">Roster Orders</th>
+                      <th className="p-3">Previous Packages Chosen</th>
+                      <th className="p-3 text-right pr-4">Total Revenue Spend (CLV)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-900/30 text-zinc-300">
+                    {parsedCustomers.map((cust) => (
+                      <tr key={cust.customer_id} className="hover:bg-zinc-900/10 transition-all text-zinc-300">
+                        <td className="p-3 pl-4 font-mono font-black text-amber-500">{cust.customer_id}</td>
+                        <td className="p-3 text-zinc-100 font-bold">{cust.customer_name}</td>
+                        <td className="p-3 font-mono text-zinc-400 text-[10px]">
+                          <div>{cust.email || 'no-email-recorded'}</div>
+                          <div>{cust.mobile || 'no-phone-recorded'}</div>
+                        </td>
+                        <td className="p-3 text-center font-mono text-zinc-400">{cust.leads.length}</td>
+                        <td className="p-3 text-center font-mono">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                            cust.totalOrders >= 2 
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' 
+                              : 'bg-zinc-800/40 text-zinc-450 border-zinc-900'
+                          }`}>
+                            {cust.totalOrders} {cust.totalOrders >= 2 ? 'RETENTION' : 'SINGLE'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-[10px] text-zinc-400 max-w-[220px] truncate">
+                          {cust.previousPackages.join(', ') || 'N/A (Awaiting Order)'}
+                        </td>
+                        <td className="p-3 text-right pr-4 font-mono font-black text-emerald-400 text-[13px]">
+                          {formatINR(cust.totalRevenue)}
+                        </td>
+                      </tr>
+                    ))}
+                    {parsedCustomers.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-zinc-500 font-mono">
+                          Awaiting customer records load synchronization...
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Interactive photography vectorscope & real-time calibration monitor */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -549,6 +697,10 @@ export const Dashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="mt-8">
+        <BusinessOwnerCalendar />
       </div>
 
       <ProjectDetailModal 

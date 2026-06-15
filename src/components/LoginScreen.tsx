@@ -434,7 +434,7 @@ export const LoginScreen: React.FC = () => {
                     value={emailOrUsername}
                     onChange={(e) => setEmailOrUsername(e.target.value)}
                     disabled={isLoading}
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-11 pr-4 py-3.5 text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 font-medium transition-all"
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-11 pr-4 py-3.5 text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 focus:shadow-[0_0_15px_rgba(245,158,11,0.12)] font-medium transition-all duration-300 hover:border-zinc-750"
                   />
                 </div>
               </div>
@@ -454,7 +454,7 @@ export const LoginScreen: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-11 pr-11 py-3.5 text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 font-medium tracking-wide transition-all"
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-11 pr-11 py-3.5 text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 focus:shadow-[0_0_15px_rgba(245,158,11,0.12)] font-medium tracking-wide transition-all duration-300 hover:border-zinc-750"
                   />
                   <button
                     type="button"
@@ -470,7 +470,7 @@ export const LoginScreen: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-505 hover:opacity-90 disabled:opacity-50 text-black py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2 mt-4"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-505 hover:opacity-95 disabled:opacity-50 text-black py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 transform hover:scale-[1.01] active:scale-[0.99] hover:shadow-[0_0_20px_rgba(245,158,11,0.22)] cursor-pointer shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2 mt-4"
               >
                 {isLoading ? (
                   <>
@@ -502,15 +502,21 @@ export const LoginScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Demo Directory */}
+          {/* Quick Directory */}
           <div className="bg-zinc-900/30 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
             <span className="text-[10px] font-black uppercase font-mono tracking-widest text-zinc-400 flex items-center gap-1.5 pl-1">
               <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-              <span>Demo Direct Access Index (Click to Auto-fill)</span>
+              <span>Direct Access Index (Click to Auto-fill)</span>
             </span>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {users.map((usr) => {
+              {users.filter(usr => {
+                const isDemo = usr.name.toLowerCase().includes('demo') || 
+                               usr.email.toLowerCase().includes('demo') || 
+                               usr.name.toLowerCase().includes('test') || 
+                               usr.email.toLowerCase().includes('test');
+                return !isDemo;
+              }).map((usr) => {
                 const theme = getRoleTheme(usr.role);
                 const isInactive = !usr.active;
                 return (

@@ -14,7 +14,7 @@ async function test() {
   }
   const supabase = createClient(url, anonKey);
   
-  const tables = ['users', 'leads', 'orders', 'operations', 'raw_footage', 'production', 'payments', 'activity_logs', 'notifications', 'production_staff'];
+  const tables = ['users', 'leads', 'orders', 'operations', 'raw_footage', 'production', 'payments', 'activity_logs', 'notifications', 'production_staff', 'packages', 'lead_packages'];
   for (const table of tables) {
     const { data, error } = await supabase.from(table).select('*').limit(1);
     if (error) {

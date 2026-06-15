@@ -1,3 +1,5 @@
+import { Lead, Order, Payment, Customer } from './types';
+
 /**
  * Utility functions for formatting Indian currency, phone numbers, and AM/PM times.
  */
@@ -123,4 +125,177 @@ export function formatTime12Hour(timeStr?: string): string {
   }
 
   return timeStr;
+}
+
+export function cleanPhone(phone: string | undefined): string {
+  if (!phone) return '';
+  const cleaned = phone.replace(/[^\d]/g, '');
+  return cleaned.length >= 10 ? cleaned.slice(-10) : cleaned;
+}
+
+export function cleanEmail(email: string | undefined): string {
+  if (!email) return '';
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Compile unified Customer Profiles dynamically from Leads, Orders, and Payments.
+ * Ensures consistent Customer ID mapping using deterministic sorting and links history.
+ */
+export function getCustomers(leads: Lead[], orders: Order[], payments: Payment[]): Customer[] {
+  const customerMap: { [key: string]: {
+    name: string;
+    mobile: string;
+    altMobile?: string;
+    email: string;
+    leads: Lead[];
+    orders: Order[];
+  } } = {};
+
+  const getMatchedGroupKey = (mobile: string, altMobile?: string, email?: string): string | null => {
+    const cp = cleanPhone(mobile);
+    const calt = cleanPhone(altMobile);
+    const ce = cleanEmail(email);
+
+    if (!cp && !calt && !ce) return null;
+
+    for (const k of Object.keys(customerMap)) {
+      const parent = customerMap[k];
+      const pcp = cleanPhone(parent.mobile);
+      const pcalt = cleanPhone(parent.altMobile);
+      const pce = cleanEmail(parent.email);
+
+      if (
+        (cp && (cp === pcp || cp === pcalt)) ||
+        (calt && (calt === pcp || calt === pcalt)) ||
+        (ce && ce === pce)
+      ) {
+        return k;
+      }
+    }
+    return null;
+  };
+
+  // Group leads
+  leads.forEach(lead => {
+    const matchedKey = getMatchedGroupKey(lead.mobile, lead.alternate_mobile, lead.email);
+    const key = matchedKey || lead.email.trim().toLowerCase() || lead.mobile.replace(/[^\d]/g, '') || lead.lead_id;
+
+    if (!customerMap[key]) {
+      customerMap[key] = {
+        name: lead.customer_name,
+        mobile: lead.mobile,
+        altMobile: lead.alternate_mobile,
+        email: lead.email,
+        leads: [],
+        orders: []
+      };
+    }
+    
+    // Append lead
+    if (!customerMap[key].leads.some(l => l.lead_id === lead.lead_id)) {
+      customerMap[key].leads.push(lead);
+    }
+    // Set alt info if missing
+    if (!customerMap[key].altMobile && lead.alternate_mobile) {
+      customerMap[key].altMobile = lead.alternate_mobile;
+    }
+    if (!customerMap[key].email && lead.email) {
+      customerMap[key].email = lead.email;
+    }
+    if (!customerMap[key].name && lead.customer_name) {
+      customerMap[key].name = lead.customer_name;
+    }
+  });
+
+  // Group orders and map to their leads/customers
+  orders.forEach(order => {
+    // Find associated lead to fetch alt mobile & email for accurate grouping
+    const associatedLead = leads.find(l => l.lead_id === order.lead_id);
+    const matchedKey = getMatchedGroupKey(
+      order.mobile,
+      associatedLead?.alternate_mobile,
+      associatedLead?.email
+    );
+    
+    const key = matchedKey || associatedLead?.email?.trim()?.toLowerCase() || order.mobile.replace(/[^\d]/g, '') || order.order_id;
+
+    if (!customerMap[key]) {
+      customerMap[key] = {
+        name: order.customer_name,
+        mobile: order.mobile,
+        altMobile: associatedLead?.alternate_mobile,
+        email: associatedLead?.email || '',
+        leads: associatedLead ? [associatedLead] : [],
+        orders: []
+      };
+    }
+
+    if (!customerMap[key].orders.some(o => o.order_id === order.order_id)) {
+      customerMap[key].orders.push(order);
+    }
+    if (!customerMap[key].name && order.customer_name) {
+      customerMap[key].name = order.customer_name;
+    }
+  });
+
+  // Convert map to array and filter out empty nodes
+  const customerList = Object.keys(customerMap)
+    .map(k => customerMap[k])
+    .filter(c => c.name || c.mobile || c.email);
+
+  // Sort deterministically to keep Customer IDs stable
+  customerList.sort((a, b) => {
+    const valA = cleanEmail(a.email) || cleanPhone(a.mobile) || a.name;
+    const valB = cleanEmail(b.email) || cleanPhone(b.mobile) || b.name;
+    return valA.localeCompare(valB);
+  });
+
+  // Map to Customer objects with index-based IDs (CUST-001, CUST-002, ...)
+  return customerList.map((c, index) => {
+    const customer_id = `CUST-${String(index + 1).padStart(3, '0')}`;
+
+    // Link customer_id back into all the matched leads and orders
+    c.leads.forEach(l => { l.customer_id = customer_id; });
+    c.orders.forEach(o => { o.customer_id = customer_id; });
+
+    // Link payments
+    const customerOrdersIds = c.orders.map(o => o.order_id);
+    const customerPayments = payments.filter(p => customerOrdersIds.includes(p.order_id));
+
+    // Calculate total collected revenue: based on advance + final payments
+    const collectedRevenue = customerPayments.reduce((sum, p) => sum + (Number(p.advance_received || 0) + Number(p.final_payment_received || 0)), 0);
+    // fallback if no payments are configured
+    const totalRevenue = collectedRevenue || c.orders.reduce((sum, o) => sum + Number(o.advance_received || 0), 0);
+
+    // Collect packages and events
+    const previousPackages = Array.from(new Set(c.orders.map(o => o.package_name).filter(Boolean)));
+    const previousEvents = Array.from(new Set(c.orders.map(o => o.event_type).filter(Boolean)));
+
+    // Find the latest event date
+    const allEventDates = [
+      ...c.leads.map(l => l.event_date),
+      ...c.orders.map(o => o.event_date)
+    ].filter(Boolean);
+    
+    const lastEventDate = allEventDates.length > 0 
+      ? [...allEventDates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+      : undefined;
+
+    return {
+      customer_id,
+      customer_name: c.name,
+      mobile: c.mobile,
+      alternate_mobile: c.altMobile,
+      email: c.email,
+      totalOrders: c.orders.length,
+      totalRevenue,
+      previousPackages,
+      previousEvents,
+      lastEventDate,
+      leads: c.leads,
+      orders: c.orders,
+      payments: customerPayments
+    };
+  });
 }

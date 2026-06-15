@@ -49,6 +49,7 @@ export interface User {
 
 export interface Lead {
   lead_id: string;
+  customer_id?: string;
   created_date: string;
   lead_source: string;
   customer_name: string;
@@ -68,9 +69,23 @@ export interface Lead {
   updated_at?: string;
 }
 
+export interface LeadPackage {
+  lead_package_id: string;
+  lead_id: string;
+  package_id: string;
+  package_name: string;
+  package_cost: number;
+  quantity: number;
+  total_amount: number;
+  discount: number;
+  final_amount: number;
+  created_at?: string;
+}
+
 export interface Order {
   order_id: string;
   lead_id: string;
+  customer_id?: string;
   customer_name: string;
   mobile: string;
   event_type: string;
@@ -87,6 +102,22 @@ export interface Order {
   created_at: string;
   updated_by?: string;
   updated_at?: string;
+}
+
+export interface Customer {
+  customer_id: string;
+  customer_name: string;
+  mobile: string;
+  alternate_mobile?: string;
+  email: string;
+  totalOrders: number;
+  totalRevenue: number;
+  previousPackages: string[];
+  previousEvents: string[];
+  lastEventDate?: string;
+  leads: Lead[];
+  orders: Order[];
+  payments: Payment[];
 }
 
 export interface Operation {
@@ -176,6 +207,18 @@ export interface Staff {
   rating?: number;
   bio?: string;
   created_at?: string;
+  whatsapp_number?: string;
+}
+
+export interface StaffAssignment {
+  assignment_id: string;
+  order_id: string;
+  staff_role: string;
+  staff_id: string;
+  staff_name: string;
+  assignment_date: string;
+  assignment_status: 'Assigned' | 'Completed' | 'Cancelled';
+  whatsapp_sent_status?: string;
 }
 
 export interface Notification {
@@ -204,6 +247,20 @@ export interface Equipment {
   purchase_date: string;
   notes?: string;
   created_at?: string;
+}
+
+export interface Package {
+  package_id: string;
+  package_name: string;
+  category: string;
+  price: number;
+  status: 'Active' | 'Inactive';
+  deliverables?: string;
+  team_members?: string;
+  seasonal_offer?: string;
+  terms_conditions?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 

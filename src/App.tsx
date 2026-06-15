@@ -13,13 +13,23 @@ import { UserManagementModule } from './components/UserManagementModule';
 import { DatabaseHealthModule } from './components/DatabaseHealthModule';
 import { NotificationsModule } from './components/NotificationsModule';
 import { AppLogo } from './components/AppLogo';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Briefcase, Camera, Video, Landmark, Shield, Users, Search, Info, Target, Sparkles, Menu, RefreshCw, Activity, Bell,
-  UserPlus, Truck, Layers, CheckSquare, Clock, Play, BarChart3
+  UserPlus, Truck, Layers, CheckSquare, Clock, Play, BarChart3, LogOut, Calendar
 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
-  const { currentUser, currentRole, resetAllData, refreshData, notifications } = useRole();
+  const { currentUser, currentRole, resetAllData, refreshData, notifications, logout } = useRole();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    refreshData();
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 600);
+  };
   
   // Collapse sidebar/hidden by default, read from sessionStorage to persist during session
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
@@ -32,10 +42,10 @@ const MainAppContent: React.FC = () => {
   }, [sidebarOpen]);
 
   // Sub-tab selection state for production suite
-  const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'production_leads' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications'>('production_leads');
+  const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'production_leads' | 'production_calendar' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications'>('production_leads');
 
   // Sub-tab selection state for operations suite
-  const [activeOpSubTab, setActiveOpSubTab] = useState<'operations_leads' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics'>('operations_leads');
+  const [activeOpSubTab, setActiveOpSubTab] = useState<'operations_leads' | 'operations_calendar' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics'>('operations_leads');
 
   // Initialize correct default tab according to user role to avoid visual flashes
   const [activeTab, setActiveTab] = useState<'dashboard' | 'sales' | 'operations' | 'production' | 'staff_management' | 'notifications' | 'payments' | 'search' | 'users' | 'diagnostics'>(() => {
@@ -141,6 +151,7 @@ const MainAppContent: React.FC = () => {
           <nav className="space-y-1.5">
             {[
               { id: 'operations_leads', label: 'Operations Leads', icon: Sparkles },
+              { id: 'operations_calendar', label: 'Operations Calendar', icon: Calendar },
               { id: 'equipment_management', label: 'Equipment Management', icon: Camera },
               { id: 'operations_staff', label: 'Staff Management', icon: Users },
               { id: 'event_scheduling', label: 'Event Scheduling', icon: Clock },
@@ -210,6 +221,7 @@ const MainAppContent: React.FC = () => {
           <nav className="space-y-1.5">
             {[
               { id: 'production_leads', label: 'Production Leads', icon: Sparkles },
+              { id: 'production_calendar', label: 'Production Calendar', icon: Calendar },
               { id: 'staff_management', label: 'Staff Management', icon: UserPlus },
               { id: 'staff_performance', label: 'Staff Performance', icon: Users },
               { id: 'overall_performance', label: 'Overall Performance', icon: BarChart3 },
@@ -466,6 +478,29 @@ const MainAppContent: React.FC = () => {
           <div className="my-1" />
         </div>
       )}
+
+      {/* Global Actions at bottom of sidebar */}
+      <div className="bg-[#09090b]/80 border border-zinc-900 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
+        <button
+          onClick={handleRefresh}
+          className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-mono uppercase tracking-wider font-extrabold rounded-xl transition-all cursor-pointer border border-emerald-500/10 hover:border-emerald-500/35 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-450 group"
+        >
+          <div className="flex items-center gap-2.5">
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-450 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
+            <span>Refresh System Flow</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => logout()}
+          className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-mono uppercase tracking-wider font-extrabold rounded-xl transition-all cursor-pointer border border-rose-500/10 hover:border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/15 text-rose-455"
+        >
+          <div className="flex items-center gap-2.5">
+            <LogOut className="w-3.5 h-3.5 text-rose-455" />
+            <span>Secure Logout</span>
+          </div>
+        </button>
+      </div>
     </aside>
   );
 
@@ -511,20 +546,31 @@ const MainAppContent: React.FC = () => {
 
           {/* Render Active View Container */}
           <div className="bg-transparent rounded-2xl relative">
-            {activeTab === 'dashboard' && currentRole === 'Business Owner' && <Dashboard />}
-            {activeTab === 'sales' && (currentRole === 'Business Owner' || currentRole === 'Sales Team') && <SalesModule />}
-            {activeTab === 'operations' && (currentRole === 'Business Owner' || currentRole === 'Operations Team') && (
-              <OperationsModule activeSubTab={activeOpSubTab} setActiveSubTab={setActiveOpSubTab} />
-            )}
-            {activeTab === 'production' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && (
-              <ProductionModule activeSubTab={activeSubTab} setActiveSubTab={setActiveSubTab} />
-            )}
-            {activeTab === 'staff_management' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && <StaffManagementModule />}
-            {activeTab === 'notifications' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && <NotificationsModule />}
-            {activeTab === 'payments' && currentRole === 'Business Owner' && <PaymentsModule />}
-            {activeTab === 'search' && currentRole === 'Business Owner' && <OrderSearch />}
-            {activeTab === 'users' && currentRole === 'Business Owner' && <UserManagementModule />}
-            {activeTab === 'diagnostics' && currentRole === 'Business Owner' && <DatabaseHealthModule />}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 12, filter: 'blur(3px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -12, filter: 'blur(3px)' }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="will-change-transform"
+              >
+                {activeTab === 'dashboard' && currentRole === 'Business Owner' && <Dashboard />}
+                {activeTab === 'sales' && (currentRole === 'Business Owner' || currentRole === 'Sales Team') && <SalesModule />}
+                {activeTab === 'operations' && (currentRole === 'Business Owner' || currentRole === 'Operations Team') && (
+                  <OperationsModule activeSubTab={activeOpSubTab} setActiveSubTab={setActiveOpSubTab} />
+                )}
+                {activeTab === 'production' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && (
+                  <ProductionModule activeSubTab={activeSubTab} setActiveSubTab={setActiveSubTab} />
+                )}
+                {activeTab === 'staff_management' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && <StaffManagementModule />}
+                {activeTab === 'notifications' && (currentRole === 'Business Owner' || currentRole === 'Production Team') && <NotificationsModule />}
+                {activeTab === 'payments' && currentRole === 'Business Owner' && <PaymentsModule />}
+                {activeTab === 'search' && currentRole === 'Business Owner' && <OrderSearch />}
+                {activeTab === 'users' && currentRole === 'Business Owner' && <UserManagementModule />}
+                {activeTab === 'diagnostics' && currentRole === 'Business Owner' && <DatabaseHealthModule />}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
 

@@ -84,6 +84,50 @@ export const INITIAL_USERS: User[] = [
     active: true,
     created_at: '2026-06-12T00:00:00Z',
     password: 'demo123'
+  },
+  {
+    id: 'U-009',
+    name: 'Business Owner Demo',
+    mobile: '+919999999909',
+    email: 'owner@photocrewdemo.com',
+    username: 'businessowner',
+    role: 'Business Owner',
+    active: true,
+    created_at: '2026-06-14T00:00:00Z',
+    password: 'Admin@123'
+  },
+  {
+    id: 'U-010',
+    name: 'Sales Team Demo',
+    mobile: '+919999999910',
+    email: 'sales@photocrewdemo.com',
+    username: 'salesteam',
+    role: 'Sales Team',
+    active: true,
+    created_at: '2026-06-14T00:00:00Z',
+    password: 'Sales@123'
+  },
+  {
+    id: 'U-011',
+    name: 'Operations Team Demo',
+    mobile: '+919999999911',
+    email: 'operations@photocrewdemo.com',
+    username: 'operationsteam',
+    role: 'Operations Team',
+    active: true,
+    created_at: '2026-06-14T00:00:00Z',
+    password: 'Ops@123'
+  },
+  {
+    id: 'U-012',
+    name: 'Production Team Demo',
+    mobile: '+919999999912',
+    email: 'production@photocrewdemo.com',
+    username: 'productionteam',
+    role: 'Production Team',
+    active: true,
+    created_at: '2026-06-14T00:00:00Z',
+    password: 'Prod@123'
   }
 ];
 
