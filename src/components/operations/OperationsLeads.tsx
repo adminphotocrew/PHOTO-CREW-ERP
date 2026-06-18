@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Order, CurrentStage, Staff, Equipment } from '../../types';
 import { ProjectDetailModal } from '../ProjectDetailModal';
+import { CameraLensStatsCard, CameraLensTheme } from '../CameraLensStatsCard';
 
 export const OperationsLeads: React.FC = () => {
   const { 
@@ -16,9 +17,11 @@ export const OperationsLeads: React.FC = () => {
     assignOperations, 
     markEventCompleted, 
     confirmRawFootageReceived,
+    updateOrderStage,
     rawFootage,
     staffAssignments,
-    saveStaffAssignments
+    saveStaffAssignments,
+    payments
   } = useRole();
 
   const canEdit = currentRole === 'Operations Team' || currentRole === 'Business Owner';
@@ -57,17 +60,37 @@ export const OperationsLeads: React.FC = () => {
     equipment_kit: '',
     reporting_time: '08:00',
     remarks: '',
-    event_status: 'Assigned' as 'Assigned' | 'Completed',
+    event_status: 'Assigned' as 'Assigned' | 'Completed' | 'Event Scheduled' | 'Event Completed' | 'Raw Footage Received' | string,
     current_stage: 'Order Confirmed' as CurrentStage,
-    raw_footage_link: ''
+    raw_footage_link: '',
+    event_date: '',
+    event_time: '10:00'
   });
 
   // State for completing shoot
   const [closingOrderId, setClosingOrderId] = useState<string | null>(null);
   const [serverPath, setServerPath] = useState('');
 
+  // Raw Footage Modal State
+  const [receivingFootageOrderId, setReceivingFootageOrderId] = useState<string | null>(null);
+  const [footageForm, setFootageForm] = useState({
+    footage_link: '',
+    storage_type: 'Google Drive',
+    upload_notes: ''
+  });
+  const [paymentCollectionStatus, setPaymentCollectionStatus] = useState<'Full Payment Received' | 'Partial Payment Received' | 'Payment Pending'>('Payment Pending');
+  const [additionalReceived, setAdditionalReceived] = useState<number>(0);
+
+  // Staff Assignment Success Popup State
+  const [successModalData, setSuccessModalData] = useState<{
+    orderId: string;
+    customerName: string;
+    order: Order;
+    assignments: { staff_role: string; staff_name: string }[];
+  } | null>(null);
+
   // Filter orders to show confirmed ones for Operations
-  const allowedStages = ['Order Confirmed', 'Operations Assigned', 'Event Scheduled', 'Event Completed', 'Raw Footage Received'];
+  const allowedStages = ['Order Confirmed', 'New Order Received', 'Operations Assigned', 'Event Scheduled', 'Staff Assigned', 'Event Completed', 'Raw Footage Received'];
   const operationsOrders = orders.filter(o => {
     // If we're Operations role, we filter strictly to current ops lifecycles
     if (currentRole === 'Operations Team') {
@@ -169,6 +192,18 @@ export const OperationsLeads: React.FC = () => {
         if (statusFilter === 'Event Scheduled' && o.current_stage !== 'Event Scheduled') return false;
         if (statusFilter === 'Event Completed' && o.current_stage !== 'Event Completed') return false;
         if (statusFilter === 'Raw Footage Received' && o.current_stage !== 'Raw Footage Received') return false;
+
+        // Custom stats click metrics
+        if (statusFilter === 'Pending' && (o.current_stage !== 'Order Confirmed' && o.current_stage !== 'Operations Assigned')) return false;
+        if (statusFilter === 'Raw Footage Pending') {
+          const rf = rawFootage ? rawFootage.find(f => f.order_id === o.order_id) : null;
+          const isMatch = o.current_stage === 'Event Completed' && (!rf || !rf.raw_received || rf.ingest_status === 'Pending');
+          if (!isMatch) return false;
+        }
+        if (statusFilter === 'Ready for Production') {
+          const isMatch = ['Raw Footage Received', 'Editor Assigned', 'Editing Started'].includes(o.current_stage);
+          if (!isMatch) return false;
+        }
       }
 
       // 2. Date Filter based on Event Date
@@ -240,9 +275,11 @@ export const OperationsLeads: React.FC = () => {
       equipment_kit: op?.equipment_kit || '',
       reporting_time: op?.reporting_time || '08:00',
       remarks: op?.remarks || '',
-      event_status: op?.event_status || 'Assigned',
-      current_stage: order.current_stage || 'Order Confirmed',
-      raw_footage_link: rf?.server_path || `s3://photocrew-vault-production/2026/${order.order_id}-shoot/raw/`
+      event_status: op?.event_status || 'Event Scheduled',
+      current_stage: order.current_stage || 'Event Scheduled',
+      raw_footage_link: rf?.server_path || `s3://photocrew-vault-production/2026/${order.order_id}-shoot/raw/`,
+      event_date: order.event_date || '',
+      event_time: order.event_time || '10:00'
     });
     setAssigningOrderId(order.order_id);
     
@@ -265,6 +302,7 @@ export const OperationsLeads: React.FC = () => {
     const assistant = activeAssignments.find(a => a.staff_role.toLowerCase().includes('assistant'))?.staff_name || '';
     
     // Assign operations includes event_status and raw footage link if updated
+    // Note: requirements state that upon saving assignment, status becomes Event Scheduled and Stage becomes Event Scheduled
     assignOperations(assigningOrderId, {
       photographer_assigned: photographer || assignForm.photographer_assigned || 'Ramesh Kumar',
       videographer_assigned: videographer || assignForm.videographer_assigned || 'Rahul Verma',
@@ -273,19 +311,23 @@ export const OperationsLeads: React.FC = () => {
       equipment_kit: assignForm.equipment_kit,
       reporting_time: assignForm.reporting_time,
       remarks: assignForm.remarks,
-      event_status: assignForm.event_status,
-      current_stage: assignForm.current_stage
+      event_status: 'Event Scheduled',
+      current_stage: 'Event Scheduled',
+      event_date: assignForm.event_date,
+      event_time: assignForm.event_time
     });
 
-    // If the stage selected is 'Raw Footage Received', trigger raw footage confirmation directly
-    if (assignForm.current_stage === 'Raw Footage Received') {
-      confirmRawFootageReceived(assigningOrderId);
-    } else if (assignForm.current_stage === 'Event Completed' || assignForm.event_status === 'Completed') {
-      markEventCompleted(assigningOrderId, assignForm.raw_footage_link || `s3://photocrew-vault-production/2026/${assigningOrderId}-shoot/raw/`);
+    const matchedOrder = orders.find(o => o.order_id === assigningOrderId);
+    if (matchedOrder) {
+      setSuccessModalData({
+        orderId: assigningOrderId,
+        customerName: matchedOrder.customer_name,
+        order: matchedOrder,
+        assignments: [...activeAssignments]
+      });
     }
 
     setAssigningOrderId(null);
-    alert(`Personnel and gears allocated successfully to Order [${assigningOrderId}].`);
   };
 
   const getStaffForRole = (role: string) => {
@@ -398,21 +440,123 @@ export const OperationsLeads: React.FC = () => {
       {/* 1. Results Summary Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {[
-          { label: "Total Operations Leads", value: stats.totalLeads, color: "text-amber-400 border-amber-500/20 bg-amber-500/5", icon: "📋" },
-          { label: "Scheduled Events", value: stats.scheduled, color: "text-cyan-400 border-cyan-500/20 bg-cyan-500/5", icon: "📅" },
-          { label: "Completed Events", value: stats.completed, color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", icon: "✅" },
-          { label: "Pending Events", value: stats.pending, color: "text-orange-400 border-orange-500/20 bg-orange-500/5", icon: "⏳" },
-          { label: "Raw Footage Pending", value: stats.rawFootagePending, color: "text-rose-450 border-rose-500/20 bg-rose-500/5", icon: "🎞️" },
-          { label: "Ready for Production", value: stats.readyForProduction, color: "text-purple-400 border-purple-500/20 bg-purple-500/5", icon: "🎬" },
-        ].map((s, idx) => (
-          <div key={idx} className={`p-3.5 rounded-xl border ${s.color} flex flex-col justify-between space-y-2 shadow-sm`}>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-mono tracking-wider font-bold uppercase text-zinc-400 leading-snug">{s.label}</span>
-              <span className="text-sm">{s.icon}</span>
-            </div>
-            <span className="text-xl font-black font-mono">{s.value}</span>
-          </div>
+          { label: "Total Operations Leads", val: stats.totalLeads, theme: 'purple' as CameraLensTheme, filterValue: 'All', trendText: 'Active', chartPoints: [10, 18, 14, 25, 20, 31, 35] },
+          { label: "Scheduled Events", val: stats.scheduled, theme: 'cyan' as CameraLensTheme, filterValue: 'Event Scheduled', trendText: 'Rostered', chartPoints: [5, 9, 7, 14, 11, 16, 15] },
+          { label: "Completed Events", val: stats.completed, theme: 'green' as CameraLensTheme, filterValue: 'Event Completed', trendText: 'Closed Out', chartPoints: [8, 15, 12, 20, 16, 25, 24] },
+          { label: "Pending Events", val: stats.pending, theme: 'gold' as CameraLensTheme, filterValue: 'Pending', trendText: 'Pending Assign', chartPoints: [3, 8, 5, 12, 10, 15, 12] },
+          { label: "Raw Footage Pending", val: stats.rawFootagePending, theme: 'red' as CameraLensTheme, filterValue: 'Raw Footage Pending', trendText: 'Ingest Lag', chartPoints: [2, 4, 1, 5, 3, 6, 2] },
+          { label: "Ready for Production", val: stats.readyForProduction, theme: 'purple' as CameraLensTheme, filterValue: 'Ready for Production', trendText: 'In Suite', chartPoints: [11, 14, 12, 18, 15, 20, 17] },
+        ].map((card, idx) => (
+          <CameraLensStatsCard
+            key={idx}
+            label={card.label}
+            val={card.val}
+            theme={card.theme}
+            trendText={card.trendText}
+            subText="OPS MONITOR"
+            chartPoints={card.chartPoints}
+            activeFilterValue={statusFilter}
+            currentFilterValue={card.filterValue}
+            onClick={() => setStatusFilter(statusFilter === card.filterValue ? 'All' : card.filterValue)}
+            lensLabel={card.label.slice(0, 10).toUpperCase()}
+          />
         ))}
+      </div>
+
+      {/* ### New Orders Received */}
+      <div id="new_orders_received_section" className="bg-zinc-950/80 border border-amber-500/25 p-5 rounded-2xl mb-6 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+            <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest font-mono">
+              ### New Orders Received
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono text-zinc-500">
+            {orders.filter(o => o.current_stage === 'Order Confirmed' || o.current_stage === 'New Order Received').length} Pending Action
+          </span>
+        </div>
+
+        <div className="overflow-x-auto border border-zinc-900 rounded-xl">
+          <table className="w-full border-collapse text-left text-xs text-zinc-300">
+            <thead>
+              <tr className="border-b border-zinc-900 bg-zinc-900/40 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+                <th className="p-3 font-bold">Order ID</th>
+                <th className="p-3 font-bold">Customer Name</th>
+                <th className="p-3 font-bold">Event Type</th>
+                <th className="p-3 font-bold">Event Date</th>
+                <th className="p-3 font-bold">Event Time</th>
+                <th className="p-3 font-bold">Reporting Time</th>
+                <th className="p-3 font-bold">Package Name</th>
+                <th className="p-3 font-bold">Order Confirmation Date</th>
+                <th className="p-3 font-bold">Current Status</th>
+                <th className="p-3 font-bold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-900">
+              {(() => {
+                const newOrdersList = orders.filter(o => o.current_stage === 'Order Confirmed' || o.current_stage === 'New Order Received');
+                if (newOrdersList.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={10} className="p-6 text-center text-zinc-500 italic">
+                        No new confirmed orders waiting in receiving bay.
+                      </td>
+                    </tr>
+                  );
+                }
+                return newOrdersList.map(ord => {
+                  const op = operations.find(o => o.order_id === ord.order_id);
+                  const confDate = ord.created_at ? ord.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
+                  return (
+                    <tr key={ord.order_id} className="hover:bg-zinc-900/40 transition-all font-mono">
+                      <td className="p-3 text-amber-400 font-bold">{ord.order_id}</td>
+                      <td className="p-3 font-sans font-bold text-white">{ord.customer_name}</td>
+                      <td className="p-3 text-zinc-300 font-sans">{ord.event_type}</td>
+                      <td className="p-3 text-zinc-405">{ord.event_date || '—'}</td>
+                      <td className="p-3 text-zinc-405">{ord.event_time || '—'}</td>
+                      <td className="p-3 text-zinc-405">{op?.reporting_time || '—'}</td>
+                      <td className="p-3 text-zinc-300 font-sans">{ord.package_name}</td>
+                      <td className="p-3 text-zinc-405">{confDate}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${
+                          ord.current_stage === 'Order Confirmed' 
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' 
+                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        }`}>
+                          {ord.current_stage}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {ord.current_stage === 'Order Confirmed' && (
+                            <button
+                              onClick={() => {
+                                updateOrderStage(ord.order_id, 'New Order Received');
+                                alert(`Order ${ord.order_id} Acknowledged & marked as "New Order Received".`);
+                              }}
+                              className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold rounded cursor-pointer transition-all uppercase"
+                            >
+                              Acknowledge
+                            </button>
+                          )}
+                          {(ord.current_stage === 'Order Confirmed' || ord.current_stage === 'New Order Received') && (
+                            <button
+                              onClick={() => startAssigning(ord)}
+                              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold rounded cursor-pointer transition-all uppercase"
+                            >
+                              Schedule / Assign
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Search & Simplified Filters Bar */}
@@ -460,6 +604,9 @@ export const OperationsLeads: React.FC = () => {
               <option value="Event Scheduled">Event Scheduled</option>
               <option value="Event Completed">Event Completed</option>
               <option value="Raw Footage Received">Raw Footage Received</option>
+              <option value="Pending">Pending Events</option>
+              <option value="Raw Footage Pending">Raw Footage Pending</option>
+              <option value="Ready for Production">Ready for Production</option>
             </select>
           </div>
         </div>
@@ -497,9 +644,7 @@ export const OperationsLeads: React.FC = () => {
             )}
           </div>
         )}
-      </div>
-
-      {/* Main Board Table */}
+            {/* Main Board Table */}
       <div className="bg-zinc-900/40 border border-zinc-850 rounded-2xl overflow-x-auto shadow-xl">
         <table className="w-full text-left border-collapse min-w-[1240px]">
           <thead>
@@ -512,24 +657,12 @@ export const OperationsLeads: React.FC = () => {
               >
                 Customer Name {renderSortIndicator('customer_name')}
               </th>
-              <th className="p-4 font-bold">Mobile Number</th>
-              <th className="p-4 font-bold">Event Type</th>
-              <th 
-                onClick={() => toggleSort('event_date')}
-                className="p-4 font-bold cursor-pointer hover:bg-zinc-800/40 hover:text-white transition-colors"
-                title="Click to Sort by Event Date"
-              >
-                Event Date {renderSortIndicator('event_date')}
-              </th>
-              <th className="p-4 font-bold">Event Location</th>
-              <th 
-                onClick={() => toggleSort('status')}
-                className="p-4 font-bold cursor-pointer hover:bg-zinc-800/40 hover:text-white transition-colors"
-                title="Click to Sort by Current Stage"
-              >
-                Current Status {renderSortIndicator('status')}
-              </th>
+              <th className="p-4 font-bold">Event Date</th>
+              <th className="p-4 font-bold">Event Time</th>
+              <th className="p-4 font-bold">Reporting Time</th>
               <th className="p-4 font-bold">Assigned Team</th>
+              <th className="p-4 font-bold">Event Status</th>
+              <th className="p-4 font-bold">Current Stage</th>
               <th className="p-4 font-bold text-right text-zinc-400">Actions</th>
             </tr>
           </thead>
@@ -548,6 +681,9 @@ export const OperationsLeads: React.FC = () => {
                   ...orderAssignments.map(a => `${a.staff_name} (${a.staff_role})`)
                 ].filter(Boolean);
 
+                const currentStage = ord.current_stage || 'Order Confirmed';
+                const eventStatus = op?.event_status || (currentStage === 'Order Confirmed' ? 'Unscheduled' : currentStage);
+
                 return (
                   <tr key={ord.order_id} className="hover:bg-zinc-900/20 transition-all">
                     <td className="p-4">
@@ -559,28 +695,13 @@ export const OperationsLeads: React.FC = () => {
                       {ord.customer_name}
                     </td>
                     <td className="p-4 font-mono text-zinc-300">
-                      {ord.mobile || <span className="text-zinc-600 italic">—</span>}
+                      {ord.event_date || <span className="text-zinc-600 italic">—</span>}
                     </td>
-                    <td className="p-4 text-zinc-300 font-medium font-mono text-[11px]">
-                      {ord.event_type}
+                    <td className="p-4 font-mono text-zinc-300">
+                      {ord.event_time || <span className="text-zinc-600 italic">—</span>}
                     </td>
-                    <td className="p-4 text-zinc-300 font-mono text-[11px]">
-                      {ord.event_date}
-                    </td>
-                    <td className="p-4 text-zinc-450 text-[11px] truncate max-w-[180px]" title={ord.event_location}>
-                      {ord.event_location}
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase border ${
-                        ord.current_stage === 'Order Confirmed' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                        ord.current_stage === 'Operations Assigned' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
-                        ord.current_stage === 'Event Scheduled' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        ord.current_stage === 'Event Completed' ? 'bg-rose-500/10 text-rose-450 border-rose-500/20' :
-                        ord.current_stage === 'Raw Footage Received' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                        'bg-zinc-800 text-zinc-400 border-zinc-700'
-                      }`}>
-                        {ord.current_stage}
-                      </span>
+                    <td className="p-4 font-mono text-zinc-300">
+                      {op?.reporting_time || <span className="text-zinc-600 italic">—</span>}
                     </td>
                     <td className="p-4 text-[11px] text-zinc-350 max-w-[220px]">
                       {crewNames.length > 0 ? (
@@ -592,50 +713,191 @@ export const OperationsLeads: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-zinc-600 italic">Not Assigned</span>
+                        <span className="text-zinc-650 italic">Not Assigned</span>
                       )}
                     </td>
-                    <td className="p-4 text-right space-y-1">
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase border ${
+                        eventStatus === 'Order Confirmed' || eventStatus === 'Unscheduled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                        eventStatus === 'Event Scheduled' || eventStatus === 'Assigned' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        eventStatus === 'Event Completed' || eventStatus === 'Completed' ? 'bg-indigo-500/10 text-indigo-455 border-indigo-500/20' :
+                        eventStatus === 'Raw Footage Received' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                        'bg-zinc-800 text-zinc-400 border-zinc-700'
+                      }`}>
+                        {eventStatus}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase border ${
+                        currentStage === 'Order Confirmed' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                        currentStage === 'Operations Assigned' ? 'bg-sky-500/10 text-sky-450 border-sky-500/20' :
+                        currentStage === 'Event Scheduled' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        currentStage === 'Event Completed' ? 'bg-rose-500/10 text-rose-455 border-rose-500/20' :
+                        currentStage === 'Raw Footage Received' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                        'bg-zinc-800 text-zinc-400 border-zinc-700'
+                      }`}>
+                        {currentStage}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {/* Always visible: View Details */}
                         <button
-                          onClick={() => {
-                            setProjectDossierId(ord.order_id);
-                          }}
-                          className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded cursor-pointer transition-all border border-zinc-700"
-                          title="View Project dossier"
+                          onClick={() => setProjectDossierId(ord.order_id)}
+                          className="px-2 py-1 bg-zinc-805 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-mono font-bold border border-zinc-700 cursor-pointer transition-all uppercase flex items-center gap-1"
+                          title="View Details"
                         >
-                          <Eye className="w-3.5 h-3.5" />
+                          <Eye className="w-3 h-3" /> Details
                         </button>
- 
-                        {canEdit && (
-                          <button
-                            onClick={() => startAssigning(ord)}
-                            className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 font-mono font-bold text-[10px] border border-amber-500/30 rounded cursor-pointer transition-all uppercase"
-                          >
-                            Assign Crew/Gear
-                          </button>
-                        )}
- 
-                        {canEdit && op && ord.current_stage !== 'Event Completed' && ord.current_stage !== 'Raw Footage Received' && (
-                          <button
-                            onClick={() => triggerCompletionModal(ord.order_id)}
-                            className="px-2.5 py-1 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-455 font-mono font-bold text-[10px] rounded cursor-pointer transition-all uppercase"
-                          >
-                            Mark Completed
-                          </button>
-                        )}
- 
-                        {canEdit && ord.current_stage === 'Event Completed' && (
+
+                        {/* WhatsApp Staff: visible when assignment exists */}
+                        {crewNames.length > 0 && (
                           <button
                             onClick={() => {
-                              confirmRawFootageReceived(ord.order_id);
-                              alert(`Raw footage status set to Received! Project transitioned to Production.`);
+                              setSuccessModalData({
+                                orderId: ord.order_id,
+                                customerName: ord.customer_name,
+                                order: ord,
+                                assignments: orderAssignments.map(a => ({ staff_role: a.staff_role, staff_name: a.staff_name }))
+                              });
                             }}
-                            className="px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 font-mono font-bold text-[10px] rounded cursor-pointer transition-all uppercase animate-pulse"
+                            className="px-2 py-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 rounded text-[10px] font-mono font-bold cursor-pointer transition-all uppercase"
+                            title="Share roster with team on WhatsApp"
+                          >
+                            WhatsApp Staff
+                          </button>
+                        )}
+
+                        {/* Before Event Actions */}
+                        {canEdit && (currentStage === 'Order Confirmed') && (
+                          <button
+                            onClick={() => startAssigning(ord)}
+                            className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 font-mono font-bold text-[10px] border border-amber-500/30 rounded cursor-pointer transition-all uppercase"
+                          >
+                            Assign Staff
+                          </button>
+                        )}
+
+                        {/* Edit Assignment: stage Event Scheduled */}
+                        {canEdit && (currentStage === 'Event Scheduled') && (
+                          <button
+                            onClick={() => startAssigning(ord)}
+                            className="px-2 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 hover:text-sky-300 font-mono font-bold text-[10px] border border-sky-500/30 rounded cursor-pointer transition-all uppercase"
+                          >
+                            Edit Assignment
+                          </button>
+                        )}
+
+                        {/* Mark Event Scheduled Option: manual toggle if needed */}
+                        {canEdit && (currentStage === 'Order Confirmed') && (
+                          <button
+                            onClick={() => {
+                              assignOperations(ord.order_id, {
+                                photographer_assigned: 'Ramesh Kumar',
+                                videographer_assigned: 'Rahul Verma',
+                                drone_operator_assigned: '',
+                                assistant_assigned: '',
+                                equipment_kit: '',
+                                reporting_time: '08:00',
+                                remarks: 'Auto scheduled via manual trigger',
+                                event_status: 'Event Scheduled',
+                                current_stage: 'Event Scheduled',
+                                event_date: ord.event_date || '2026-06-20',
+                                event_time: ord.event_time || '10:00 AM'
+                              });
+                            }}
+                            className="px-2 py-1 bg-lime-500/10 hover:bg-lime-500/20 text-lime-400 border border-lime-500/20 rounded text-[10px] font-mono font-bold cursor-pointer transition-all uppercase"
+                          >
+                            Schedule Event
+                          </button>
+                        )}
+
+                        {/* After Event Action: Mark Event Completed */}
+                        {canEdit && (currentStage === 'Event Scheduled' || currentStage === 'Operations Assigned') && (
+                          <button
+                            onClick={() => triggerCompletionModal(ord.order_id)}
+                            className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-mono font-bold text-[10px] rounded cursor-pointer transition-all uppercase"
+                          >
+                            Mark Event Completed
+                          </button>
+                        )}
+
+                        {/* After Event Completed Action: Mark Raw Footage Received */}
+                        {canEdit && (currentStage === 'Event Completed') && (
+                          <button
+                            onClick={() => {
+                              setReceivingFootageOrderId(ord.order_id);
+                              const existingRf = rawFootage?.find(f => f.order_id === ord.order_id);
+                              setFootageForm({
+                                footage_link: existingRf?.server_path || `https://drive.google.com/drive/folders/PC-${ord.order_id}-footage`,
+                                storage_type: 'Google Drive',
+                                upload_notes: ''
+                              });
+                              
+                              const existingPay = payments?.find(p => p.order_id === ord.order_id);
+                              if (existingPay) {
+                                if (existingPay.payment_collection_status) {
+                                  setPaymentCollectionStatus(existingPay.payment_collection_status as any);
+                                } else {
+                                  if (existingPay.payment_status === 'Fully Paid') {
+                                    setPaymentCollectionStatus('Full Payment Received');
+                                  } else if (existingPay.payment_status === 'Partially Paid') {
+                                    setPaymentCollectionStatus('Partial Payment Received');
+                                  } else {
+                                    setPaymentCollectionStatus('Payment Pending');
+                                  }
+                                }
+                                setAdditionalReceived(existingPay.additional_received || existingPay.final_payment_received || 0);
+                              } else {
+                                setPaymentCollectionStatus('Payment Pending');
+                                setAdditionalReceived(0);
+                              }
+                            }}
+                            className="px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 font-mono font-bold text-[10px] rounded cursor-pointer transition-all uppercase animate-pulse"
                           >
                             Mark Raw Received
                           </button>
                         )}
+
+                        {/* After Footage Uploaded View/Copy/Open Actions */}
+                        {currentStage === 'Raw Footage Received' && (() => {
+                          const rf = rawFootage ? rawFootage.find(f => f.order_id === ord.order_id) : null;
+                          const path = rf?.server_path || '';
+                          return (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => alert(`Footage Link (via ${rf?.storage_type || 'Google Drive'}): \n\n${path}`)}
+                                className="px-1.5 py-1 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/20 text-emerald-450 font-mono text-[9px] font-bold rounded cursor-pointer"
+                                title="View Footage Link"
+                              >
+                                View Link
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (path) {
+                                    navigator.clipboard.writeText(path);
+                                    alert('Copied raw footage drive link to clipboard!');
+                                  }
+                                }}
+                                className="px-1.5 py-1 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-450 font-mono text-[9px] font-bold rounded cursor-pointer"
+                                title="Copy Footage Link"
+                              >
+                                Copy Link
+                              </button>
+                              {path && (
+                                <a
+                                  href={path}
+                                  target="_blank"
+                                  referrerPolicy="no-referrer"
+                                  className="px-1.5 py-1 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-505/20 text-indigo-400 font-mono text-[9px] font-bold rounded cursor-pointer inline-block"
+                                  title="Open Drive Link"
+                                >
+                                  Open Link
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </td>
                   </tr>
@@ -651,7 +913,7 @@ export const OperationsLeads: React.FC = () => {
             )}
           </tbody>
         </table>
-      </div>
+      </div>    </div>
 
       {/* Slide-over or Inline modal for Crew and Equipment Assignment */}
       {assigningOrderId && (
@@ -799,6 +1061,35 @@ export const OperationsLeads: React.FC = () => {
                   </select>
                 </div>
 
+                {/* Event Date */}
+                <div>
+                  <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-amber-500">
+                    Event Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={assignForm.event_date}
+                    onChange={(e) => setAssignForm({ ...assignForm, event_date: e.target.value })}
+                    className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
+                  />
+                </div>
+
+                {/* Event Time */}
+                <div>
+                  <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-amber-500">
+                    Event Time *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 10:00 AM - 6:00 PM"
+                    required
+                    value={assignForm.event_time}
+                    onChange={(e) => setAssignForm({ ...assignForm, event_time: e.target.value })}
+                    className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
+                  />
+                </div>
+
                 {/* Reporting Time */}
                 <div>
                   <label className="block text-[11px] font-zinc-400 font-mono font-extrabold uppercase mb-1">
@@ -939,6 +1230,350 @@ export const OperationsLeads: React.FC = () => {
         onClose={() => setProjectDossierId(null)} 
         orderId={projectDossierId} 
       />
+
+      {/* 4. Staff Assignment Success Modal / WhatsApp Share Popup */}
+      {successModalData && (() => {
+        const getOpDetails = (orderId: string) => {
+          return operations.find(o => o.order_id === orderId);
+        };
+
+        const generateWhatsAppLink = (role: string, name: string) => {
+          const order = successModalData.order;
+          const op = getOpDetails(order.order_id);
+          const reportingTime = op?.reporting_time || '08:00';
+          const specialNotes = op?.remarks || 'Please report on time with fully charged gears.';
+          
+          const textMessage = `Event Assignment Notification
+
+Customer: ${order.customer_name}
+Order ID: ${order.order_id}
+Event Type: ${order.event_type}
+Event Date: ${order.event_date}
+Reporting Time: ${reportingTime}
+Event Time: ${order.event_time}
+Location: ${order.event_location}
+Assigned Role: ${role}
+Package: ${order.package_name || 'Standard Pro Shoot'}
+Notes: ${specialNotes}
+
+Please report on time and update status through the portal.`;
+
+          return `https://api.whatsapp.com/send?text=${encodeURIComponent(textMessage)}`;
+        };
+
+        const generateGroupWhatsAppLink = () => {
+          const order = successModalData.order;
+          const op = getOpDetails(order.order_id);
+          const reportingTime = op?.reporting_time || '08:00';
+          const specialNotes = op?.remarks || 'Please check gear checklists.';
+          
+          const crewSummary = successModalData.assignments
+            .map(a => `- ${a.staff_role}: ${a.staff_name}`)
+            .join('\n');
+            
+          const textMessage = `Event Assignment Notification (Complete Crew)
+
+Customer: ${order.customer_name}
+Order ID: ${order.order_id}
+Event Type: ${order.event_type}
+Event Date: ${order.event_date}
+Reporting Time: ${reportingTime}
+Event Time: ${order.event_time}
+Location: ${order.event_location}
+Crew Lineup:
+${crewSummary}
+Package: ${order.package_name || 'Standard Pro Shoot'}
+Notes: ${specialNotes}
+
+Please report on time and update status through the portal.`;
+
+          return `https://api.whatsapp.com/send?text=${encodeURIComponent(textMessage)}`;
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-zinc-900 border border-zinc-750 p-6 rounded-2xl w-full max-w-lg shadow-2xl relative overflow-hidden">
+              {/* Tech accents */}
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600" />
+              
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">Staff Assigned Successfully</h3>
+                  <p className="text-xs text-zinc-400">Order Ref: {successModalData.orderId}</p>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/60 rounded-xl p-3.5 border border-zinc-850 mb-5 text-xs space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-zinc-400">
+                  <div><span className="text-zinc-550 font-mono">CUSTOMER:</span> <strong className="text-zinc-250 font-sans">{successModalData.customerName}</strong></div>
+                  <div><span className="text-zinc-550 font-mono">EVENT:</span> <strong className="text-zinc-250 font-sans">{successModalData.order.event_type}</strong></div>
+                  <div><span className="text-zinc-550 font-mono">DATE:</span> <strong className="text-emerald-400 font-mono">{successModalData.order.event_date}</strong></div>
+                  <div><span className="text-zinc-550 font-mono">TIME:</span> <strong className="text-zinc-300 font-mono">{successModalData.order.event_time}</strong></div>
+                  <div className="col-span-2"><span className="text-zinc-550 font-mono">LOCATION:</span> <strong className="text-zinc-350">{successModalData.order.event_location}</strong></div>
+                </div>
+              </div>
+
+              <h4 className="text-[10px] uppercase font-mono tracking-widest text-zinc-500 mb-2.5 font-bold">Crew Roster & WhatsApp Share Links</h4>
+              <div className="space-y-2 mb-6 max-h-[180px] overflow-y-auto pr-1">
+                {successModalData.assignments.length === 0 ? (
+                  <p className="text-xs text-zinc-500 italic">No custom staff assignments saved.</p>
+                ) : (
+                  successModalData.assignments.map((assignment, index) => {
+                    const indLink = generateWhatsAppLink(assignment.staff_role, assignment.staff_name);
+                    return (
+                      <div key={index} className="flex items-center justify-between p-2.5 bg-zinc-950/40 rounded-xl border border-zinc-850 hover:bg-zinc-950/80 transition-colors">
+                        <div className="flex flex-col text-left">
+                          <span className="text-[10px] uppercase font-mono text-zinc-400 font-bold">{assignment.staff_role}</span>
+                          <span className="text-xs text-white font-semibold">{assignment.staff_name}</span>
+                        </div>
+                        <a
+                          href={indLink}
+                          target="_blank"
+                          referrerPolicy="no-referrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-505 text-white font-mono font-bold text-[10px] rounded-lg tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
+                        >
+                          💬 SHARE DETAILS
+                        </a>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t border-zinc-850">
+                <a
+                  href={generateGroupWhatsAppLink()}
+                  target="_blank"
+                  referrerPolicy="no-referrer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-550 text-white font-bold text-xs rounded-xl tracking-wide transition-all shadow-lg text-center cursor-pointer"
+                >
+                  💬 Share Complete Crew Lineup on WhatsApp
+                </a>
+                <button
+                  onClick={() => setSuccessModalData(null)}
+                  className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-350 font-bold text-xs rounded-xl transition-all cursor-pointer border border-transparent"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Raw Footage Received Modal */}
+      {receivingFootageOrderId && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-805 rounded-2xl w-full max-w-md shadow-2xl relative p-5 space-y-4">
+            <h3 className="text-sm font-bold text-purple-400 font-mono uppercase flex items-center gap-1.5 border-b border-zinc-800 pb-2">
+              <span>💿</span> Mark Raw Footage Received
+            </h3>
+            <div className="text-[11px] text-zinc-400 leading-relaxed">
+              Upon confirmation, this order transitions to **Raw Footage Received** and escalates automatically to the Production Dashboard.
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              confirmRawFootageReceived(
+                receivingFootageOrderId,
+                footageForm.footage_link,
+                footageForm.storage_type,
+                footageForm.upload_notes,
+                paymentCollectionStatus,
+                additionalReceived
+              );
+              setReceivingFootageOrderId(null);
+              setFootageForm({ footage_link: '', storage_type: 'Google Drive', upload_notes: '' });
+            }} className="space-y-3.5 text-left">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono mb-1">
+                  Raw Footage Drive Link *
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={footageForm.footage_link}
+                  onChange={(e) => setFootageForm({ ...footageForm, footage_link: e.target.value })}
+                  placeholder="e.g. https://drive.google.com/drive/folders/..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono placeholder:text-zinc-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono mb-1">
+                  Storage Type *
+                </label>
+                <select
+                  required
+                  value={footageForm.storage_type}
+                  onChange={(e) => setFootageForm({ ...footageForm, storage_type: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
+                >
+                  <option value="Google Drive">Google Drive</option>
+                  <option value="Dropbox">Dropbox</option>
+                  <option value="OneDrive">OneDrive</option>
+                  <option value="Supabase Storage">Supabase Storage</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono mb-1">
+                  Upload Notes / Remarks
+                </label>
+                <textarea
+                  value={footageForm.upload_notes}
+                  onChange={(e) => setFootageForm({ ...footageForm, upload_notes: e.target.value })}
+                  placeholder="e.g. Drone clips are in separate subfolder..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-zinc-100 font-sans"
+                  rows={2}
+                />
+              </div>
+
+              {/* Popup Section: Payment Collection Status */}
+              {(() => {
+                const targetOrder = orders.find(o => o.order_id === receivingFootageOrderId);
+                if (!targetOrder) return null;
+
+                const totalAmount = targetOrder.quotation_amount || targetOrder.budget || 0;
+                const advanceReceived = targetOrder.advance_received || 0;
+                const calculatedRemaining = Math.max(0, totalAmount - advanceReceived - additionalReceived);
+
+                return (
+                  <div className="bg-zinc-950 p-4 rounded-xl border border-amber-500/10 space-y-3.5 my-3 text-xs">
+                    <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      Payment Collection Status
+                    </h4>
+                    
+                    <div className="flex flex-col gap-2">
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['Full Payment Received', 'Partial Payment Received', 'Payment Pending'] as const).map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              setPaymentCollectionStatus(opt);
+                              if (opt === 'Full Payment Received') {
+                                setAdditionalReceived(totalAmount - advanceReceived);
+                              } else if (opt === 'Payment Pending') {
+                                setAdditionalReceived(0);
+                              }
+                            }}
+                            className={`px-1 py-2 text-[9px] rounded font-black uppercase transition-all border text-center cursor-pointer ${
+                              paymentCollectionStatus === opt
+                                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 font-extrabold'
+                                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {opt === 'Full Payment Received' ? 'Full' : opt === 'Partial Payment Received' ? 'Partial' : 'Pending'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Conditional inputs and displays based on chosen Option */}
+                    {paymentCollectionStatus === 'Full Payment Received' && (
+                      <div className="space-y-1.5 pt-2 border-t border-zinc-900 font-mono text-zinc-300">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-450 text-[10px]">Total Amount:</span>
+                          <span className="font-bold text-white">₹{totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-zinc-450 text-[10px]">Amount Received:</span>
+                          <span className="font-bold text-emerald-450">₹{totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between pt-1 border-t border-zinc-900">
+                          <span className="text-zinc-450 text-[10px]">Payment Status:</span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-extrabold uppercase">Paid</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentCollectionStatus === 'Partial Payment Received' && (
+                      <div className="space-y-2 pt-2 border-t border-zinc-900 font-mono text-zinc-300">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-450 text-[10px]">Total Amount:</span>
+                          <span className="font-bold text-white">₹{totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-zinc-450 text-[10px]">Advance Amount:</span>
+                          <span className="font-bold text-zinc-400">₹{advanceReceived.toLocaleString('en-IN')}</span>
+                        </div>
+                        
+                        <div className="flex flex-col gap-1.5 pt-1">
+                          <label className="text-[10px] text-zinc-400 uppercase font-sans font-bold">Additional Amount Received (₹)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={totalAmount - advanceReceived}
+                            value={additionalReceived || ''}
+                            onChange={(e) => {
+                              const val = Math.min(Number(e.target.value), totalAmount - advanceReceived);
+                              setAdditionalReceived(val);
+                            }}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+                            placeholder="e.g. 10000"
+                          />
+                        </div>
+
+                        <div className="flex justify-between pt-1 border-t border-zinc-900">
+                          <span className="text-zinc-450 text-[10px]">Remaining Amount:</span>
+                          <span className="font-bold text-amber-500">₹{calculatedRemaining.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between pt-1">
+                          <span className="text-zinc-450 text-[10px]">Status:</span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-300/15 text-[9px] font-extrabold uppercase">Partial Payment</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentCollectionStatus === 'Payment Pending' && (
+                      <div className="space-y-1.5 pt-2 border-t border-zinc-900 font-mono text-zinc-300">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-450 text-[10px]">Total Amount:</span>
+                          <span className="font-bold text-white">₹{totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-zinc-450 text-[10px]">Advance Received:</span>
+                          <span className="font-bold text-zinc-400">₹{advanceReceived.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between pt-1 border-t border-zinc-900 text-red-450">
+                          <span className="text-zinc-450 text-[10px]">Remaining Amount Pending:</span>
+                          <span className="font-bold text-red-400">₹{(totalAmount - advanceReceived).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between pt-1">
+                          <span className="text-zinc-450 text-[10px]">Status:</span>
+                          <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-extrabold uppercase font-mono">Payment Pending</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-850">
+                <button
+                  type="button"
+                  onClick={() => setReceivingFootageOrderId(null)}
+                  className="px-4 py-2 bg-zinc-800 text-zinc-300 text-xs rounded-xl cursor-pointer hover:bg-zinc-700 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-650 hover:bg-purple-700 text-white font-semibold text-xs rounded-xl cursor-pointer"
+                >
+                  Save & Move to Production
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

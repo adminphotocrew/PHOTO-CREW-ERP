@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRole } from './RoleContext';
 import { 
   Users, Calendar, FileText, CheckCircle, Landmark, TrendingUp, AlertCircle, Clock, ShieldAlert, Sparkles, Filter, Sliders, ChevronRight,
@@ -10,12 +10,53 @@ import { formatINR, formatTime12Hour, getCustomers } from '../utils';
 import { ProjectDetailModal } from './ProjectDetailModal';
 import { AppLogo } from './AppLogo';
 import { BusinessOwnerCalendar } from './BusinessOwnerCalendar';
+import { CameraLensStatsCard, CameraLensTheme } from './CameraLensStatsCard';
 
 export const Dashboard: React.FC = () => {
   const { leads, orders, production, payments, logs, operations, rawFootage } = useRole();
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [kpiFilter, setKpiFilter] = useState<string>('All');
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      if (kpiFilter === 'All') return true;
+      if (kpiFilter === 'Total Leads') return true;
+      if (kpiFilter === "Today's Inflow") return true;
+      if (kpiFilter === 'June Leads') {
+        return order.event_date.startsWith('2026-06');
+      }
+      if (kpiFilter === 'Signed Orders') {
+        return order.order_status === 'Confirmed' || order.current_stage === 'Order Confirmed';
+      }
+      if (kpiFilter === 'Pending Shoots') {
+        return order.current_stage !== 'Closed';
+      }
+      if (kpiFilter === 'Events Prepped') {
+        return order.current_stage === 'Operations Assigned' || order.current_stage === 'Event Scheduled';
+      }
+      if (kpiFilter === 'Editing Suite') {
+        const footage = rawFootage?.find(f => f.order_id === order.order_id);
+        const prd = footage ? production.find(p => p.tracking_id === footage.tracking_id) : null;
+        return prd && prd.editing_status !== 'Delivered' && prd.editing_status !== 'Approved';
+      }
+      if (kpiFilter === 'Delivered Reels') {
+        const footage = rawFootage?.find(f => f.order_id === order.order_id);
+        const prd = footage ? production.find(p => p.tracking_id === footage.tracking_id) : null;
+        return prd && prd.editing_status === 'Delivered';
+      }
+      if (kpiFilter === 'Settled Ledger Balance') {
+        const payment = payments.find(p => p.order_id === order.order_id);
+        return payment && (payment.advance_received + payment.final_payment_received) > 0;
+      }
+      if (kpiFilter === 'Receivables') {
+        const payment = payments.find(p => p.order_id === order.order_id);
+        return payment && payment.balance_due > 0;
+      }
+      return true;
+    });
+  }, [orders, kpiFilter, rawFootage, production, payments]);
 
   const handleOpenDetailModal = (orderId: string) => {
     setSelectedProjectId(orderId);
@@ -131,88 +172,72 @@ export const Dashboard: React.FC = () => {
             {
               label: "Total Leads",
               val: totalLeads,
-              lensType: "total_leads" as any,
-              trend: "Live Queue",
+              theme: 'purple' as CameraLensTheme,
+              trendText: "Live Queue",
               subText: "All Time",
-              sparklineColor: "#a855f7",
-              glowClass: "hover:border-purple-500/40 hover:shadow-[0_8px_30px_rgba(168,85,247,0.18)]",
               chartPoints: [10, 18, 14, 25, 20, 31, 35],
               colSpan: "col-span-1"
             },
             {
               label: "Today's Inflow",
               val: todaysLeads,
-              lensType: "new_projects" as any,
-              trend: "+12% growth",
+              theme: 'blue' as CameraLensTheme,
+              trendText: "+12% growth",
               subText: "Today",
-              sparklineColor: "#3b82f6",
-              glowClass: "hover:border-blue-500/40 hover:shadow-[0_8px_30px_rgba(59,130,246,0.18)]",
               chartPoints: [3, 8, 5, 12, 10, 15, 12],
               colSpan: "col-span-1"
             },
             {
               label: "June Leads",
               val: thisMonthLeads,
-              lensType: "in_editing" as any,
-              trend: "June Active",
+              theme: 'purple' as CameraLensTheme,
+              trendText: "June Active",
               subText: "Campaign",
-              sparklineColor: "#6366f1",
-              glowClass: "hover:border-indigo-500/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.18)]",
               chartPoints: [15, 10, 19, 14, 22, 18, 26],
               colSpan: "col-span-1"
             },
             {
               label: "Signed Orders",
               val: confirmedOrdersNum,
-              lensType: "approved" as any,
-              trend: "Verified",
+              theme: 'green' as CameraLensTheme,
+              trendText: "Verified",
               subText: "Contracts",
-              sparklineColor: "#10b981",
-              glowClass: "hover:border-teal-500/40 hover:shadow-[0_8px_30px_rgba(20,184,166,0.18)]",
               chartPoints: [8, 15, 12, 20, 16, 25, 24],
               colSpan: "col-span-1"
             },
             {
               label: "Pending Shoots",
               val: pendingOrders,
-              lensType: "overdue" as any,
-              trend: "In Queue",
+              theme: 'red' as CameraLensTheme,
+              trendText: "In Queue",
               subText: "Outstanding",
-              sparklineColor: "#f43f5e",
-              glowClass: "hover:border-rose-500/40 hover:shadow-[0_8px_30px_rgba(244,63,94,0.18)]",
               chartPoints: [2, 4, 1, 5, 3, 6, 2],
               colSpan: "col-span-1"
             },
             {
               label: "Events Prepped",
               val: eventsScheduled,
-              lensType: "in_review" as any,
-              trend: "Squad Ready",
+              theme: 'gold' as CameraLensTheme,
+              trendText: "Squad Ready",
               subText: "Pre-pro",
-              sparklineColor: "#f59e0b",
-              glowClass: "hover:border-amber-500/40 hover:shadow-[0_8px_30px_rgba(245,158,11,0.18)]",
               chartPoints: [5, 9, 7, 14, 11, 16, 15],
               colSpan: "col-span-1"
             },
             {
               label: "Editing Suite",
               val: editingPending,
-              lensType: "in_editing" as any,
-              trend: "Active CC",
+              theme: 'purple' as CameraLensTheme,
+              trendText: "Active CC",
               subText: "Lightroom",
-              sparklineColor: "#6366f1",
-              glowClass: "hover:border-indigo-500/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.18)]",
               chartPoints: [11, 14, 12, 18, 15, 20, 17],
               colSpan: "col-span-1"
             },
             {
               label: "Delivered Reels",
               val: deliveredProjects,
-              lensType: "delivered" as any,
-              trend: "Released",
+              theme: 'cyan' as CameraLensTheme,
+              trendText: "Released",
               subText: "Galleries",
-              sparklineColor: "#06b6d4",
-              glowClass: "hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgba(16,185,129,0.18)]",
               chartPoints: [12, 18, 15, 26, 22, 34, 38],
               colSpan: "col-span-1"
             },
@@ -220,23 +245,19 @@ export const Dashboard: React.FC = () => {
               label: "Settled Ledger Balance",
               val: totalCollected,
               isCurrency: true,
-              lensType: "approved" as any,
-              trend: "Settled Ledger",
+              theme: 'gold' as CameraLensTheme,
+              trendText: "Settled Ledger",
               subText: "CLEARED FUNDS",
-              sparklineColor: "#fbbf24",
-              glowClass: "hover:border-amber-400/40 hover:shadow-[0_8px_30px_rgba(245,158,11,0.18)]",
               chartPoints: [20, 35, 28, 45, 52, 60, 75],
-              colSpan: "col-span-2"
+              colSpan: "col-span-1 sm:col-span-2"
             },
             {
               label: "Receivables",
               val: totalOutstanding,
               isCurrency: true,
-              lensType: "overdue" as any,
-              trend: "Pending",
+              theme: 'red' as CameraLensTheme,
+              trendText: "Pending",
               subText: "Balance",
-              sparklineColor: "#f43f5e",
-              glowClass: "hover:border-rose-500/40 hover:shadow-[0_8px_30px_rgba(244,63,94,0.18)]",
               chartPoints: [45, 38, 42, 30, 25, 28, 22],
               colSpan: "col-span-1"
             },
@@ -244,71 +265,33 @@ export const Dashboard: React.FC = () => {
               label: "Lead Conversion",
               val: conversionPct,
               isPercentage: true,
-              lensType: "total_leads" as any,
-              trend: "CR Target",
+              theme: 'green' as CameraLensTheme,
+              trendText: "CR Target",
               subText: "Win Rate",
-              sparklineColor: "#10b981",
-              glowClass: "hover:border-teal-400/40 hover:shadow-[0_8px_30px_rgba(20,184,166,0.18)]",
               chartPoints: [35, 45, 40, 55, 48, 62, 58],
               colSpan: "col-span-1"
             }
           ];
 
-          return kpiCards.map((card, idx) => {
-            const displayVal = card.isCurrency 
-              ? formatINR(card.val)
-              : card.isPercentage 
-                ? `${card.val}%` 
-                : card.val;
-
-            return (
-              <div 
-                key={idx} 
-                style={{ animationDelay: `${idx * 60}ms`, animationFillMode: 'both' }}
-                className={`bg-zinc-950/65 backdrop-blur-xl border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between transition-all duration-500 hover:-translate-y-1.5 select-none ${card.glowClass} ${card.colSpan} group/card animate-fade-in-up relative overflow-hidden`}
-              >
-                {/* Premium subtle glass light strike overlay */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.01] to-white/[0.04] opacity-50 pointer-events-none" />
-                
-                {/* Interactive underlying neon spot glow */}
-                <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-[28px] pointer-events-none opacity-10 transition-all duration-500 group-hover/card:scale-150 group-hover/card:opacity-20" style={{ backgroundColor: card.sparklineColor }} />
-
-                {/* Top Segment: DSLR Lens Graphic & Status Badge */}
-                <div className="flex items-center justify-between z-10">
-                  <CameraLensGraphic type={card.lensType} />
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-1.5 bg-zinc-905/40 px-2.5 py-0.5 rounded-lg border border-zinc-900/60 shadow-inner">
-                      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: card.sparklineColor }} />
-                      <span className="text-[9px] font-mono font-medium text-zinc-400 uppercase tracking-widest">{card.trend}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Middle Segment: Metric label and Large value */}
-                <div className="mt-5 space-y-2 z-10">
-                  <p className="text-[10px] font-bold font-sans tracking-widest text-zinc-500 uppercase group-hover/card:text-zinc-300 transition-colors duration-300">{card.label}</p>
-                  <div className="flex items-baseline justify-between select-none">
-                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight group-hover/card:scale-105 transition-transform duration-500 origin-left">
-                      {card.isCurrency || card.isPercentage ? (
-                        <span>{displayVal}</span>
-                      ) : (
-                        <LiveAnimateCounter value={card.val} />
-                      )}
-                    </span>
-                    <span className="text-[9px] font-mono tracking-wider font-extrabold uppercase" style={{ color: card.sparklineColor }}>{card.subText}</span>
-                  </div>
-                </div>
-
-                {/* Bottom Segment: Sparkline element */}
-                <div className="mt-4 pt-2 border-t border-zinc-900/40 flex items-center justify-between gap-4 z-10">
-                  <div className="flex-1">
-                    <MicroSparkline points={card.chartPoints} color={card.sparklineColor} />
-                  </div>
-                  <span className="text-[8px] font-mono text-zinc-550 group-hover/card:text-zinc-455">AF EXP</span>
-                </div>
-              </div>
-            );
-          });
+          return kpiCards.map((card, idx) => (
+            <div key={idx} className={card.colSpan}>
+              <CameraLensStatsCard
+                label={card.label}
+                val={card.val}
+                theme={card.theme}
+                trendText={card.trendText}
+                subText={card.subText}
+                chartPoints={card.chartPoints}
+                isCurrency={card.isCurrency}
+                isPercentage={card.isPercentage}
+                currencyFormatter={formatINR}
+                activeFilterValue={kpiFilter}
+                currentFilterValue={card.label}
+                onClick={() => setKpiFilter(kpiFilter === card.label ? 'All' : card.label)}
+                lensLabel={card.label.slice(0, 10).toUpperCase()}
+              />
+            </div>
+          ));
         })()}
       </div>
 
@@ -571,6 +554,21 @@ export const Dashboard: React.FC = () => {
 
 
       {/* ALL PROJECTS MASTER WORKFLOW LEDGER */}
+      {kpiFilter !== 'All' && (
+        <div className="bg-zinc-950 px-4 py-3 flex items-center justify-between text-xs text-zinc-400 border border-zinc-910 rounded-xl mb-3">
+          <span className="flex items-center gap-2 font-mono text-[11px]">
+            <span className="bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">Filtered View</span>
+            <span>Showing records for metric: <strong className="text-white">{kpiFilter}</strong> ({filteredOrders.length} records found)</span>
+          </span>
+          <button 
+            onClick={() => setKpiFilter('All')}
+            className="text-amber-400 hover:text-amber-300 font-mono text-[11px] bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1 rounded-lg border border-amber-500/30 transition-all font-bold uppercase cursor-pointer"
+          >
+            Reset Filter
+          </button>
+        </div>
+      )}
+
       <div className="bg-zinc-900/40 rounded-xl border border-zinc-900 shadow-xl overflow-hidden shadow-2xl">
         <div className="p-4 border-b border-zinc-900 bg-zinc-900/60 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
@@ -599,7 +597,7 @@ export const Dashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-900/60 font-sans text-zinc-300">
-              {orders.map((order) => {
+              {filteredOrders.map((order) => {
                 const operation = operations?.find(op => op.order_id === order.order_id);
                 const footage = rawFootage?.find(f => f.order_id === order.order_id);
                 const prd = footage ? production.find(p => p.tracking_id === footage.tracking_id) : undefined;

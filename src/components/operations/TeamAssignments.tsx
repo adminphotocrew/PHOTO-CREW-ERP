@@ -1,16 +1,82 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRole } from '../RoleContext';
 import { 
-  Users, Shield, Calendar, AlertTriangle, CheckCircle, RefreshCw, Briefcase, Sparkles
+  Users, Shield, Calendar, AlertTriangle, CheckCircle, RefreshCw, Briefcase, Sparkles, Phone, Clock
 } from 'lucide-react';
 
 export const TeamAssignments: React.FC = () => {
-  const { currentRole, orders, operations, staff } = useRole();
+  const { currentRole, orders, operations, staff, staffAssignments } = useRole();
 
   // Find assigned details if any
   const getOpDetails = (orderId: string) => {
     return operations.find((o) => o.order_id === orderId);
   };
+
+  // Consolidated Roster rows
+  const consolidatedRoster = useMemo(() => {
+    const list: {
+      id: string;
+      role: string;
+      name: string;
+      mobile: string;
+      assignDate: string;
+      reportingTime: string;
+      eventDate: string;
+      status: string;
+    }[] = [];
+
+    // 1. Load from legacy single-role operations table (if assigned)
+    operations.forEach(op => {
+      const order = orders.find(o => o.order_id === op.order_id);
+      if (!order) return;
+
+      const addRow = (role: string, name: string) => {
+        if (!name || name === 'None' || name.toLowerCase() === 'unassigned') return;
+        const staffMember = staff.find(s => s.name === name);
+        const mobile = staffMember?.phone || staffMember?.mobile || '—';
+        list.push({
+          id: `${op.order_id}-${role}`,
+          role,
+          name,
+          mobile,
+          assignDate: order.created_at ? order.created_at.split('T')[0] : order.event_date || '—',
+          reportingTime: op.reporting_time || '—',
+          eventDate: order.event_date || '—',
+          status: op.event_status === 'Completed' ? 'Completed' : 'Assigned'
+        });
+      };
+
+      addRow('Lead Photographer', op.photographer_assigned);
+      addRow('Lead Videographer', op.videographer_assigned);
+      addRow('Drone & Aerial Operator', op.drone_operator_assigned);
+      addRow('Production Assistant', op.assistant_assigned);
+    });
+
+    // 2. Load from staffAssignments array (multi-roles)
+    const saArray = staffAssignments || [];
+    saArray.forEach(sa => {
+      // Avoid duplication with above if we already listed them
+      if (list.some(r => r.id === `${sa.order_id}-${sa.staff_role}`)) return;
+
+      const order = orders.find(o => o.order_id === sa.order_id);
+      const op = operations.find(o => o.order_id === sa.order_id);
+      const staffMember = staff.find(s => s.staff_id === sa.staff_id || s.name === sa.staff_name);
+      
+      list.push({
+        id: sa.assignment_id || `${sa.order_id}-${sa.staff_role}`,
+        role: sa.staff_role,
+        name: sa.staff_name,
+        mobile: staffMember?.phone || staffMember?.mobile || '—',
+        assignDate: sa.assignment_date || '—',
+        reportingTime: op?.reporting_time || '—',
+        eventDate: order?.event_date || '—',
+        status: sa.assignment_status || 'Assigned'
+      });
+    });
+
+    // Sort by event date
+    return list.sort((a, b) => b.eventDate.localeCompare(a.eventDate));
+  }, [operations, orders, staff, staffAssignments]);
 
   // Extract all active operations projects
   const activeOps = operations.filter(op => op.event_status !== 'Completed');
@@ -176,6 +242,86 @@ export const TeamAssignments: React.FC = () => {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* COMPREHENSIVE STAFF ASSIGNMENT TABLE */}
+      <div className="bg-zinc-900/40 border border-zinc-850 rounded-2xl p-5 shadow-xl space-y-4">
+        <h3 className="text-xs font-mono font-black text-zinc-330 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-85" style={{ paddingBottom: '10px' }}>
+          <Briefcase className="w-4 h-4 text-purple-405" />
+          <span>STAFF ASSIGNMENT REGISTRY & ROSTER STATUS</span>
+        </h3>
+
+        <div className="overflow-x-auto border border-zinc-850/50 rounded-xl">
+          <table className="w-full text-left border-collapse text-xs min-w-[900px]">
+            <thead>
+              <tr className="border-b border-zinc-850 text-[10px] font-mono text-zinc-400 uppercase bg-zinc-950/50">
+                <th className="py-3 px-4 font-black tracking-wide">Staff Role</th>
+                <th className="py-3 px-4 font-black tracking-wide">Staff Name</th>
+                <th className="py-3 px-4 font-black tracking-wide">Mobile Number</th>
+                <th className="py-3 px-4 font-black tracking-wide">Assignment Date</th>
+                <th className="py-3 px-4 font-black tracking-wide">Reporting Time</th>
+                <th className="py-3 px-4 font-black tracking-wide">Event Date</th>
+                <th className="py-3 px-4 font-black tracking-wide text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-850/40 text-[11px] text-zinc-300 font-mono">
+              {consolidatedRoster.length > 0 ? (
+                consolidatedRoster.map((item) => (
+                  <tr key={item.id} className="hover:bg-zinc-950/40 transition-colors">
+                    {/* Staff Role */}
+                    <td className="py-3 px-4 font-sans font-bold text-zinc-200">
+                      <span className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-[10px] rounded text-zinc-400">
+                        {item.role}
+                      </span>
+                    </td>
+                    {/* Staff Name */}
+                    <td className="py-3 px-4 font-sans font-extrabold text-white text-xs max-w-[150px] truncate-on-mobile break-words">
+                      {item.name}
+                    </td>
+                    {/* Mobile Number */}
+                    <td className="py-3 px-4 text-zinc-400">
+                      {item.mobile}
+                    </td>
+                    {/* Assignment Date */}
+                    <td className="py-3 px-4 text-zinc-450">
+                      {item.assignDate}
+                    </td>
+                    {/* Reporting Time */}
+                    <td className="py-3 px-4 font-bold text-amber-500">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-zinc-550 flex-shrink-0" />
+                        <span>{item.reportingTime}</span>
+                      </div>
+                    </td>
+                    {/* Event Date */}
+                    <td className="py-3 px-4 text-indigo-300 font-bold">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-zinc-550 flex-shrink-0" />
+                        <span>{item.eventDate}</span>
+                      </div>
+                    </td>
+                    {/* Status */}
+                    <td className="py-3 px-4 text-right">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wide border ${
+                        item.status === 'Completed'
+                          ? 'bg-emerald-500/10 text-emerald-450 border-emerald-500/20'
+                          : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-zinc-500 italic font-sans text-xs">
+                    No active staff allocations recorded on the operations dossier.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

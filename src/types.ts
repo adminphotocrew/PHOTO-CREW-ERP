@@ -10,8 +10,10 @@ export type CurrentStage =
   | 'Quotation Sent'
   | 'Negotiation'
   | 'Order Confirmed'
+  | 'New Order Received'
   | 'Operations Assigned'
   | 'Event Scheduled'
+  | 'Staff Assigned'
   | 'Event Completed'
   | 'Raw Footage Received'
   | 'Editor Assigned'
@@ -24,12 +26,17 @@ export type CurrentStage =
   | 'Closed';
 
 export type EditingStatus =
-  | 'Pending'
-  | 'Editing'
-  | 'Customer Review'
+  | 'Raw Footage Received'
+  | 'Editor Assigned'
+  | 'Editing Started'
+  | 'Editing In Progress'
+  | 'Internal QC Review'
+  | 'Client Review Sent'
   | 'Revision Required'
-  | 'Approved'
-  | 'Delivered';
+  | 'Revision In Progress'
+  | 'Final Approval'
+  | 'Project Delivered'
+  | 'Project Closed';
 
 export type PaymentStatus = 'Pending' | 'Partially Paid' | 'Fully Paid';
 
@@ -129,7 +136,7 @@ export interface Operation {
   assistant_assigned: string;
   equipment_kit: string;
   reporting_time: string;
-  event_status: 'Assigned' | 'Completed';
+  event_status: 'Assigned' | 'Completed' | 'Event Scheduled' | 'Event Completed' | 'Raw Footage Received' | string;
   remarks?: string;
   updated_by: string;
 }
@@ -143,6 +150,8 @@ export interface RawFootage {
   uploaded_by?: string;
   uploaded_date?: string;
   status: 'Pending' | 'Received';
+  storage_type?: string;
+  upload_notes?: string;
 }
 
 export interface Production {
@@ -163,6 +172,7 @@ export interface Production {
   actual_delivery_date?: string;
   production_status?: 'New Project' | 'Footage Received' | 'Editor Assigned' | 'Editing Started' | 'In Progress' | 'Customer Review' | 'Revision Required' | 'Approved' | 'Delivered' | 'Closed';
   approval_status?: string;
+  editing_progress?: string;
 }
 
 export interface Payment {
@@ -175,6 +185,8 @@ export interface Payment {
   payment_date?: string;
   payment_proof_url?: string;
   payment_status: PaymentStatus;
+  payment_collection_status?: string;
+  additional_received?: number;
 }
 
 export interface ActivityLog {
@@ -208,6 +220,27 @@ export interface Staff {
   bio?: string;
   created_at?: string;
   whatsapp_number?: string;
+  production_role_speciality?: string;
+  experience?: string;
+}
+
+export interface ProductionSpeciality {
+  speciality_id: string;
+  name: string;
+  active: boolean;
+  created_at?: string;
+}
+
+export interface EditorAssignment {
+  assignment_id: string;
+  production_id: string;
+  staff_id: string;
+  staff_name: string;
+  speciality: string;
+  assigned_date: string;
+  target_finish_date: string;
+  status: 'Assigned' | 'Editing Started' | 'In Progress' | 'Review Pending' | 'Revision' | 'Completed';
+  created_at?: string;
 }
 
 export interface StaffAssignment {

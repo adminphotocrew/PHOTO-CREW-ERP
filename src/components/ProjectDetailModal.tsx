@@ -94,7 +94,12 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
             { id: 'operations', label: 'Crew & Shoot', icon: Calendar },
             { id: 'production', label: 'Editing Suites', icon: Film },
             { id: 'billing', label: 'Billing & Cash', icon: Landmark }
-          ].map((tab) => {
+          ].filter((tab) => {
+            if (tab.id === 'billing' && currentRole === 'Production Team') {
+              return false;
+            }
+            return true;
+          }).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -291,16 +296,18 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">Service Retainer Contract</span>
                     <p className="text-xs text-amber-400 font-black mt-1 uppercase tracking-wider">{order.package_name}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">Master Audited Quote</span>
-                      <p className="text-xs text-zinc-100 font-extrabold mt-1">{formatINR(order.quotation_amount)}</p>
+                  {currentRole !== 'Production Team' && (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">Master Audited Quote</span>
+                        <p className="text-xs text-zinc-100 font-extrabold mt-1">{formatINR(order.quotation_amount)}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">Retainer Advance Deposited</span>
+                        <p className="text-xs text-emerald-450 font-extrabold mt-1">{formatINR(order.advance_received)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">Retainer Advance Deposited</span>
-                      <p className="text-xs text-emerald-450 font-extrabold mt-1">{formatINR(order.advance_received)}</p>
-                    </div>
-                  </div>
+                  )}
                   <div className="border-t border-zinc-900/80 pt-3 font-sans">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">Sales Remarks & Retainer Reminders</span>
                     <p className="text-xs text-zinc-400 mt-1 italic whitespace-pre-line leading-relaxed max-h-[100px] overflow-y-auto">

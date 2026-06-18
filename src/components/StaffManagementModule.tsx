@@ -7,10 +7,13 @@ import {
 } from 'lucide-react';
 
 export const StaffManagementModule: React.FC = () => {
-  const { staff, addStaff, updateStaff, deleteStaff, production, currentRole } = useRole();
+  const { 
+    staff, addStaff, updateStaff, deleteStaff, production, currentRole,
+    specialities = [], addSpeciality, updateSpeciality, deactivateSpeciality
+  } = useRole();
   
-  // Tabs: 'dashboard' | 'list' | 'add'
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'list' | 'add'>('dashboard');
+  // Tabs: 'dashboard' | 'list' | 'add' | 'specialities'
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'list' | 'add' | 'specialities'>('dashboard');
   
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,6 +32,15 @@ export const StaffManagementModule: React.FC = () => {
   const [profilePhoto, setProfilePhoto] = useState('');
   const [notes, setNotes] = useState('');
   const [showPhotoTip, setShowPhotoTip] = useState(false);
+
+  // Specialties & experience fields
+  const [prodSpeciality, setProdSpeciality] = useState('');
+  const [experience, setExperience] = useState('Junior Editor (1-2 Years)');
+
+  // Specialty manager inline form states
+  const [newSpecName, setNewSpecName] = useState('');
+  const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
+  const [editingSpecName, setEditingSpecName] = useState('');
 
   // Core production roles requested by user
   const PRODUCTION_ROLES = [
@@ -52,10 +64,10 @@ export const StaffManagementModule: React.FC = () => {
       p.editor_assigned?.toLowerCase() === staffName.toLowerCase()
     );
     const completed = staffProjects.filter(p => 
-      p.editing_status === 'Approved' || p.editing_status === 'Delivered'
+      ['Approved', 'Delivered', 'Final Approval', 'Project Delivered', 'Project Closed'].includes(p.editing_status)
     ).length;
     const pending = staffProjects.filter(p => 
-      p.editing_status !== 'Approved' && p.editing_status !== 'Delivered'
+      !['Approved', 'Delivered', 'Final Approval', 'Project Delivered', 'Project Closed'].includes(p.editing_status)
     ).length;
     return {
       assigned: staffProjects.length,
@@ -90,7 +102,9 @@ export const StaffManagementModule: React.FC = () => {
       status,
       joining_date: joiningDate,
       profile_photo: profilePhoto || undefined,
-      notes: notes || undefined
+      notes: notes || undefined,
+      production_role_speciality: prodSpeciality,
+      experience: experience
     });
 
     // Reset Form
@@ -104,6 +118,8 @@ export const StaffManagementModule: React.FC = () => {
     setJoiningDate(new Date().toISOString().split('T')[0]);
     setProfilePhoto('');
     setNotes('');
+    setProdSpeciality('');
+    setExperience('Junior Editor (1-2 Years)');
 
     alert('Staff member registered successfully in ERP system!');
     setActiveSubTab('list');
@@ -177,6 +193,17 @@ export const StaffManagementModule: React.FC = () => {
           >
             <UserPlus className="w-3.5 h-3.5" />
             <span>Onboard Staff</span>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('specialities')}
+            className={`px-3.5 py-1.5 text-xs font-mono uppercase tracking-wider font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+              activeSubTab === 'specialities'
+                ? 'bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-400 border border-violet-500/30'
+                : 'text-zinc-400 hover:text-white border border-transparent'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            <span>Specialities ({specialities.length})</span>
           </button>
         </div>
       </div>
@@ -394,8 +421,14 @@ export const StaffManagementModule: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-zinc-400 font-sans">
                         <span className="flex items-center gap-1">
                           <Award className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
-                          <span>{member.role}</span>
+                          <span>{member.production_role_speciality || member.role}</span>
                         </span>
+                        {member.experience && (
+                          <>
+                            <span className="text-zinc-650">•</span>
+                            <span className="text-[10px] text-zinc-400 font-mono bg-zinc-900 px-1.5 py-0.5 rounded">Exp: {member.experience}</span>
+                          </>
+                        )}
                         <span className="text-zinc-650">•</span>
                         <span className="bg-zinc-900 px-1.5 py-0.5 text-[10px] font-mono leading-none rounded text-zinc-300">
                           {member.department}
@@ -582,19 +615,40 @@ export const StaffManagementModule: React.FC = () => {
               />
             </div>
 
-            {/* Role dropdown list */}
+            {/* Production Role Speciality Dropdown */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-zinc-400 uppercase font-bold flex items-center gap-1">
                 <span>Production Role Speciality</span>
+                <span className="text-rose-500">*</span>
               </label>
               <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+                required
+                value={prodSpeciality}
+                onChange={(e) => setProdSpeciality(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:border-violet-500 outline-none cursor-pointer font-mono"
               >
-                {PRODUCTION_ROLES.map(roleOpt => (
-                  <option key={roleOpt} value={roleOpt}>{roleOpt}</option>
+                <option value="">-- Select Specialty --</option>
+                {specialities.filter(s => s.active).map(spec => (
+                  <option key={spec.speciality_id} value={spec.name}>{spec.name}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Experience Level */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-zinc-400 uppercase font-bold flex items-center gap-1">
+                <span>Experience Level</span>
+                <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:border-violet-500 outline-none cursor-pointer font-mono"
+              >
+                <option value="1-3 Years">Junior Editor (1-3 Years)</option>
+                <option value="3-5 Years">Mid-Level (3-5 Years)</option>
+                <option value="5-8 Years">Senior specialist (5-8 Years)</option>
+                <option value="8+ Years">Technical Expert / Lead (8+ Years)</option>
               </select>
             </div>
 
@@ -711,6 +765,118 @@ export const StaffManagementModule: React.FC = () => {
             <span>Generate Crew Roll Verification & Register</span>
           </button>
         </form>
+      )}
+
+      {/* SPECIALITIES TAB CONTAINER */}
+      {activeSubTab === 'specialities' && (
+        <div className="bg-zinc-950 border border-zinc-900 p-6 rounded-2xl space-y-6 shadow-xl relative animate-fade-in">
+          <div className="absolute top-3 left-3 w-1.5 h-1.5 bg-violet-500/50 rounded-full" />
+          <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-violet-500/50 rounded-full" />
+          
+          <h2 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-350 border-b border-zinc-900 pb-3 font-mono">
+            MANAGE PRODUCTION ROLE SPECIALITIES
+          </h2>
+
+          {/* Add / Edit Specialty Form */}
+          <div className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+              {editingSpecId ? 'Edit Room Speciality' : 'Add New Production Speciality'}
+            </h3>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                placeholder="e.g. Wedding Video Editor, Reel Editor..."
+                value={editingSpecId ? editingSpecName : newSpecName}
+                onChange={(e) => editingSpecId ? setEditingSpecName(e.target.value) : setNewSpecName(e.target.value)}
+                className="flex-1 bg-zinc-900 border border-zinc-850 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:border-violet-500 outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (editingSpecId) {
+                      if (!editingSpecName.trim()) return;
+                      await updateSpeciality(editingSpecId, editingSpecName.trim());
+                      setEditingSpecId(null);
+                      setEditingSpecName('');
+                    } else {
+                      if (!newSpecName.trim()) return;
+                      await addSpeciality(newSpecName.trim());
+                      setNewSpecName('');
+                    }
+                  }}
+                  className="px-5 py-3 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                >
+                  {editingSpecId ? 'Save' : 'Create Speciality'}
+                </button>
+                {editingSpecId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSpecId(null);
+                      setEditingSpecName('');
+                    }}
+                    className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Specialities List Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-zinc-900 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                  <th className="py-3 px-4 font-bold">Speciality ID</th>
+                  <th className="py-3 px-4 font-bold">Speciality Name</th>
+                  <th className="py-3 px-4 font-bold">Status</th>
+                  <th className="py-3 px-4 font-bold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900/60">
+                {specialities.map((spec) => (
+                  <tr key={spec.speciality_id} className="hover:bg-zinc-900/10">
+                    <td className="py-3.5 px-4 font-mono text-zinc-400">{spec.speciality_id}</td>
+                    <td className="py-3.5 px-4 font-bold text-white text-xs">{spec.name}</td>
+                    <td className="py-3.5 px-4">
+                      <span className={`px-2 py-0.5 rounded-[4px] text-[8px] font-mono tracking-wider font-extrabold uppercase ${
+                        spec.active 
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                      }`}>
+                        {spec.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right space-x-2.5">
+                      <button
+                        onClick={() => {
+                          setEditingSpecId(spec.speciality_id);
+                          setEditingSpecName(spec.name);
+                        }}
+                        className="text-[10px] font-mono font-bold text-violet-400 hover:text-violet-350 cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await deactivateSpeciality(spec.speciality_id, !spec.active);
+                        }}
+                        className={`text-[10px] font-mono font-bold cursor-pointer ${
+                          spec.active ? 'text-zinc-400 hover:text-white' : 'text-emerald-400 hover:text-emerald-350'
+                        }`}
+                      >
+                        {spec.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
     </div>

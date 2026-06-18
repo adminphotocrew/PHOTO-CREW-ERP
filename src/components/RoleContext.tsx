@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment } from '../types';
+import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
@@ -38,6 +38,11 @@ interface RoleContextType {
   updatePackage: (packageId: string, updates: Partial<Package>) => Promise<void>;
   deletePackage: (packageId: string) => Promise<void>;
 
+  quotations: any[];
+  addQuotation: (quotation: any) => Promise<void>;
+  updateQuotation: (quotationId: string, updates: Partial<any>) => Promise<void>;
+  updateLead: (leadId: string, updates: Partial<Lead>) => void;
+
   // Master flow operations
   addLead: (
     lead: Omit<Lead, 'lead_id' | 'status' | 'created_by' | 'sales_person' | 'created_date'>,
@@ -55,7 +60,11 @@ interface RoleContextType {
     leadId: string, 
     packageName: string, 
     quotationAmount: number, 
-    advanceReceived: number
+    advanceReceived: number,
+    eventDate?: string,
+    eventTime?: string,
+    paymentMode?: string,
+    notes?: string
   ) => string;
   assignOperations: (
     orderId: string, 
@@ -68,10 +77,21 @@ interface RoleContextType {
       reporting_time: string;
       remarks?: string;
       current_stage?: CurrentStage;
+      event_date?: string;
+      event_time?: string;
+      event_status?: string;
     }
   ) => void;
   markEventCompleted: (orderId: string, serverPath: string) => void;
-  confirmRawFootageReceived: (orderId: string) => void;
+  confirmRawFootageReceived: (
+    orderId: string,
+    footageLink?: string,
+    storageType?: string,
+    uploadNotes?: string,
+    paymentCollectionStatus?: string,
+    additionalReceived?: number
+  ) => void;
+  updateOrderStage: (orderId: string, stage: CurrentStage) => void;
   acceptRawFootage: (trackingId: string) => void;
   updateProduction: (
     productionId: string, 
@@ -108,6 +128,19 @@ interface RoleContextType {
     role: string,
     status: string
   ) => Promise<void>;
+
+  specialities: ProductionSpeciality[];
+  addSpeciality: (name: string) => Promise<void>;
+  updateSpeciality: (id: string, name: string) => Promise<void>;
+  deactivateSpeciality: (id: string, active: boolean) => Promise<void>;
+  
+  editorAssignments: EditorAssignment[];
+  assignEditorToProject: (assignment: Omit<EditorAssignment, 'assignment_id' | 'status' | 'assigned_date'>) => Promise<void>;
+  updateEditorAssignmentStatus: (assignmentId: string, status: EditorAssignment['status']) => Promise<void>;
+  deleteEditorAssignment: (assignmentId: string) => Promise<void>;
+  globalDateRange: { start: string; end: string };
+  setGlobalDateRange: (range: { start: string; end: string }) => void;
+  resetGlobalDateRange: () => void;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -705,6 +738,27 @@ const INITIAL_PACKAGES: Package[] = [
 ];
 
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [globalDateRange, setGlobalDateRangeState] = useState<{ start: string; end: string }>(() => {
+    const savedStart = sessionStorage.getItem('erp_global_start_date');
+    const savedEnd = sessionStorage.getItem('erp_global_end_date');
+    return {
+      start: savedStart || '2026-06-01',
+      end: savedEnd || '2026-06-30'
+    };
+  });
+
+  const setGlobalDateRange = (range: { start: string; end: string }) => {
+    sessionStorage.setItem('erp_global_start_date', range.start);
+    sessionStorage.setItem('erp_global_end_date', range.end);
+    setGlobalDateRangeState(range);
+  };
+
+  const resetGlobalDateRange = () => {
+    sessionStorage.removeItem('erp_global_start_date');
+    sessionStorage.removeItem('erp_global_end_date');
+    setGlobalDateRangeState({ start: '2026-06-01', end: '2026-06-30' });
+  };
+
   // Initialize state arrays as empty so data is always loaded directly from Supabase (the single source of truth) without relying on cached or stale demo data
   const [users, setUsers] = useState<User[]>([]);
 
@@ -722,6 +776,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [quotations, setQuotations] = useState<any[]>(() => {
+    const cached = localStorage.getItem('erp_quotations');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [leadPackages, setLeadPackages] = useState<LeadPackage[]>(() => {
     const cached = localStorage.getItem('erp_lead_packages');
     return cached ? JSON.parse(cached) : [];
@@ -817,6 +875,38 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('erp_staff_assignments');
     return saved ? JSON.parse(saved) : [];
   });
+
+  const [specialities, setSpecialities] = useState<ProductionSpeciality[]>(() => {
+    const saved = localStorage.getItem('erp_production_specialities');
+    if (saved) return JSON.parse(saved);
+    return [
+      { speciality_id: 'SPC-001', name: 'Wedding Video Editor', active: true },
+      { speciality_id: 'SPC-002', name: 'Reel Editor', active: true },
+      { speciality_id: 'SPC-003', name: 'Album Designer', active: true },
+      { speciality_id: 'SPC-004', name: 'Photo Editor', active: true },
+      { speciality_id: 'SPC-005', name: 'Wedding Photo Editor', active: true },
+      { speciality_id: 'SPC-006', name: 'Cinematic Video Editor', active: true },
+      { speciality_id: 'SPC-007', name: 'Color Grading Specialist', active: true },
+      { speciality_id: 'SPC-008', name: 'Thumbnail Designer', active: true },
+      { speciality_id: 'SPC-009', name: 'Motion Graphics Editor', active: true },
+      { speciality_id: 'SPC-010', name: 'Short Film Editor', active: true },
+      { speciality_id: 'SPC-011', name: 'Senior Editor', active: true },
+      { speciality_id: 'SPC-012', name: 'QC Reviewer', active: true }
+    ];
+  });
+
+  const [editorAssignments, setEditorAssignments] = useState<EditorAssignment[]>(() => {
+    const saved = localStorage.getItem('erp_editor_assignments');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('erp_production_specialities', JSON.stringify(specialities));
+  }, [specialities]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_editor_assignments', JSON.stringify(editorAssignments));
+  }, [editorAssignments]);
 
   useEffect(() => {
     localStorage.setItem('erp_staff_assignments', JSON.stringify(staffAssignments));
@@ -1018,6 +1108,22 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       );
 
+      const dbQuotationsPromise = supabaseClient.from('quotations').select('*').then(
+        (res) => {
+          if (res.error) {
+            console.warn('Supabase quotations load error:', res.error?.message);
+            const cached = localStorage.getItem('erp_quotations');
+            return { data: cached ? JSON.parse(cached) : [], error: null };
+          }
+          return res;
+        },
+        (err) => {
+          console.warn('Could not read quotations from Supabase:', err);
+          const cached = localStorage.getItem('erp_quotations');
+          return { data: cached ? JSON.parse(cached) : [], error: null };
+        }
+      );
+
       const [
         { data: dbUsers, error: uErr },
         { data: dbLeads, error: ldErr },
@@ -1032,7 +1138,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         equipRes,
         leadPackagesRes,
         packagesRes,
-        staffAssignmentsRes
+        staffAssignmentsRes,
+        quotationsRes
       ] = await Promise.all([
         supabaseClient.from('users').select('*'),
         supabaseClient.from('leads').select('*').order('created_date', { ascending: false }),
@@ -1047,7 +1154,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dbEquipmentPromise,
         dbLeadPackagesPromise,
         dbPackagesPromise,
-        dbStaffAssignmentsPromise
+        dbStaffAssignmentsPromise,
+        dbQuotationsPromise
       ]);
 
       if (uErr || ldErr || ordErr || opErr || rfErr || prodErr || payErr || logErr) {
@@ -1143,6 +1251,34 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('erp_staff_assignments', JSON.stringify(staffAssignmentsRes.data));
       }
 
+      if (quotationsRes && quotationsRes.data) {
+        const parsedQuotes = (quotationsRes.data as any[]).map((q: any) => {
+          let metadata: any = {};
+          if (q.terms_conditions && q.terms_conditions.includes('METADATA:')) {
+            try {
+              const parts = q.terms_conditions.split('METADATA:');
+              const jsonStr = parts[1]?.trim();
+              if (jsonStr) {
+                metadata = JSON.parse(jsonStr);
+              }
+            } catch (e) {
+              console.warn('Failed to parse metadata from terms_conditions:', e);
+            }
+          }
+          return {
+            ...q,
+            order_id: q.order_id || metadata.order_id || '',
+            customer_id: q.customer_id || metadata.customer_id || '',
+            pdf_url: q.pdf_url || metadata.pdf_url || '',
+            whatsapp_sent_status: q.whatsapp_sent_status !== undefined ? q.whatsapp_sent_status : (metadata.whatsapp_sent_status || false),
+            viewed_status: q.viewed_status !== undefined ? q.viewed_status : (metadata.viewed_status || false),
+            generated_date: q.generated_date || metadata.generated_date || q.created_at?.split('T')[0] || new Date().toISOString().split('T')[0]
+          };
+        });
+        setQuotations(parsedQuotes);
+        localStorage.setItem('erp_quotations', JSON.stringify(parsedQuotes));
+      }
+
       // Seed 5 custom notifications on-the-fly if empty in Supabase
       if (notifRes && notifRes.data && notifRes.data.length === 0) {
         console.log('Seeding 5 default notifications into Supabase...');
@@ -1228,6 +1364,27 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEquipment(equipRes.data);
       }
 
+      // Sync specialties and editor assignments from Supabase if they exist
+      try {
+        const { data: dbSpecList } = await supabaseClient.from('production_specialties').select('*');
+        if (dbSpecList && dbSpecList.length > 0) {
+          setSpecialities(dbSpecList);
+          localStorage.setItem('erp_production_specialities', JSON.stringify(dbSpecList));
+        }
+      } catch (err) {
+        console.warn('Could not read production_specialties from Supabase:', err);
+      }
+
+      try {
+        const { data: dbAssignList } = await supabaseClient.from('editor_assignments').select('*');
+        if (dbAssignList && dbAssignList.length > 0) {
+          setEditorAssignments(dbAssignList);
+          localStorage.setItem('erp_editor_assignments', JSON.stringify(dbAssignList));
+        }
+      } catch (err) {
+        console.warn('Could not read editor_assignments from Supabase:', err);
+      }
+
       updateDiagnosticMetric('read', 'ok');
       updateDiagnosticMetric('connection', 'connected');
     } catch (err: any) {
@@ -1253,7 +1410,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { table: 'production_staff', key: 'staff_id', setter: setStaff },
       { table: 'activity_logs', key: 'log_id', setter: setLogs },
       { table: 'notifications', key: 'notification_id', setter: setNotifications },
-      { table: 'equipment', key: 'equipment_id', setter: setEquipment }
+      { table: 'equipment', key: 'equipment_id', setter: setEquipment },
+      { table: 'production_specialties', key: 'speciality_id', setter: setSpecialities },
+      { table: 'editor_assignments', key: 'assignment_id', setter: setEditorAssignments }
     ].map(({ table, key, setter }) => {
       return supabaseClient
         .channel(`rt-${table}`)
@@ -1697,17 +1856,34 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     leadId: string, 
     packageName: string, 
     quotationAmount: number, 
-    advanceReceived: number
+    advanceReceived: number,
+    eventDate?: string,
+    eventTime?: string,
+    paymentMode?: string,
+    notes?: string
   ) => {
     const targetLead = leads.find((ld) => ld.lead_id === leadId);
     if (!targetLead) return '';
 
+    const resolvedRemarks = `${targetLead.remarks || ''}\n[Booking Confirmed Update ${new Date().toISOString().split('T')[0]}]: ${notes || 'No extra notes'}. Payment Mode: ${paymentMode || 'N/A'}`;
+
     // Update lead stage
     setLeads((prev) =>
-      prev.map((ld) => (ld.lead_id === leadId ? { ...ld, status: 'Order Confirmed', updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
+      prev.map((ld) => (ld.lead_id === leadId ? { 
+        ...ld, 
+        status: 'Order Confirmed', 
+        event_date: eventDate || ld.event_date,
+        event_time: eventTime || ld.event_time,
+        remarks: resolvedRemarks,
+        updated_by: currentUserName, 
+        updated_at: new Date().toISOString() 
+      } : ld))
     );
     pushUpdate('leads', 'lead_id', leadId, { 
       status: 'Order Confirmed',
+      event_date: eventDate || targetLead.event_date,
+      event_time: eventTime || targetLead.event_time,
+      remarks: resolvedRemarks,
       updated_by: currentUserName,
       updated_at: new Date().toISOString()
     });
@@ -1719,8 +1895,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       customer_name: targetLead.customer_name,
       mobile: targetLead.mobile,
       event_type: targetLead.event_type,
-      event_date: targetLead.event_date,
-      event_time: targetLead.event_time,
+      event_date: eventDate || targetLead.event_date,
+      event_time: eventTime || targetLead.event_time,
       event_location: targetLead.event_location,
       package_name: packageName,
       quotation_amount: quotationAmount,
@@ -1742,7 +1918,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       advance_received: advanceReceived,
       balance_due: quotationAmount - advanceReceived,
       final_payment_received: 0,
-      payment_status: advanceReceived > 0 ? 'Partially Paid' : 'Pending',
+      payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
     };
 
     setOrders((prev) => [newOrder, ...prev]);
@@ -1763,9 +1939,6 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     logActivity(`Confirmed Order for ${targetLead.customer_name}. Package: ${packageName}`, 'Sales', orderId, targetLead.status, 'Order Confirmed');
 
-    // Automatically transition to Operations Team module
-    setCurrentRole('Operations Team');
-
     return orderId;
   };
 
@@ -1781,39 +1954,63 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reporting_time: string;
       remarks?: string;
       current_stage?: CurrentStage;
+      event_date?: string;
+      event_time?: string;
+      event_status?: string;
     }
   ) => {
     const opId = `OP-${Math.floor(5012 + Math.random() * 800)}`;
-    const { current_stage, ...restOpData } = opData;
+    const { current_stage, event_date, event_time, event_status, ...restOpData } = opData;
+    
+    // Default or specified status / stage
+    const targetStatus = event_status || 'Event Scheduled';
+    const targetStageNum: CurrentStage = current_stage || 'Event Scheduled';
+
     const newOp: Operation = {
       operation_id: opId,
       order_id: orderId,
       ...restOpData,
-      event_status: 'Assigned',
+      event_status: targetStatus,
       updated_by: currentUserName,
     };
 
     const targetOrder = orders.find((o) => o.order_id === orderId);
     const previousStage = targetOrder ? targetOrder.current_stage : 'Order Confirmed';
-    const targetStage: CurrentStage = current_stage || 
-      ((opData.photographer_assigned && opData.videographer_assigned) ? 'Event Scheduled' : 'Operations Assigned');
 
-    // Update order & lead stage
+    // Update order & lead stage, and event_date / event_time
     setOrders((prev) =>
-      prev.map((ord) => (ord.order_id === orderId ? { ...ord, current_stage: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ord))
+      prev.map((ord) => (ord.order_id === orderId ? { 
+        ...ord, 
+        current_stage: targetStageNum, 
+        event_date: event_date || ord.event_date,
+        event_time: event_time || ord.event_time,
+        updated_by: currentUserName, 
+        updated_at: new Date().toISOString() 
+      } : ord))
     );
     pushUpdate('orders', 'order_id', orderId, { 
-      current_stage: targetStage,
+      current_stage: targetStageNum,
+      event_date: event_date || (targetOrder ? targetOrder.event_date : undefined),
+      event_time: event_time || (targetOrder ? targetOrder.event_time : undefined),
       updated_by: currentUserName,
       updated_at: new Date().toISOString()
     });
 
     if (targetOrder) {
       setLeads((prev) =>
-        prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { ...ld, status: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
+        prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { 
+          ...ld, 
+          status: targetStageNum, 
+          event_date: event_date || ld.event_date,
+          event_time: event_time || ld.event_time,
+          updated_by: currentUserName, 
+          updated_at: new Date().toISOString() 
+        } : ld))
       );
       pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
-        status: targetStage,
+        status: targetStageNum,
+        event_date: event_date || targetOrder.event_date,
+        event_time: event_time || targetOrder.event_time,
         updated_by: currentUserName,
         updated_at: new Date().toISOString()
       });
@@ -1825,7 +2022,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     pushUpsert('operations', newOp);
 
-    logActivity(`Assigned Crew for Order: ${orderId}`, 'Operations', opId, previousStage, targetStage);
+    logActivity(`Assigned Crew for Order: ${orderId} (Status: ${targetStatus})`, 'Operations', opId, previousStage, targetStageNum);
   };
 
   const saveStaffAssignments = async (
@@ -1986,7 +2183,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tracking_id: trackingId,
       editor_assigned: 'Unassigned',
       raw_footage_location: newRawFootage.server_path,
-      editing_status: 'Pending',
+      editing_status: 'Raw Footage Received',
       remarks: 'Raw footage uploaded. Awaiting editor assignment.',
     };
 
@@ -2076,7 +2273,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 2. Status Updates & Task Completed
       if (updates.editing_status && updates.editing_status !== targetProd.editing_status) {
         const status = updates.editing_status;
-        if (status === 'Customer Review') {
+        if (status === 'Client Review Sent') {
           addNotification({
             user_id: targetProd.editor_assigned,
             project_id: productionId,
@@ -2096,7 +2293,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             message: `Revision was requested for "${orderName}" (Order: ${oId}). Status updated to Revision Required.`,
             recipient_role: 'Production Team'
           });
-        } else if (status === 'Approved') {
+        } else if (status === 'Final Approval') {
           addNotification({
             user_id: targetProd.editor_assigned,
             project_id: productionId,
@@ -2115,7 +2312,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             message: `Review completed. "${orderName}" (Order: ${oId}) was approved by the client.`,
             recipient_role: 'Production Team'
           });
-        } else if (status === 'Delivered') {
+        } else if (status === 'Project Delivered') {
           addNotification({
             user_id: targetProd.editor_assigned,
             project_id: productionId,
@@ -2152,11 +2349,16 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Determine Stage to update on Order and Lead
     let nextStage: CurrentStage | null = null;
-    if (updates.editing_status === 'Editing') nextStage = 'Editing Started';
-    else if (updates.editing_status === 'Customer Review') nextStage = 'Customer Review';
+    if (updates.editing_status === 'Raw Footage Received') nextStage = 'Raw Footage Received';
+    else if (updates.editing_status === 'Editor Assigned') nextStage = 'Editor Assigned';
+    else if (updates.editing_status === 'Editing Started') nextStage = 'Editing Started';
+    else if (updates.editing_status === 'Editing In Progress') nextStage = 'Editing Started';
+    else if (updates.editing_status === 'Internal QC Review') nextStage = 'Editing Started';
+    else if (updates.editing_status === 'Client Review Sent') nextStage = 'Customer Review';
     else if (updates.editing_status === 'Revision Required') nextStage = 'Revision Required';
-    else if (updates.editing_status === 'Approved') nextStage = 'Approved';
-    else if (updates.editing_status === 'Delivered') {
+    else if (updates.editing_status === 'Revision In Progress') nextStage = 'Revision Required';
+    else if (updates.editing_status === 'Final Approval') nextStage = 'Approved';
+    else if (updates.editing_status === 'Project Delivered') {
       if (targetProd) {
         const rf = rawFootage.find((f) => f.tracking_id === targetProd.tracking_id);
         const payment = rf ? payments.find((p) => p.order_id === rf.order_id) : undefined;
@@ -2164,6 +2366,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         nextStage = 'Payment Pending';
       }
+    } else if (updates.editing_status === 'Project Closed') {
+      nextStage = 'Closed';
     } else if (updates.editor_assigned && updates.editor_assigned !== 'Unassigned') {
       nextStage = 'Editor Assigned';
     }
@@ -2266,11 +2470,20 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity(`Audited & accepted Raw Footage for Order: ${orderId}. Assigned to editing pipelines.`, 'Production', orderId, previousStage, 'Raw Footage Received');
   };
 
-  const confirmRawFootageReceived = (orderId: string) => {
+  const confirmRawFootageReceived = (
+    orderId: string,
+    footageLink?: string,
+    storageType?: string,
+    uploadNotes?: string,
+    paymentCollectionStatus?: string,
+    additionalReceived?: number
+  ) => {
     const targetOrder = orders.find((o) => o.order_id === orderId);
     if (!targetOrder) return;
     const previousStage = targetOrder.current_stage;
     const targetStage: CurrentStage = 'Raw Footage Received';
+
+    const resolvedLink = footageLink || `s3://photocrew-vault-production/2026/${orderId}-shoot/raw/`;
 
     setOrders((prev) =>
       prev.map((ord) => (ord.order_id === orderId ? { ...ord, current_stage: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ord))
@@ -2281,6 +2494,49 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString()
     });
 
+    // Handle Payment Capture if provided
+    if (paymentCollectionStatus) {
+      const existingPayment = payments.find(p => p.order_id === orderId);
+      const totalAmount = targetOrder.quotation_amount || 0;
+      const advanceAmount = targetOrder.advance_received || 0;
+      const finalReceived = additionalReceived || 0;
+
+      let payStatus: PaymentStatus = 'Pending';
+      let balanceDue = totalAmount - advanceAmount - finalReceived;
+
+      if (paymentCollectionStatus === 'Full Payment Received') {
+        payStatus = 'Fully Paid';
+        balanceDue = 0;
+      } else if (paymentCollectionStatus === 'Partial Payment Received') {
+        payStatus = 'Partially Paid';
+      } else if (paymentCollectionStatus === 'Payment Pending') {
+        payStatus = 'Pending';
+        balanceDue = totalAmount - advanceAmount; // no additional received
+      }
+
+      const payId = existingPayment?.payment_id || `PAY-${Math.floor(3000 + Math.random() * 1000)}`;
+      const updatedPayment: Payment = {
+        payment_id: payId,
+        order_id: orderId,
+        quotation_amount: totalAmount,
+        advance_received: advanceAmount,
+        final_payment_received: paymentCollectionStatus === 'Full Payment Received' ? (totalAmount - advanceAmount) : finalReceived,
+        balance_due: balanceDue < 0 ? 0 : balanceDue,
+        payment_status: payStatus,
+        payment_collection_status: paymentCollectionStatus,
+        additional_received: paymentCollectionStatus === 'Full Payment Received' ? (totalAmount - advanceAmount) : finalReceived,
+        payment_date: new Date().toISOString().split('T')[0],
+      };
+
+      if (existingPayment) {
+        setPayments(prev => prev.map(p => p.payment_id === payId ? updatedPayment : p));
+        pushUpdate('payments', 'payment_id', payId, updatedPayment);
+      } else {
+        setPayments(prev => [updatedPayment, ...prev]);
+        pushInsert('payments', updatedPayment);
+      }
+    }
+
     setLeads((prev) =>
       prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { ...ld, status: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
     );
@@ -2290,47 +2546,64 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString()
     });
 
+    // Also update event_status of corresponding Operations record to 'Raw Footage Received' if exists
+    setOperations((prev) =>
+      prev.map((op) => (op.order_id === orderId ? { ...op, event_status: 'Raw Footage Received' } : op))
+    );
+    pushUpdate('operations', 'order_id', orderId, { event_status: 'Raw Footage Received' });
+
     let existingRf = rawFootage.find(f => f.order_id === orderId);
-    let trackingId = existingRf?.tracking_id || `TRK-${Math.floor(2012 + Math.random() * 800)}`;
+    let trackingId = existingRf?.tracking_id || `TRK-${Math.floor(2012 + Math.random() * 850)}`;
+
+    const nowIso = new Date().toISOString();
+    const todayYyyyMmDd = nowIso.split('T')[0];
+
+    const finalRf: RawFootage = {
+      tracking_id: trackingId,
+      order_id: orderId,
+      event_completed_date: existingRf?.event_completed_date || todayYyyyMmDd,
+      raw_received: true,
+      server_path: resolvedLink,
+      uploaded_by: currentUserName,
+      uploaded_date: nowIso,
+      status: 'Received',
+      storage_type: storageType || 'Google Drive',
+      upload_notes: uploadNotes || '',
+    };
 
     if (existingRf) {
       setRawFootage((prev) =>
-        prev.map((rf) => {
-          if (rf.order_id === orderId) {
-            pushUpdate('raw_footage', 'tracking_id', rf.tracking_id, { status: 'Received', raw_received: true });
-            return { ...rf, status: 'Received', raw_received: true };
-          }
-          return rf;
-        })
+        prev.map((rf) => (rf.order_id === orderId ? finalRf : rf))
       );
+      pushUpdate('raw_footage', 'tracking_id', trackingId, finalRf);
     } else {
-      const serverPath = `s3://photocrew-vault-production/2026/${orderId}-shoot/raw/`;
-      const newRf: RawFootage = {
-        tracking_id: trackingId,
-        order_id: orderId,
-        event_completed_date: new Date().toISOString().split('T')[0],
-        raw_received: true,
-        server_path: serverPath,
-        uploaded_by: currentUserName,
-        uploaded_date: new Date().toISOString(),
-        status: 'Received',
-      };
-      setRawFootage((prev) => [newRf, ...prev]);
-      pushInsert('raw_footage', newRf);
+      setRawFootage((prev) => [finalRf, ...prev]);
+      pushInsert('raw_footage', finalRf);
     }
 
-    // Ensure production entry exists
+    // Ensure production entry exists or update it
     let existingProd = production.find(p => p.tracking_id === trackingId);
-    if (!existingProd) {
-      const pId = `PRD-${Math.floor(4012 + Math.random() * 800)}`;
-      const serverPath = existingRf?.server_path || `s3://photocrew-vault-production/2026/${orderId}-shoot/raw/`;
+    if (existingProd) {
+      setProduction((prev) =>
+        prev.map((prod) => (prod.tracking_id === trackingId ? {
+          ...prod,
+          raw_footage_location: resolvedLink,
+          remarks: `Raw footage received via ${storageType || 'Google Drive'}. ${uploadNotes || ''}`,
+        } : prod))
+      );
+      pushUpdate('production', 'tracking_id', trackingId, {
+        raw_footage_location: resolvedLink,
+        remarks: `Raw footage received via ${storageType || 'Google Drive'}. ${uploadNotes || ''}`,
+      });
+    } else {
+      const pId = `PRD-${Math.floor(4012 + Math.random() * 850)}`;
       const newProd: Production = {
         production_id: pId,
         tracking_id: trackingId,
         editor_assigned: 'Unassigned',
-        raw_footage_location: serverPath,
-        editing_status: 'Pending',
-        remarks: 'Raw footage received. Awaiting editor assignment.',
+        raw_footage_location: resolvedLink,
+        editing_status: 'Raw Footage Received',
+        remarks: `Raw footage received via ${storageType || 'Google Drive'}. ${uploadNotes || ''}`,
       };
       setProduction((prev) => [newProd, ...prev]);
       pushInsert('production', newProd);
@@ -2342,14 +2615,38 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       task_id: 'Editing',
       notification_type: 'Task Assigned',
       title: 'New Raw Footage Received',
-      message: `Raw footage for "${targetOrder.package_name || 'Shoot'}" (Order: ${orderId}) has been received and verified. Project is ready for post-production editing!`,
+      message: `Raw footage for "${targetOrder.package_name || 'Shoot'}" (Order: ${orderId}) has been received and verified. Storage Type: ${storageType || 'Google Drive'}. Ready for editing!`,
       recipient_role: 'Production Team'
     });
 
-    logActivity(`Raw Footage Received and Confirmed in system for Order: ${orderId}`, 'Operations', orderId, previousStage, targetStage);
+    logActivity(`Raw Footage Received and Confirmed in system for Order: ${orderId}. Drive Link: ${resolvedLink}. Storage: ${storageType || 'Google Drive'}`, 'Operations', orderId, previousStage, targetStage);
+  };
 
-    // Automatically switch role to Production Team to navigate to the Production Dashboard!
-    setCurrentRole('Production Team');
+  const updateOrderStage = (orderId: string, stage: CurrentStage) => {
+    const targetOrder = orders.find((o) => o.order_id === orderId);
+    const previousStage = targetOrder ? targetOrder.current_stage : 'Order Confirmed';
+
+    setOrders((prev) =>
+      prev.map((ord) => (ord.order_id === orderId ? { ...ord, current_stage: stage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ord))
+    );
+    pushUpdate('orders', 'order_id', orderId, { 
+      current_stage: stage,
+      updated_by: currentUserName,
+      updated_at: new Date().toISOString()
+    });
+
+    if (targetOrder) {
+      setLeads((prev) =>
+        prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { ...ld, status: stage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
+      );
+      pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
+        status: stage,
+        updated_by: currentUserName,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    logActivity(`Updated stage for Order ${orderId}`, 'Operations', orderId, previousStage, stage);
   };
 
   // 7. Mark Delivered (Action button)
@@ -2911,6 +3208,236 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const addSpeciality = async (name: string) => {
+    const id = `SPC-${Math.floor(100 + Math.random() * 900)}`;
+    const newSpec: ProductionSpeciality = {
+      speciality_id: id,
+      name,
+      active: true,
+      created_at: new Date().toISOString()
+    };
+    setSpecialities(prev => [newSpec, ...prev]);
+    await pushInsert('production_specialties', newSpec);
+    logActivity(`Created Role Speciality: ${name}`, 'Production', id);
+  };
+
+  const updateSpeciality = async (id: string, name: string) => {
+    setSpecialities(prev => prev.map(s => s.speciality_id === id ? { ...s, name } : s));
+    await pushUpdate('production_specialties', 'speciality_id', id, { name });
+    logActivity(`Updated Speciality to: ${name}`, 'Production', id);
+  };
+
+  const deactivateSpeciality = async (id: string, active: boolean) => {
+    setSpecialities(prev => prev.map(s => s.speciality_id === id ? { ...s, active } : s));
+    await pushUpdate('production_specialties', 'speciality_id', id, { active });
+    logActivity(`${active ? 'Activated' : 'Deactivated'} Speciality: ${id}`, 'Production', id);
+  };
+
+  const assignEditorToProject = async (assignment: Omit<EditorAssignment, 'assignment_id' | 'status' | 'assigned_date'>) => {
+    const id = `EDR-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newAssign: EditorAssignment = {
+      ...assignment,
+      assignment_id: id,
+      status: 'Assigned',
+      assigned_date: new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+    setEditorAssignments(prev => [newAssign, ...prev]);
+    await pushInsert('editor_assignments', newAssign);
+    logActivity(`Assigned Editor: ${assignment.staff_name} as ${assignment.speciality}`, 'Production', id);
+    
+    const prodProj = production.find(p => p.production_id === assignment.production_id);
+    if (prodProj) {
+      const currentAssigned = prodProj.assigned_staff ? prodProj.assigned_staff.split(', ') : [];
+      if (!currentAssigned.includes(assignment.staff_name)) {
+        currentAssigned.push(assignment.staff_name);
+        const updatedStaff = currentAssigned.join(', ');
+        updateProduction(assignment.production_id, {
+          assigned_staff: updatedStaff,
+          editor_assigned: assignment.staff_name, // keep the latest assigned as the main editor_assigned
+          production_status: 'Editor Assigned'
+        });
+      }
+    }
+  };
+
+  const updateEditorAssignmentStatus = async (assignmentId: string, status: EditorAssignment['status']) => {
+    let targetAssignment: EditorAssignment | undefined;
+    
+    setEditorAssignments(prev => {
+      const updated = prev.map(a => {
+        if (a.assignment_id === assignmentId) {
+          targetAssignment = { ...a, status };
+          return targetAssignment;
+        }
+        return a;
+      });
+      localStorage.setItem('erp_editor_assignments', JSON.stringify(updated));
+      return updated;
+    });
+
+    await pushUpdate('editor_assignments', 'assignment_id', assignmentId, { status });
+    logActivity(`Updated Editor Task ${assignmentId} status to: ${status}`, 'Production', assignmentId);
+    
+    // Defer reading the up-to-date assignment list to correctly calculate and push production updates
+    setTimeout(() => {
+      setEditorAssignments(currentAssignments => {
+        const assignment = currentAssignments.find(a => a.assignment_id === assignmentId);
+        if (assignment) {
+          const prodId = assignment.production_id;
+          const allTasks = currentAssignments.filter(t => t.production_id === prodId);
+          
+          const completedTasks = allTasks.filter(t => t.status === 'Completed').length;
+          const totalTasks = allTasks.length;
+          const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+          
+          let nextEditingStatus: EditingStatus = 'Editing Started';
+          if (completedTasks === totalTasks && totalTasks > 0) {
+            nextEditingStatus = 'Internal QC Review';
+          } else if (status === 'Review Pending') {
+            nextEditingStatus = 'Internal QC Review';
+          } else if (status === 'Revision') {
+            nextEditingStatus = 'Revision Required';
+          } else if (status === 'In Progress' || status === 'Editing Started') {
+            nextEditingStatus = 'Editing In Progress';
+          }
+          
+          updateProduction(prodId, {
+            editing_status: nextEditingStatus,
+            editing_progress: `${progressPercent}%`,
+            remarks: `Task updated: ${assignment.staff_name} (${assignment.speciality}) marked status to ${status}. Total Project Tasks Progress: ${progressPercent}%.`
+          });
+        }
+        return currentAssignments;
+      });
+    }, 50);
+  };
+
+  const deleteEditorAssignment = async (assignmentId: string) => {
+    setEditorAssignments(prev => prev.filter(a => a.assignment_id !== assignmentId));
+    await pushDelete('editor_assignments', 'assignment_id', assignmentId);
+    logActivity(`Removed Editor Task Assignment: ${assignmentId}`, 'Production', assignmentId);
+  };
+
+  const addQuotation = async (newQuote: any) => {
+    setQuotations((prev) => {
+      const next = [newQuote, ...prev];
+      localStorage.setItem('erp_quotations', JSON.stringify(next));
+      return next;
+    });
+
+    logActivity(`Generated Quotation: ${newQuote.quotation_number}`, 'Sales', newQuote.lead_id, 'N/A', 'Quotation Generated');
+
+    if (!supabaseClient) return;
+
+    const metadataObj = {
+      order_id: newQuote.order_id,
+      customer_id: newQuote.customer_id,
+      pdf_url: newQuote.pdf_url,
+      whatsapp_sent_status: newQuote.whatsapp_sent_status,
+      viewed_status: newQuote.viewed_status,
+      generated_date: newQuote.generated_date
+    };
+
+    const packedTerms = `${newQuote.terms_conditions || ''}\n\nMETADATA:${JSON.stringify(metadataObj)}`;
+
+    const standardPayload = {
+      quotation_id: newQuote.quotation_id,
+      lead_id: newQuote.lead_id,
+      quotation_number: newQuote.quotation_number,
+      quotation_amount: newQuote.quotation_amount,
+      discount_amount: newQuote.discount_amount,
+      tax_amount: newQuote.tax_amount || 0,
+      final_amount: newQuote.final_amount,
+      quotation_status: newQuote.quotation_status,
+      valid_until: newQuote.valid_until || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      terms_conditions: packedTerms,
+      created_by: newQuote.created_by,
+      created_at: newQuote.created_at,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      const { error } = await supabaseClient.from('quotations').insert(standardPayload);
+      if (error) {
+        console.warn('Could not insert quotation into Supabase with standard fields:', error.message);
+      }
+    } catch (err) {
+      console.warn('Supabase exception on inserting quotation:', err);
+    }
+  };
+
+  const updateQuotation = async (quotationId: string, updates: Partial<any>) => {
+    let updatedQuote: any = null;
+    
+    setQuotations((prev) => {
+      const next = prev.map((q) => {
+        if (q.quotation_id === quotationId) {
+          updatedQuote = { ...q, ...updates, updated_at: new Date().toISOString() };
+          return updatedQuote;
+        }
+        return q;
+      });
+      localStorage.setItem('erp_quotations', JSON.stringify(next));
+      return next;
+    });
+
+    setTimeout(async () => {
+      if (!updatedQuote) return;
+      if (!supabaseClient) return;
+
+      const metadataObj = {
+        order_id: updatedQuote.order_id,
+        customer_id: updatedQuote.customer_id,
+        pdf_url: updatedQuote.pdf_url,
+        whatsapp_sent_status: updatedQuote.whatsapp_sent_status,
+        viewed_status: updatedQuote.viewed_status,
+        generated_date: updatedQuote.generated_date
+      };
+
+      let cleanTerms = updatedQuote.terms_conditions || '';
+      if (cleanTerms.includes('\n\nMETADATA:')) {
+        cleanTerms = cleanTerms.split('\n\nMETADATA:')[0];
+      } else if (cleanTerms.includes('METADATA:')) {
+        cleanTerms = cleanTerms.split('METADATA:')[0];
+      }
+
+      const packedTerms = `${cleanTerms}\n\nMETADATA:${JSON.stringify(metadataObj)}`;
+
+      const standardPayload = {
+        quotation_status: updatedQuote.quotation_status,
+        terms_conditions: packedTerms,
+        updated_at: new Date().toISOString()
+      };
+
+      try {
+        const { error } = await supabaseClient.from('quotations').update(standardPayload).eq('quotation_id', quotationId);
+        if (error) {
+          console.warn('Supabase Update error for quotations table:', error.message);
+        }
+      } catch (err) {
+        console.warn('Supabase Exception on updating quotation:', err);
+      }
+    }, 10);
+  };
+
+  const updateLead = (leadId: string, updates: Partial<Lead>) => {
+    setLeads((prev) =>
+      prev.map((ld) => {
+        if (ld.lead_id === leadId) {
+          const updated = {
+            ...ld,
+            ...updates,
+            updated_at: new Date().toISOString()
+          };
+          pushUpdate('leads', 'lead_id', leadId, updates);
+          return updated;
+        }
+        return ld;
+      })
+    );
+  };
+
   return (
     <RoleContext.Provider
       value={{
@@ -2945,12 +3472,17 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addPackage,
         updatePackage,
         deletePackage,
+        quotations,
+        addQuotation,
+        updateQuotation,
+        updateLead,
         addLead,
         updateLeadFollowUp,
         confirmOrder,
         assignOperations,
         markEventCompleted,
         confirmRawFootageReceived,
+        updateOrderStage,
         acceptRawFootage,
         updateProduction,
         markDelivered,
@@ -2965,6 +3497,17 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         staffAssignments,
         saveStaffAssignments,
         updateStaffAssignmentWhatsAppStatus,
+        specialities,
+        addSpeciality,
+        updateSpeciality,
+        deactivateSpeciality,
+        editorAssignments,
+        assignEditorToProject,
+        updateEditorAssignmentStatus,
+        deleteEditorAssignment,
+        globalDateRange,
+        setGlobalDateRange,
+        resetGlobalDateRange,
       }}
     >
       {children}

@@ -499,10 +499,11 @@ export const LoginScreen: React.FC = () => {
                   Create Account
                 </button>
               </p>
-            </div>
           </div>
+        </div>
 
-          {/* Quick Directory */}
+        {/* Quick Directory - Hidden from user view */}
+        {false && (
           <div className="bg-zinc-900/30 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
             <span className="text-[10px] font-black uppercase font-mono tracking-widest text-zinc-400 flex items-center gap-1.5 pl-1">
               <KeyRound className="w-3.5 h-3.5 text-amber-500" />
@@ -554,8 +555,10 @@ export const LoginScreen: React.FC = () => {
               })}
             </div>
           </div>
+          )}
 
-          {/* Connection Status Indicator Card */}
+          {/* Connection Status Indicator Card - Hidden from user view */}
+          {false && (
           <div className="bg-zinc-900/40 backdrop-blur-md border border-zinc-900 rounded-3xl p-6 shadow-2xl relative">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xs font-black uppercase tracking-wider text-white font-mono flex items-center gap-1.5">
@@ -753,7 +756,7 @@ export const LoginScreen: React.FC = () => {
                     ) : realtimeTest === 'fail' ? (
                       <span className="text-rose-400 bg-rose-950/30 px-2 py-0.5 rounded-md text-[9px] uppercase tracking-wider">🔴 Unsubscribed</span>
                     ) : (
-                      <span className="text-zinc-600">⚪ Untested</span>
+                      <span className="text-zinc-650">⚪ Untested</span>
                     )}
                   </span>
                 </div>
@@ -792,6 +795,7 @@ export const LoginScreen: React.FC = () => {
               </div>
             )}
           </div>
+        )}
 
         </div>
 

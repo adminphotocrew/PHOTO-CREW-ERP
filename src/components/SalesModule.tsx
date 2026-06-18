@@ -2,11 +2,488 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRole } from './RoleContext';
 import { 
-  Plus, Edit, CheckSquare, Search, Filter, Ban, X, Phone, Mail, MapPin, Calendar, DollarSign, Clock, Users, ArrowRight, ChevronDown, Check
+  Plus, Edit, CheckSquare, Search, Filter, Ban, X, Phone, Mail, MapPin, Calendar, DollarSign, Clock, Users, ArrowRight, ChevronDown, Check, Package
 } from 'lucide-react';
 import { Lead, CurrentStage, LeadPackage } from '../types';
+import { CameraLensStatsCard, CameraLensTheme } from './CameraLensStatsCard';
 import { formatINR, formatIndianPhoneNumber, validateIndianMobile, formatTime12Hour, getCustomers } from '../utils';
 import { SalesCalendar } from './SalesCalendar';
+import { jsPDF } from 'jspdf';
+
+const generateQuotationPDF = (
+  lead: any,
+  activePkgs: any[],
+  quoteNum: string,
+  termsText: string,
+  logoBase64?: string,
+  editableInclusions?: Record<string, string[]>,
+  editableDeliverables?: Record<string, string[]>,
+  discountValue = 0,
+  additionalCharges = 0
+) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Color Palette & Premium Theme Variables (Photography Studio Inspired)
+  const slateDark = [15, 23, 42];      // #0f172a
+  const slateGray = [100, 116, 139];   // #64748b
+  const bgLightGrid = [248, 250, 252]; // #f8fafc
+  const headerBgColor = [18, 18, 22];  // Luxury Carbon Black
+  const goldColor = [212, 175, 55];   // #D4AF37 Classic Gold
+
+  // 1. BRAND HEADER (Black + Gold Premium Theme)
+  // Fill full-width elegant dark header block
+  doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
+  doc.rect(0, 0, 210, 42, 'F'); // 42mm tall header
+
+  // Bottom gold ribbon border
+  doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.rect(0, 41, 210, 1.2, 'F');
+
+  // LEFT: Draw White Logo (stands out beautifully on Luxury Carbon Black background)
+  let logoY = 10;
+  let hasLogo = false;
+  if (logoBase64 && logoBase64.startsWith('data:image')) {
+    try {
+      doc.addImage(logoBase64, 'PNG', 15, logoY, 22, 22);
+      hasLogo = true;
+    } catch (e) {
+      console.warn('Failed to add logo image to PDF, drawing fallback badge:', e);
+    }
+  }
+
+  if (!hasLogo) {
+    // Fallback: A luxury golden camera style emblem & title branding
+    doc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
+    doc.setLineWidth(0.6);
+    doc.setFillColor(18, 18, 22);
+    doc.circle(26, logoY + 11, 8, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text('P', 24.5, logoY + 14.5);
+  }
+
+  // CENTER: Photocrew Pictures Branding
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.text('PHOTOCREW PICTURES', 105, 19, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(185, 185, 185); // elegant light text
+  doc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 105, 24, { align: 'center' });
+
+  doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.setFontSize(6.5);
+  doc.text('★ ★ ★ ★ ★', 105, 29, { align: 'center' });
+
+  // RIGHT: Contact Info (Right-aligned, absolutely safe against any overlap)
+  doc.setTextColor(245, 245, 245);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text('www.photocrewpictures.com', 195, 17, { align: 'right' });
+  doc.text('info@photocrewpictures.com', 195, 22, { align: 'right' });
+  doc.text('+91 9060144016', 195, 27, { align: 'right' });
+
+  // 2. CUSTOMER DETAILS & LOGISTICS
+  let clientY = 49;
+  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]); // slate-50
+  doc.roundedRect(15, clientY, 180, 32, 1.5, 1.5, 'F');
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(0.25);
+  doc.roundedRect(15, clientY, 180, 32, 1.5, 1.5, 'D');
+
+  // Left Column (Customer Specifics)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('CUSTOMER DETAILS', 20, clientY + 6);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+  
+  const wrapCustName = doc.splitTextToSize(lead.customer_name || '', 55);
+  doc.text(`Customer Name  :  ${wrapCustName[0] || 'N/A'}`, 20, clientY + 11.5);
+  doc.text(`Mobile Number  :  ${lead.mobile || 'N/A'}`, 20, clientY + 16.5);
+  const wrapEmail = doc.splitTextToSize(lead.email || 'N/A', 55);
+  doc.text(`Email Address  :  ${wrapEmail[0]}`, 20, clientY + 21.5);
+  doc.text(`Quotation No   :  ${quoteNum}`, 20, clientY + 26.5);
+
+  // Right Column (Event & Proposal Logistics)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('EVENT LOGISTICS', 110, clientY + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+  
+  const wrapEventType = doc.splitTextToSize(lead.event_type || '', 60);
+  doc.text(`Event Type      :  ${wrapEventType[0] || 'N/A'}`, 110, clientY + 11.5);
+  
+  let formattedEvDate = 'N/A';
+  if (lead.event_date) {
+    try {
+      formattedEvDate = new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch(e) {}
+  }
+  doc.text(`Event Date      :  ${formattedEvDate}`, 110, clientY + 16.5);
+  
+  const wrapLocation = doc.splitTextToSize(lead.event_location || 'N/A', 60);
+  doc.text(`Event Location  :  ${wrapLocation[0]}`, 110, clientY + 21.5);
+  doc.text(`Quotation Date  :  ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`, 110, clientY + 26.5);
+
+  // 3. PACKAGE DETAILS SECTION
+  let currentY = 88;
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('CHOSEN PACKAGE SPECIFICATIONS', 15, currentY);
+  currentY += 4.5; // 92.5
+
+  const hasActivePkgs = activePkgs.length > 0;
+  
+  const defaultDeliverables = [
+    '350 Edited Photos',
+    '4K Cinematic Video',
+    '3 Reels',
+    'Traditional Edited Video',
+    'Album Details',
+    'Additional Deliverables'
+  ];
+
+  const defaultInclusions = [
+    '1 Candid Photographer',
+    '1 Cinematographer',
+    '2 Traditional Photographers',
+    '2 Traditional Videographers',
+    '1 Drone',
+    '1 LED Wall',
+    '1 Spot Mixing'
+  ];
+
+  const packagesToRender = hasActivePkgs ? activePkgs : [{
+    package_name: `Default ${lead.event_type} Standard Package`,
+    package_id: `default_${lead.lead_id}`,
+    package_cost: lead.budget
+  }];
+
+  packagesToRender.forEach((pkg: any) => {
+    const pkgKey = pkg.package_id || pkg.lead_package_id || 'default';
+    
+    // Resolve dynamic edited items or fallbacks
+    const inclusionsList = (editableInclusions && editableInclusions[pkgKey]) || defaultInclusions;
+    const deliverablesList = (editableDeliverables && editableDeliverables[pkgKey]) || defaultDeliverables;
+
+    // Calculate title wrap length (110mm max width leaves robust margin for price column on right)
+    const titleLines = doc.splitTextToSize((pkg.package_name || '').toUpperCase(), 110);
+    const titleHeight = Math.max(8, 4 + titleLines.length * 4.2);
+
+    // Compute fully wrapped inclusions and deliverables to prevent any overflow or boundary breaking
+    const wrappedInclusions: string[] = [];
+    inclusionsList.forEach(inc => {
+      const lines = doc.splitTextToSize(inc, 74); // column width ~80 minus space indent padding
+      lines.forEach((line, i) => {
+        wrappedInclusions.push(i === 0 ? `✓  ${line}` : `    ${line}`);
+      });
+    });
+
+    const wrappedDeliverables: string[] = [];
+    deliverablesList.forEach(del => {
+      const lines = doc.splitTextToSize(del, 74);
+      lines.forEach((line, i) => {
+        wrappedDeliverables.push(i === 0 ? `✓  ${line}` : `    ${line}`);
+      });
+    });
+
+    const maxRows = Math.max(wrappedInclusions.length, wrappedDeliverables.length);
+    const contentHeight = 12 + (maxRows * 4.2);
+    const totalBoxHeight = titleHeight + contentHeight;
+
+    // Rigid check to prevent any content or border overflowing onto footer (max height before footer is 250)
+    if (currentY + totalBoxHeight > 250) {
+      doc.addPage();
+      currentY = 20; // reset to top gap on empty page
+      doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
+      doc.rect(0, 0, 210, 4, 'F'); // elegant top band
+    }
+
+    // Outer package layout container box
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(15, currentY, 180, totalBoxHeight, 1.5, 1.5, 'FD');
+
+    // Inside package header bar (Carbon Black)
+    doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
+    doc.rect(15, currentY, 180, titleHeight, 'F');
+
+    // Left sidebar ribbon gold accent
+    doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+    doc.rect(15, currentY, 1.5, titleHeight, 'F');
+
+    // Render wrapped Package Title lines
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255);
+    titleLines.forEach((line: string, lineIdx: number) => {
+      doc.text(line, 19, currentY + 5.5 + (lineIdx * 4.2));
+    });
+
+    // Package Price (Align Right, vertically centered)
+    doc.setFont('helvetica', 'bold');
+    const priceStr = `Price: ₹ ${Number(pkg.package_cost).toLocaleString('en-IN')}`;
+    doc.text(priceStr, 192, currentY + (titleHeight / 2) + 1.2, { align: 'right' });
+
+    let detailsY = currentY + titleHeight + 4; // content rendering offset
+
+    // INCLUSIONS (Left Column - fully aligned, wrapped inside bounds)
+    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('PACKAGE INCLUDES:', 20, detailsY);
+
+    wrappedInclusions.forEach((incLine: string, lineIdx: number) => {
+      const isHeader = incLine.startsWith('✓');
+      const yItem = detailsY + 5 + (lineIdx * 4.2);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      
+      if (isHeader) {
+        // Draw elegant circular bullet using shapes instead of questionable unicode characters
+        doc.setFillColor(16, 185, 129); // emerald-500
+        doc.circle(21.5, yItem - 1.1, 0.7, 'F');
+        doc.text(incLine.slice(2).trim(), 24, yItem);
+      } else {
+        doc.text(incLine.trim(), 24, yItem);
+      }
+    });
+
+    // DELIVERABLES (Right Column - perfectly aligned, wrapped inside bounds)
+    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('DELIVERABLES:', 110, detailsY);
+
+    wrappedDeliverables.forEach((delLine: string, lineIdx: number) => {
+      const isHeader = delLine.startsWith('✓');
+      const yItem = detailsY + 5 + (lineIdx * 4.2);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      
+      if (isHeader) {
+        // Draw elegant amber/gold circular bullet using shapes
+        doc.setFillColor(212, 175, 55); // goldColor/amber
+        doc.circle(111.5, yItem - 1.1, 0.7, 'F');
+        doc.text(delLine.slice(2).trim(), 114, yItem);
+      } else {
+        doc.text(delLine.trim(), 114, yItem);
+      }
+    });
+
+    currentY += totalBoxHeight + 6; // gap below of cards
+  });
+
+  // 4. TERMS AND PRICING CONTAINER
+  // Make sure we have enough space (at least 48mm) before drawing the bottom elements
+  if (currentY + 48 > 250) {
+    doc.addPage();
+    currentY = 20;
+    doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
+    doc.rect(0, 0, 210, 4, 'F');
+  }
+
+  let blockY = currentY + 4;
+
+  // Draw Left Container roundedRect for Terms & Conditions (Aligns beautifully in a clean enclosed box)
+  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]); // slate-50
+  doc.roundedRect(15, blockY - 2, 92, 41, 1.5, 1.5, 'F');
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(0.25);
+  doc.roundedRect(15, blockY - 2, 92, 41, 1.5, 1.5, 'D');
+
+  // Gold brand ribbon on the left of terms box
+  doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.rect(15, blockY - 2, 1.5, 41, 'F');
+
+  // Terms title (fully aligned and nested)
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('TERMS & CONDITIONS', 19, blockY + 3.5);
+
+  const customTermsList = termsText.split('\n').map(t => t.trim()).filter(Boolean);
+  const pdfTerms = customTermsList.length > 0 ? customTermsList : [
+    'Booking subject to wedding / event date availability.',
+    'Advance payment required for booking confirmation.',
+    'Remaining balance to be cleared as per standard company timeline.',
+    'Additional travel/accommodation charges may apply on actuals.',
+    'Additional post-production editing requests might incur extra fee.'
+  ];
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8); // elegant, high-profile tight legal text
+  doc.setTextColor(100, 116, 139); // slate-500
+  let termsOffset = blockY + 8.5;
+  
+  pdfTerms.forEach((term: string) => {
+    const termLines = doc.splitTextToSize(term, 82);
+    termLines.forEach((line: string, lineIdx: number) => {
+      if (termsOffset < blockY + 37) { // keep it inside the 41mm height container safely
+        if (lineIdx === 0) {
+          // Draw a tiny amber list bullet
+          doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+          doc.circle(20.5, termsOffset - 0.9, 0.5, 'F');
+          doc.text(line, 22.5, termsOffset);
+        } else {
+          doc.text(line, 22.5, termsOffset);
+        }
+        termsOffset += 3.3;
+      }
+    });
+  });
+
+  // Draw Pricing Section (Right Column) with Dotted Rows
+  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]); // slate-50
+  doc.rect(112, blockY - 2, 83, 41, 'F');
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(0.25);
+  doc.rect(112, blockY - 2, 83, 41, 'D');
+
+  const subtotal = packagesToRender.reduce((acc, p) => acc + Number(p.package_cost), 0);
+  const discount = discountValue;
+  const additionalServices = additionalCharges;
+  const tempSubVal = subtotal + additionalServices - discount;
+  const gstValue = 0; // GST is custom or zero
+
+  const drawPricingRow = (label: string, valueStr: string, yPos: number, isBold = false) => {
+    const style = isBold ? 'bold' : 'normal';
+    const size = isBold ? 8.5 : 7.5;
+    
+    // Set active font to measure correctly
+    doc.setFont('helvetica', style);
+    doc.setFontSize(size);
+    
+    const labelWidth = doc.getTextWidth(label);
+    const valueWidth = doc.getTextWidth(valueStr);
+    
+    // Left-aligned label
+    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.text(label, 115, yPos);
+    
+    // Right-aligned value
+    if (isBold) {
+      doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]); // Gold accent for final amounts
+    } else {
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    }
+    doc.text(valueStr, 192, yPos, { align: 'right' });
+
+    // Dotted Leaders (measured and drawn in standard normal 7.5 font)
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184); // slate-400
+    
+    // Since dots are normal size, let's re-measure labelWidth and valueWidth with normal 7.5 for dot offset calculation
+    const normalLabelW = doc.getTextWidth(label);
+    const normalValueW = doc.getTextWidth(valueStr);
+    
+    const dotStart = 115 + normalLabelW + 2;
+    const dotEnd = 192 - normalValueW - 2;
+    if (dotStart < dotEnd) {
+      let dots = '';
+      const dotCharW = doc.getTextWidth('.');
+      let currW = dotStart;
+      while (currW < dotEnd) {
+        dots += '.';
+        currW += dotCharW;
+      }
+      doc.text(dots, dotStart, yPos);
+    }
+  };
+
+  let pricingOffset = blockY + 3;
+  
+  const formattedSubtotal = `₹ ${subtotal.toLocaleString('en-IN')}`;
+  const formattedAddl = `₹ ${additionalServices.toLocaleString('en-IN')}`;
+  const formattedDisc = `₹ ${discount.toLocaleString('en-IN')}`;
+  const formattedSub = `₹ ${tempSubVal.toLocaleString('en-IN')}`;
+  const formattedGST = `₹ 0`;
+  const formattedGrand = `₹ ${tempSubVal.toLocaleString('en-IN')}`;
+
+  drawPricingRow('Package Cost', formattedSubtotal, pricingOffset);
+  pricingOffset += 4.5;
+  drawPricingRow('Additional Services', formattedAddl, pricingOffset);
+  pricingOffset += 4.5;
+  drawPricingRow('Discount', formattedDisc, pricingOffset);
+  pricingOffset += 4.5;
+  
+  // Divider line
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.25);
+  doc.line(115, pricingOffset + 1.2, 192, pricingOffset + 1.2);
+  pricingOffset += 5.5;
+
+  drawPricingRow('Sub Total', formattedSub, pricingOffset, true);
+  pricingOffset += 4.5;
+  drawPricingRow('GST (If Applicable)', formattedGST, pricingOffset);
+  pricingOffset += 4.5;
+
+  // Final Total highlight line
+  doc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.setLineWidth(0.25);
+  doc.line(115, pricingOffset + 1.2, 192, pricingOffset + 1.2);
+  pricingOffset += 5.5;
+  
+  drawPricingRow('Final Amount', formattedGrand, pricingOffset, true);
+
+  // 5. FOOTER SECTION
+  let footerY = 260;
+  
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.line(15, footerY, 195, footerY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('PHOTOCREW PICTURES', 15, footerY + 5);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Website : https://www.photocrewpictures.com/  |  Email: info@photocrewpictures.com  |  Phone: +91 9060144016', 15, footerY + 9);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]); // Gold primary accent
+  doc.text('Thank You For Choosing Photocrew Pictures', 15, footerY + 14);
+
+  // Authorised Signatory right aligned
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('For Photocrew Pictures', 150, footerY + 5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('Authorized Signatory', 150, footerY + 12);
+
+  // Bottom Accent ribbon
+  doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.rect(0, 292, 210, 5, 'F');
+
+  return doc;
+};
+
 
 const highlightText = (text: string, search: string) => {
   if (!search.trim()) return <span>{text}</span>;
@@ -43,8 +520,53 @@ export const SalesModule: React.FC = () => {
     packages,
     addPackage,
     updatePackage,
-    deletePackage
+    deletePackage,
+    quotations,
+    addQuotation,
+    updateQuotation,
+    updateLead
   } = useRole();
+
+  const [logoBase64, setLogoBase64] = useState<string>('');
+
+  React.useEffect(() => {
+    const preloadLogo = async () => {
+      try {
+        const response = await fetch('https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png');
+        if (response.ok) {
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              setLogoBase64(reader.result);
+            }
+          };
+          reader.readAsDataURL(blob);
+        }
+      } catch (err) {
+        // Fall back to loader with canvas
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            try {
+              const dataUrl = canvas.toDataURL('image/png');
+              setLogoBase64(dataUrl);
+            } catch (e) {
+              console.warn('Canvas toDataURL failed:', e);
+            }
+          }
+        };
+        img.src = 'https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png';
+      }
+    };
+    preloadLogo();
+  }, []);
 
   // Role permissions gate
   const canEdit = currentRole === 'Sales Team' || currentRole === 'Business Owner';
@@ -215,11 +737,166 @@ export const SalesModule: React.FC = () => {
     package_name: 'Luxury Cinematic Bundle',
     quotation_amount: 3500,
     advance_received: 1000,
+    event_date: '',
+    event_time: '',
+    payment_mode: 'UPI',
+    notes: '',
   });
+
+  // Quotation System State
+  const [quotationTerms, setQuotationTerms] = useState(
+    "1. 50% advance payment required to confirm event booking.\n" +
+    "2. Remaining 50% balance must be cleared upon raw footage delivery.\n" +
+    "3. Videos will be hosted on Photocrew Cloud storage for 90 days.\n" +
+    "4. Extra shoot hours are billed at ₹5,000/hr.\n" +
+    "5. Delivery of final edits: 15-20 business days."
+  );
+  const [generatedPDFBlobUrl, setGeneratedPDFBlobUrl] = useState<string>('');
+  const [activeQuoteNum, setActiveQuoteNum] = useState<string>('');
+
+  // Customizable inclusions, deliverables, discount, and additional charges states
+  const [editableInclusions, setEditableInclusions] = useState<Record<string, string[]>>({});
+  const [editableDeliverables, setEditableDeliverables] = useState<Record<string, string[]>>({});
+  const [quoteDiscount, setQuoteDiscount] = useState<number>(0);
+  const [quoteAdditional, setQuoteAdditional] = useState<number>(0);
+
+  const handleEditInclusion = (pkgKey: string, index: number, value: string) => {
+    setEditableInclusions(prev => {
+      const list = prev[pkgKey] ? [...prev[pkgKey]] : [];
+      list[index] = value;
+      return { ...prev, [pkgKey]: list };
+    });
+  };
+
+  const handleRemoveInclusion = (pkgKey: string, index: number) => {
+    setEditableInclusions(prev => {
+      const list = prev[pkgKey] ? prev[pkgKey].filter((_, i) => i !== index) : [];
+      return { ...prev, [pkgKey]: list };
+    });
+  };
+
+  const handleAddInclusion = (pkgKey: string, value: string) => {
+    if (!value.trim()) return;
+    setEditableInclusions(prev => {
+      const list = prev[pkgKey] ? [...prev[pkgKey]] : [];
+      list.push(value.trim());
+      return { ...prev, [pkgKey]: list };
+    });
+  };
+
+  const handleEditDeliverable = (pkgKey: string, index: number, value: string) => {
+    setEditableDeliverables(prev => {
+      const list = prev[pkgKey] ? [...prev[pkgKey]] : [];
+      list[index] = value;
+      return { ...prev, [pkgKey]: list };
+    });
+  };
+
+  const handleRemoveDeliverable = (pkgKey: string, index: number) => {
+    setEditableDeliverables(prev => {
+      const list = prev[pkgKey] ? prev[pkgKey].filter((_, i) => i !== index) : [];
+      return { ...prev, [pkgKey]: list };
+    });
+  };
+
+  const handleAddDeliverable = (pkgKey: string, value: string) => {
+    if (!value.trim()) return;
+    setEditableDeliverables(prev => {
+      const list = prev[pkgKey] ? [...prev[pkgKey]] : [];
+      list.push(value.trim());
+      return { ...prev, [pkgKey]: list };
+    });
+  };
+
+  // Auto-initialize spec editor state when selecting a lead
+  React.useEffect(() => {
+    if (!selectedLead) {
+      setEditableInclusions({});
+      setEditableDeliverables({});
+      return;
+    }
+
+    const activePackages = (leadPackages || []).filter(lp => lp.lead_id === selectedLead.lead_id);
+    const hasActivePkgs = activePackages.length > 0;
+
+    const newInclusions = { ...editableInclusions };
+    const newDeliverables = { ...editableDeliverables };
+    let changed = false;
+
+    if (!hasActivePkgs) {
+      const defaultId = `default_${selectedLead.lead_id}`;
+      if (!newInclusions[defaultId]) {
+        newInclusions[defaultId] = [
+          '1 Candid Photographer',
+          '1 Cinematographer',
+          '2 Traditional Photographers',
+          '2 Traditional Videographers',
+          '1 Drone',
+          '1 LED Wall',
+          '1 Spot Mixing'
+        ];
+        newDeliverables[defaultId] = [
+          '350 Edited Photos',
+          '4K Cinematic Video',
+          '3 Reels',
+          'Traditional Edited Video',
+          'Album Details',
+          'Additional Deliverables'
+        ];
+        changed = true;
+      }
+    } else {
+      activePackages.forEach((lp) => {
+        const pkgKey = lp.package_id || lp.lead_package_id || 'default';
+        if (!newInclusions[pkgKey]) {
+          const pObj = (packages || []).find(p => p.package_id === lp.package_id);
+          const incStr = pObj?.team_members || lp.team_members || '';
+          const delStr = pObj?.deliverables || lp.deliverables || '';
+
+          newInclusions[pkgKey] = incStr
+            ? incStr.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
+            : [
+                '1 Candid Photographer',
+                '1 Cinematographer',
+                '2 Traditional Photographers',
+                '2 Traditional Videographers',
+                '1 Drone',
+                '1 LED Wall',
+                '1 Spot Mixing'
+              ];
+
+          newDeliverables[pkgKey] = delStr
+            ? delStr.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
+            : [
+                '350 Edited Photos',
+                '4K Cinematic Video',
+                '3 Reels',
+                'Traditional Edited Video',
+                'Album Details',
+                'Additional Deliverables'
+              ];
+          changed = true;
+        }
+      });
+    }
+
+    if (changed) {
+      setEditableInclusions(newInclusions);
+      setEditableDeliverables(newDeliverables);
+    }
+  }, [selectedLead, leadPackages, packages]);
 
   // Handle lead select
   const handleSelectLead = (lead: Lead) => {
     setSelectedLead(lead);
+    setGeneratedPDFBlobUrl('');
+    setActiveQuoteNum('');
+    setQuoteDiscount(0);
+    setQuoteAdditional(0);
+    // Explicitly reset on new lead selection
+    setEditableInclusions({});
+    setEditableDeliverables({});
+
     setFollowUpForm({
       call_notes: '',
       next_follow_up_date: '',
@@ -231,6 +908,10 @@ export const SalesModule: React.FC = () => {
       package_name: lead.event_type + ' Premium Package',
       quotation_amount: lead.budget,
       advance_received: Math.round(lead.budget / 3),
+      event_date: lead.event_date || '',
+      event_time: lead.event_time || '',
+      payment_mode: 'UPI',
+      notes: '',
     });
   };
 
@@ -384,6 +1065,20 @@ export const SalesModule: React.FC = () => {
       return;
     }
 
+    if (followUpForm.status === 'Order Confirmed') {
+      setConfirmForm({
+        package_name: selectedLead.event_type + ' Premium Package',
+        quotation_amount: Number(followUpForm.quotation_amount) || selectedLead.budget || 0,
+        advance_received: Math.round((Number(followUpForm.quotation_amount) || selectedLead.budget || 0) / 3),
+        event_date: selectedLead.event_date || '',
+        event_time: selectedLead.event_time || '',
+        payment_mode: 'UPI',
+        notes: followUpForm.call_notes || '',
+      });
+      setShowConfirmModal(true);
+      return;
+    }
+
     updateLeadFollowUp(
       selectedLead.lead_id,
       followUpForm.status,
@@ -413,11 +1108,47 @@ export const SalesModule: React.FC = () => {
     e.preventDefault();
     if (!selectedLead) return;
 
+    // Validation – enforce Event Date is confirmed
+    if (!confirmForm.event_date || confirmForm.event_date.trim() === '') {
+      alert("Event date is required before confirming booking.");
+      
+      // Automatically keep status as 'Follow Up' (which represents Follow Up Required)
+      updateLeadFollowUp(
+        selectedLead.lead_id,
+        'Follow Up',
+        'Attempted booking but event date was not confirmed.',
+        new Date().toISOString().split('T')[0],
+        Number(confirmForm.quotation_amount) || selectedLead.budget,
+        'Booking failed due to missing event date.'
+      );
+
+      setSelectedLead((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          status: 'Follow Up',
+        };
+      });
+
+      // Reset follow up form choice
+      setFollowUpForm(prev => ({
+        ...prev,
+        status: 'Follow Up'
+      }));
+
+      setShowConfirmModal(false);
+      return;
+    }
+
     const orderId = confirmOrder(
       selectedLead.lead_id,
       confirmForm.package_name,
       Number(confirmForm.quotation_amount),
-      Number(confirmForm.advance_received)
+      Number(confirmForm.advance_received),
+      confirmForm.event_date,
+      confirmForm.event_time,
+      confirmForm.payment_mode,
+      confirmForm.notes
     );
 
     setShowConfirmModal(false);
@@ -460,7 +1191,15 @@ export const SalesModule: React.FC = () => {
       lead.mobile.includes(filterQuery);
 
     const matchesSource = filterSource === '' || lead.lead_source === filterSource;
-    const matchesStatus = filterStatus === '' || lead.status === filterStatus;
+    const matchesStatus = filterStatus === '' 
+      ? true 
+      : filterStatus === 'Overdue' 
+        ? (() => {
+            if (lead.status !== 'Follow Up') return false;
+            const fDate = getFollowUpDate(lead.remarks);
+            return fDate ? fDate < todayStr : false;
+          })()
+        : lead.status === filterStatus;
     const matchesSales = filterSalesPerson === '' || lead.sales_person === filterSalesPerson;
     const matchesDate = filterDate === '' || lead.event_date === filterDate;
 
@@ -510,25 +1249,27 @@ export const SalesModule: React.FC = () => {
           <button
             id="btn_lead_tab_packages"
             onClick={() => { setActiveTab('packages'); setSelectedLead(null); setSelectedCustomerProfileId(null); }}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
               activeTab === 'packages'
                 ? 'bg-zinc-900 border-zinc-750 text-white font-black hover:border-zinc-700'
                 : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            📦 Package Catalog
+            <Package className="w-3.5 h-3.5 text-zinc-405 group-hover:text-zinc-200" />
+            <span>Package Catalog</span>
           </button>
 
           <button
             id="btn_lead_tab_calendar"
             onClick={() => { setActiveTab('calendar'); setSelectedLead(null); setSelectedCustomerProfileId(null); }}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
               activeTab === 'calendar'
                 ? 'bg-zinc-900 border-zinc-750 text-white font-black hover:border-zinc-700'
                 : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            📅 Sales Calendar
+            <Calendar className="w-3.5 h-3.5 text-zinc-405 group-hover:text-zinc-200" />
+            <span>Sales Calendar</span>
           </button>
           
           {canEdit ? (
@@ -1226,7 +1967,8 @@ export const SalesModule: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                  <span>📦</span> Dynamic Package Catalog
+                  <Package className="w-4 h-4 text-slate-400" />
+                  <span>Dynamic Package Catalog</span>
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   Manage core service offerings, pricing rates, and category bindings synced directly with Supabase.
@@ -2228,22 +2970,28 @@ export const SalesModule: React.FC = () => {
         <div className="space-y-4">
 
           {/* Sales Performance Dashboard Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3.5 mt-2">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3.5 mt-2">
             {[
-              { label: 'New Leads', val: statNewLeads, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
-              { label: "Today's Follow-ups", val: statTodayFollowups, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-              { label: 'Overdue Follow-ups', val: statOverdueFollowups, color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/20' },
-              { label: 'Quotations Sent', val: statQuotesSent, color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' },
-              { label: 'Negotiations', val: statNegotiations, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-              { label: 'Confirmed Orders', val: statConfirmedOrders, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
-            ].map((kpi, idx) => (
-              <div key={idx} className={`p-4 rounded-2xl border ${kpi.bg} flex flex-col justify-between shadow-sm relative overflow-hidden backdrop-blur-sm`}>
-                <div className="absolute top-2 right-2 w-1.5 h-1.5 border-t border-r border-current opacity-30" />
-                <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-400">{kpi.label}</span>
-                <div className={`text-2xl font-black ${kpi.color} font-mono tracking-tight mt-1.5`}>
-                  {kpi.val}
-                </div>
-              </div>
+              { label: 'New Leads', val: statNewLeads, theme: 'gold' as CameraLensTheme, filterValue: 'New Lead', chartPoints: [10, 18, 14, 25, 20, 31, 35], trendText: 'Inbound' },
+              { label: "Today's Follow-ups", val: statTodayFollowups, theme: 'green' as CameraLensTheme, filterValue: 'Follow Up', chartPoints: [5, 12, 8, 15, 10, 19, 14], trendText: 'Pending Call' },
+              { label: 'Overdue Follow-ups', val: statOverdueFollowups, theme: 'red' as CameraLensTheme, filterValue: 'Overdue', chartPoints: [2, 6, 3, 8, 4, 10, 6], trendText: 'Urgent CRM' },
+              { label: 'Quotations Sent', val: statQuotesSent, theme: 'purple' as CameraLensTheme, filterValue: 'Quotation Sent', chartPoints: [12, 14, 18, 15, 21, 25, 22], trendText: 'Proposals Out' },
+              { label: 'Negotiations', val: statNegotiations, theme: 'blue' as CameraLensTheme, filterValue: 'Negotiation', chartPoints: [4, 9, 7, 12, 11, 15, 13], trendText: 'Contract Discussions' },
+              { label: 'Confirmed Orders', val: statConfirmedOrders, theme: 'cyan' as CameraLensTheme, filterValue: 'Order Confirmed', chartPoints: [8, 15, 12, 20, 16, 25, 24], trendText: 'Signed Reels' },
+            ].map((card, idx) => (
+              <CameraLensStatsCard
+                key={idx}
+                label={card.label}
+                val={card.val}
+                theme={card.theme}
+                trendText={card.trendText}
+                subText="CRM STATUS"
+                chartPoints={card.chartPoints}
+                activeFilterValue={filterStatus}
+                currentFilterValue={card.filterValue}
+                onClick={() => setFilterStatus(filterStatus === card.filterValue ? '' : card.filterValue)}
+                lensLabel={card.label.slice(0, 10).toUpperCase()}
+              />
             ))}
           </div>
           
@@ -2302,6 +3050,7 @@ export const SalesModule: React.FC = () => {
                 className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100"
               >
                 <option value="">All Stages</option>
+                <option value="Overdue">⚠️ Overdue Follow-ups</option>
                 <option value="New Lead">New Lead</option>
                 <option value="Follow Up">Follow Up</option>
                 <option value="Quotation Sent">Quotation Sent</option>
@@ -2423,12 +3172,12 @@ export const SalesModule: React.FC = () => {
 
       {/* Confirmation Modal to Officially Log and Book Contract */}
       {showConfirmModal && selectedLead && (
-        <div className="fixed inset-0 bg-black/75 z-55 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-slate-850 border border-slate-800 rounded-xl overflow-hidden max-w-md w-full shadow-2xl p-5 space-y-4">
+        <div className="fixed inset-0 bg-black/85 z-55 flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="bg-slate-850 border border-slate-750 rounded-xl overflow-hidden max-w-md w-full shadow-2xl p-5 space-y-4">
             
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1.5">
-                <span>💍</span> Create Order ID & Generate Contract
+              <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1.5 font-sans">
+                <span>💍</span> Booking Confirmation & Contract Form
               </h4>
               <button 
                 onClick={() => setShowConfirmModal(false)}
@@ -2438,13 +3187,13 @@ export const SalesModule: React.FC = () => {
               </button>
             </div>
 
-            <div className="bg-slate-900 p-3 rounded border border-slate-800 text-[11px] space-y-1">
-              <p className="text-slate-400">Client: <strong className="text-slate-205">{selectedLead.customer_name}</strong></p>
-              <p className="text-slate-400">Type: <strong className="text-slate-205">{selectedLead.event_type}</strong></p>
-              <p className="text-slate-400">Address: <strong className="text-slate-205">{selectedLead.event_location}</strong></p>
+            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-[11px] space-y-1">
+              <p className="text-slate-400">Client: <strong className="text-slate-200">{selectedLead.customer_name}</strong></p>
+              <p className="text-slate-400">Type: <strong className="text-slate-200">{selectedLead.event_type}</strong></p>
+              <p className="text-slate-400">Address: <strong className="text-slate-200">{selectedLead.event_location}</strong></p>
             </div>
 
-            <form onSubmit={handleConfirmOrderSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleConfirmOrderSubmit} className="space-y-3.5 text-xs">
               
               {/* Product package */}
               <div>
@@ -2457,44 +3206,101 @@ export const SalesModule: React.FC = () => {
                   placeholder="Royal Destination Platinum"
                   value={confirmForm.package_name}
                   onChange={(e) => setConfirmForm({ ...confirmForm, package_name: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none"
+                  className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
               </div>
 
+              {/* Event Date & Time Block */}
               <div className="grid grid-cols-2 gap-3">
-                {/* Quotation Amt */}
                 <div>
                   <label className="block font-medium text-slate-400 mb-1">
-                    Final Contract Price (₹) *
+                    Event Date * (Required)
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={confirmForm.event_date}
+                    onChange={(e) => setConfirmForm({ ...confirmForm, event_date: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-400 mb-1">
+                    Event Time
+                  </label>
+                  <input
+                    type="time"
+                    value={confirmForm.event_time}
+                    onChange={(e) => setConfirmForm({ ...confirmForm, event_time: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Package cost and advance */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-400 mb-1">
+                    Final Package Amount (₹) *
                   </label>
                   <input
                     type="number"
                     required
                     value={confirmForm.quotation_amount}
                     onChange={(e) => setConfirmForm({ ...confirmForm, quotation_amount: Number(e.target.value) })}
-                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none font-mono"
+                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
                   />
                 </div>
 
-                {/* Advance Amount */}
                 <div>
                   <label className="block font-medium text-slate-400 mb-1">
-                    Advance Collected (₹) *
+                    Advance Collected (₹)
                   </label>
                   <input
                     type="number"
-                    required
                     value={confirmForm.advance_received}
                     onChange={(e) => setConfirmForm({ ...confirmForm, advance_received: Number(e.target.value) })}
-                    className="w-full bg-slate-900 border border-slate-755 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
                   />
                 </div>
               </div>
 
+              {/* Payment Mode */}
+              <div>
+                <label className="block font-medium text-slate-400 mb-1">
+                  Payment Mode
+                </label>
+                <select
+                  value={confirmForm.payment_mode}
+                  onChange={(e) => setConfirmForm({ ...confirmForm, payment_mode: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="UPI">UPI (GPay/PhonePe)</option>
+                  <option value="Cash">Cash Handover</option>
+                  <option value="Bank Transfer">Bank NFT/RTGS/IMPS</option>
+                  <option value="Card">Credit/Debit Card</option>
+                  <option value="Cheque">Cheque Deposit</option>
+                </select>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block font-medium text-slate-400 mb-1">
+                  Notes / Contract Clauses
+                </label>
+                <textarea
+                  placeholder="Add payment timelines, custom requests, shoot clauses..."
+                  value={confirmForm.notes}
+                  onChange={(e) => setConfirmForm({ ...confirmForm, notes: e.target.value })}
+                  rows={2}
+                  className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
+                />
+              </div>
+
               {/* Balance due readout */}
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center justify-between">
-                <span className="text-slate-350">Balance Outstanding Due:</span>
-                <strong className="text-emerald-400 font-mono font-black">
+                <span className="text-slate-350">Remaining Balance Due:</span>
+                <strong className="text-emerald-400 font-mono font-black text-sm">
                   {formatINR(Math.max(0, confirmForm.quotation_amount - confirmForm.advance_received))}
                 </strong>
               </div>
@@ -2504,16 +3310,16 @@ export const SalesModule: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmModal(false)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded cursor-pointer"
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl cursor-pointer text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   id="btn_confirm_submit"
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded inline-flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-900/30"
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl inline-flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/20 text-xs"
                 >
-                  <span>Approve Contract Book</span>
+                  <span>Approve & Book Contract</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -2524,267 +3330,808 @@ export const SalesModule: React.FC = () => {
 
       {/* Mobile/Tablet Popup Modal for Lead Follow-up Details */}
       {selectedLead && (
-        <div id="lead_details_mobile_modal" className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
-          <div className="bg-slate-900 border border-slate-805 rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl relative flex flex-col">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-850 sticky top-0 z-10 backdrop-blur-md">
-              <h3 className="text-xs font-black text-white flex items-center gap-1.5 font-mono uppercase tracking-wider">
-                <span>💍</span> Lead CRM follow-up Desk
+        <div id="lead_details_mobile_modal" className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-0 sm:p-4 overflow-hidden animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-none sm:rounded-2xl w-full sm:w-[95vw] lg:w-[92vw] xl:w-[95vw] xl:max-w-[1600px] h-screen sm:h-[90vh] shadow-2xl relative flex flex-col overflow-hidden text-left bg-gradient-to-tr from-slate-900 via-slate-900 to-slate-950">
+            {/* Header: Sticky */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 sticky top-0 z-10 backdrop-blur-md shrink-0">
+              <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5 font-mono uppercase tracking-wider">
+                <span>💍</span> Lead CRM follow-up Desk & Quotation Suite
               </h3>
               <button 
                 onClick={() => setSelectedLead(null)}
-                className="px-3 py-1 bg-slate-800 hover:bg-slate-705 text-slate-300 hover:text-white text-xs rounded-xl transition-all cursor-pointer border border-slate-700 font-bold"
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs rounded-xl transition-all cursor-pointer border border-slate-700 font-bold uppercase tracking-wider"
               >
-                Close
+                Close Desk
               </button>
             </div>
             
-            <div className="p-5 space-y-6 text-xs text-left">
-              {/* Column A: Lead Details & Meta */}
-              <div className="bg-slate-850 rounded-xl border border-slate-800 p-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-[10px] bg-slate-800 text-slate-400 font-mono px-2 py-0.5 rounded font-black border border-slate-700">
-                    {selectedLead.lead_id}
-                  </span>
-                  <span className="text-[10px] text-zinc-400">Owner: {selectedLead.sales_person}</span>
-                </div>
+            {/* Scrollable Workspace Body */}
+            <div className="p-5 overflow-y-auto flex-1 text-xs text-left space-y-5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
                 
-                <h3 className="text-base font-bold text-white">{selectedLead.customer_name}</h3>
-
-                {/* Informational Items */}
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center gap-2.5 text-slate-350">
-                    <Phone className="w-4 h-4 text-slate-500 flex-shrink-0" />
-                    <span className="font-mono text-slate-205">{formatIndianPhoneNumber(selectedLead.mobile)}</span>
-                  </div>
-                  {selectedLead.alternate_mobile && (
-                    <div className="flex items-center gap-2.5 text-slate-350">
-                      <Phone className="w-4 h-4 text-slate-505 flex-shrink-0" />
-                      <span>Alt: <span className="font-mono text-slate-205">{formatIndianPhoneNumber(selectedLead.alternate_mobile)}</span></span>
+                {/* COLUMN 1 : BUSINESS CAPTURE & QUOTATIONS */}
+                <div className="lg:col-span-12 xl:col-span-8 space-y-5">
+                  
+                  {/* Lead Details & Identity Card */}
+                  <div className="bg-slate-850/65 rounded-xl border border-slate-800 p-5 space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-mono px-2.5 py-1 rounded-md font-bold border border-indigo-500/20 shadow-sm">
+                          ID: {selectedLead.lead_id}
+                        </span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                          Agent: <strong className="text-slate-200 font-semibold">{selectedLead.sales_person}</strong>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+                        <span>Source:</span>
+                        <span className="bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-md border border-slate-700 font-bold">
+                          {selectedLead.lead_source}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2.5 text-slate-350">
-                    <Mail className="w-4 h-4 text-slate-552 flex-shrink-0" />
-                    <span className="text-slate-205 truncate">{selectedLead.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-slate-350">
-                    <MapPin className="w-4 h-4 text-slate-552 flex-shrink-0" />
-                    <span className="text-slate-205">{selectedLead.event_location}</span>
-                  </div>
-                </div>
 
-                {/* Detailed Parameters */}
-                <div className="border-t border-slate-800 pt-3 grid grid-cols-2 gap-3 text-[11px]">
-                  <div>
-                    <span className="text-slate-500 block">Shoot Type</span>
-                    <strong className="text-slate-205 font-medium">{selectedLead.event_type}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Lead Source</span>
-                    <strong className="text-slate-205 font-medium">{selectedLead.lead_source}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Date Scheduled</span>
-                    <strong className="text-slate-205 font-medium">{selectedLead.event_date} @ {formatTime12Hour(selectedLead.event_time)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-555 block">Current Budget</span>
-                    <strong className="text-amber-455 font-extrabold font-mono">{formatINR(selectedLead.budget)}</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Packages Details & Multi-level Pricing Breakdown */}
-              <div id="lead_detail_packages_breakdown_section" className="bg-slate-850 rounded-xl border border-slate-800 p-4 space-y-3">
-                <h3 className="text-xs font-semibold text-white flex items-center gap-1.5 pb-2 border-b border-slate-800">
-                  <span>📦</span> Selected Packages & Pricing
-                </h3>
-                {(() => {
-                  const activePackages = (leadPackages || []).filter(lp => lp.lead_id === selectedLead.lead_id);
-                  if (activePackages.length > 0) {
-                    const subtotalAmount = activePackages.reduce((acc, lp) => acc + Number(lp.package_cost), 0);
-                    const discountAmt = Number(activePackages[0]?.discount || 0);
-                    const finalProjValue = Number(activePackages[0]?.final_amount || selectedLead.budget);
-                    return (
-                      <div className="space-y-3">
-                        <ul className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                          {activePackages.map((lp) => (
-                            <li key={lp.lead_package_id} className="flex justify-between items-center text-xs text-slate-300">
-                              <span className="flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                <span className="font-medium text-slate-200">{lp.package_name}</span>
-                              </span>
-                              <span className="font-mono text-slate-300">₹{Number(lp.package_cost).toLocaleString('en-IN')}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="border-t border-slate-800 pt-3 space-y-1.5 text-[11px]">
-                          <div className="flex justify-between text-slate-450">
-                            <span>Subtotal</span>
-                            <span className="font-mono text-slate-200">₹{subtotalAmount.toLocaleString('en-IN')}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                      {/* Left side: Core Contact Info */}
+                      <div className="space-y-3.5">
+                        <h4 className="text-slate-405 text-[10px] font-bold tracking-wider uppercase">Contact Identity</h4>
+                        <h3 className="text-xl font-bold text-white tracking-tight">{selectedLead.customer_name}</h3>
+                        
+                        <div className="space-y-2.5 text-xs">
+                          <div className="flex items-center gap-3 text-slate-300 bg-slate-900/40 p-3 rounded-xl border border-slate-800/70">
+                            <Phone className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                            <div>
+                              <span className="font-mono text-slate-200 font-semibold">{formatIndianPhoneNumber(selectedLead.mobile)}</span>
+                              <span className="block text-[9px] text-slate-500">Primary Mobile</span>
+                            </div>
                           </div>
-                          {discountAmt > 0 && (
-                            <div className="flex justify-between text-slate-455">
-                              <span>Discount Claimed</span>
-                              <span className="font-mono text-emerald-400">-₹{discountAmt.toLocaleString('en-IN')}</span>
+                          
+                          {selectedLead.alternate_mobile && (
+                            <div className="flex items-center gap-3 text-slate-300 bg-slate-900/40 p-3 rounded-xl border border-slate-800/70">
+                              <Phone className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                              <div>
+                                <span className="font-mono text-slate-200 font-semibold">{formatIndianPhoneNumber(selectedLead.alternate_mobile)}</span>
+                                <span className="block text-[9px] text-slate-500">Alternate Mobile</span>
+                              </div>
                             </div>
                           )}
-                          <div className="flex justify-between items-center text-white border-t border-slate-800/60 pt-2 font-bold">
-                            <span className="text-slate-200">Total Project Value</span>
-                            <span className="font-mono text-amber-400 text-xs">₹{finalProjValue.toLocaleString('en-IN')}</span>
+
+                          <div className="flex items-center gap-3 text-slate-300 bg-slate-900/40 p-3 rounded-xl border border-slate-800/70">
+                            <Mail className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <span className="text-slate-200 truncate block font-medium" title={selectedLead.email}>{selectedLead.email || 'N/A'}</span>
+                              <span className="block text-[9px] text-slate-500">Email Address</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    );
-                  } else {
-                    return (
-                      <div className="text-xs text-slate-400 py-1 space-y-2">
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                            Default {selectedLead.event_type} Single Package
-                          </span>
-                          <span className="font-mono text-slate-300">₹{selectedLead.budget.toLocaleString('en-IN')}</span>
+
+                      {/* Right side: Project Details */}
+                      <div className="space-y-3.5">
+                        <h4 className="text-slate-405 text-[10px] font-bold tracking-wider uppercase">Event Parameters</h4>
+                        
+                        <div className="space-y-2.5 text-xs">
+                          <div className="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/70 space-y-3">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                              <div>
+                                <span className="text-slate-500 text-[10px] block font-medium uppercase tracking-wider">Shoot Type</span>
+                                <strong className="text-white text-xs font-bold">{selectedLead.event_type}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 text-[10px] block font-medium uppercase tracking-wider">Scheduled Date</span>
+                                <strong className="text-indigo-300 text-xs font-bold font-mono">{selectedLead.event_date || 'N/A'}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 text-[10px] block font-medium uppercase tracking-wider">Event Time</span>
+                                <strong className="text-slate-200 text-xs font-semibold">{formatTime12Hour(selectedLead.event_time)}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block text-[10px] uppercase tracking-wider font-medium">Project Budget</span>
+                                <strong className="text-amber-400 text-xs font-black font-mono">{formatINR(selectedLead.budget)}</strong>
+                              </div>
+                            </div>
+
+                            <div className="border-t border-slate-800/80 pt-2.5 flex items-start gap-2">
+                              <MapPin className="w-3.5 h-3.5 text-indigo-400 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <span className="text-[10px] text-slate-500 block uppercase font-mono tracking-wider">Shoot Location</span>
+                                <span className="text-slate-200 font-semibold leading-relaxed">{selectedLead.event_location || 'N/A'}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="border-t border-slate-800 pt-2 flex justify-between items-center font-bold text-[11px] text-white">
-                          <span>Total Project Value</span>
-                          <span className="font-mono text-amber-400">₹{selectedLead.budget.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    );
-                  }
-                })()}
-              </div>
-
-              <div className="border-t border-slate-800 pt-3 text-[11px]">
-                <span className="text-slate-500 block mb-1">Remarks & Audits</span>
-                <div className="bg-slate-900/60 p-2.5 rounded border border-slate-800 font-mono text-[10px] text-slate-400 max-h-36 overflow-y-auto whitespace-pre-wrap">
-                  {selectedLead.remarks || 'No remarks recorded.'}
-                </div>
-              </div>
-
-              {/* Convert Lead button */}
-              {canEdit && (
-                <div className="border-t border-slate-800 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmModal(true)}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg text-xs transition-all cursor-pointer font-bold"
-                  >
-                    <CheckSquare className="w-4 h-4" />
-                    <span>CONFIRM ORDER CONTRACT</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Column B: Activity Logger */}
-              <div className="bg-slate-850 rounded-xl border border-slate-800 p-4 space-y-4">
-                <h3 className="text-xs font-semibold text-white flex items-center gap-1.5 pb-2 border-b border-slate-800">
-                  <span>📝</span> CRM Notes & Follow-up
-                </h3>
-
-                {canEdit ? (
-                  <form onSubmit={handleFollowUpSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 text-left">
-                      {/* Status select */}
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-450 mb-1">
-                          Transition ERP Stage *
-                        </label>
-                        <select
-                          value={followUpForm.status}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, status: e.target.value as CurrentStage })}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 px-3 text-xs text-slate-100"
-                        >
-                          <option value="Follow Up">Follow Up</option>
-                          <option value="Quotation Sent">Quotation Sent</option>
-                          <option value="Negotiation">Negotiation</option>
-                          <option value="Order Confirmed">Order Confirmed</option>
-                        </select>
-                      </div>
-
-                      {/* Date picker */}
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-450 mb-1">
-                          Next Follow-up Action Date *
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          value={followUpForm.next_follow_up_date}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, next_follow_up_date: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 px-3 text-xs text-slate-100 font-mono"
-                        />
-                      </div>
-
-                      {/* Quotation amount */}
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-455 mb-1">
-                          Negotiated Quotation Amount (₹) *
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          value={followUpForm.quotation_amount}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, quotation_amount: Number(e.target.value) })}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 px-3 text-xs text-slate-100 font-mono"
-                        />
                       </div>
                     </div>
-
-                    {/* Conversation/Notes */}
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-455 mb-1">
-                        Call / Conversation Notes *
-                      </label>
-                      <textarea
-                        rows={4}
-                        required
-                        placeholder="Log customer concerns, callbacks or package details."
-                        value={followUpForm.call_notes}
-                        onChange={(e) => setFollowUpForm({ ...followUpForm, call_notes: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-805 rounded-lg py-2 px-3 text-xs text-zinc-100 font-sans"
-                      ></textarea>
-                    </div>
-
-                    {/* Negotiation notes */}
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-455 mb-1">
-                        Negotiation Notes (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Price offsets, justifications..."
-                        value={followUpForm.negotiation_notes}
-                        onChange={(e) => setFollowUpForm({ ...followUpForm, negotiation_notes: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 px-3 text-xs text-zinc-100"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-800 font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedLead(null)}
-                        className="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-755 text-slate-300 rounded-lg cursor-pointer border border-slate-700"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 text-xs bg-indigo-650 hover:bg-indigo-555 text-white rounded-lg shadow-sm cursor-pointer"
-                      >
-                        Save Follow-up Notes
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="p-8 text-center text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-2">
-                    <Ban className="w-8 h-8 text-slate-650 mx-auto" />
-                    <h4 className="text-xs font-semibold text-slate-350">Access Restricted</h4>
-                    <p className="text-[10px] leading-relaxed max-w-sm mx-auto">
-                      Only the **Sales Team** or the **Business Owner** possess authorized write clearances to log client interaction updates. Keep testing with another persona.
-                    </p>
                   </div>
-                )}
+
+                  {/* Selected Packages & Pricing breakdown */}
+                  <div id="lead_detail_packages_breakdown_section" className="bg-slate-850/60 rounded-xl border border-slate-800 p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                      <h3 className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wider font-mono">
+                        <span>📦</span> Current Selected Packages
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-mono">Package Composition</span>
+                    </div>
+                    {(() => {
+                      const activePackages = (leadPackages || []).filter(lp => lp.lead_id === selectedLead.lead_id);
+                      if (activePackages.length > 0) {
+                        const subtotalAmount = activePackages.reduce((acc, lp) => acc + Number(lp.package_cost), 0);
+                        const discountAmt = Number(activePackages[0]?.discount || 0);
+                        const finalProjValue = Number(activePackages[0]?.final_amount || selectedLead.budget);
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                            {/* List of active packages */}
+                            <div className="space-y-2">
+                              <label className="text-[10px] text-slate-400 uppercase tracking-wide font-bold font-mono block">Package Breakdown</label>
+                              <ul className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                {activePackages.map((lp) => (
+                                  <li key={lp.lead_package_id} className="flex justify-between items-center text-xs bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/70">
+                                    <span className="flex items-center gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                      <span className="font-semibold text-slate-200">{lp.package_name}</span>
+                                    </span>
+                                    <span className="font-mono font-bold text-slate-100">₹{Number(lp.package_cost).toLocaleString('en-IN')}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            {/* Summary of calculation */}
+                            <div className="bg-slate-900/40 rounded-xl p-4 border border-slate-800 space-y-2.5">
+                              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold font-mono block">Financial Statement</label>
+                              <div className="space-y-2 text-[11px]">
+                                <div className="flex justify-between text-slate-400">
+                                  <span>Subtotal Package Value</span>
+                                  <span className="font-mono font-black text-slate-200">₹{subtotalAmount.toLocaleString('en-IN')}</span>
+                                </div>
+                                {discountAmt > 0 && (
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Discount Claimed</span>
+                                    <span className="font-mono font-semibold text-emerald-400">-₹{discountAmt.toLocaleString('en-IN')}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center text-white border-t border-slate-800/80 pt-2.5 font-bold">
+                                  <span className="text-slate-300">Approved Project Value</span>
+                                  <span className="font-mono text-amber-400 text-sm">₹{finalProjValue.toLocaleString('en-IN')}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="text-xs text-slate-400 py-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <div className="flex justify-between items-center text-slate-355 bg-slate-900/40 p-3 rounded-lg border border-slate-800/80">
+                              <span className="flex items-center gap-2 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                                Default {selectedLead.event_type} Single Package
+                              </span>
+                              <span className="font-mono font-black text-slate-200">₹{selectedLead.budget.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-white bg-slate-900/50 p-3 rounded-lg border border-slate-800 font-bold">
+                              <span className="text-slate-400">Total Project Value</span>
+                              <span className="font-mono text-amber-400">₹{selectedLead.budget.toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
+
+                  {/* Quotation & Sharing Workspace */}
+                  <div id="lead_detail_quotation_section" className="bg-slate-850/60 rounded-xl border border-slate-800 p-5 space-y-4 text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                      <h3 className="text-xs font-bold text-white flex items-center gap-1.5 font-mono uppercase tracking-wider">
+                        <span>📄</span> Quotation & Sharing Workspace
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-mono">Premium Invoice Engine</span>
+                    </div>
+
+                    {(() => {
+                      const activePackages = (leadPackages || []).filter(lp => lp.lead_id === selectedLead.lead_id);
+                      const hasActivePkgs = activePackages.length > 0;
+
+                      // Use the activePackages to build editable structures
+                      const activePackagesToRender = hasActivePkgs 
+                        ? activePackages.map(lp => {
+                            const pObj = (packages || []).find(p => p.package_id === lp.package_id);
+                            const key = lp.package_id || lp.lead_package_id || 'default';
+                            return {
+                              ...lp,
+                              package_key: key,
+                              package_name: lp.package_name || pObj?.package_name || 'Premium Shoot Package',
+                              package_cost: Number(lp.package_cost)
+                            };
+                          })
+                        : [
+                            {
+                              package_key: `default_${selectedLead.lead_id}`,
+                              package_name: `${selectedLead.event_type} High-End Shoot Package`,
+                              package_cost: selectedLead.budget
+                            }
+                          ];
+
+                      const subtotalValue = activePackagesToRender.reduce((acc, p) => acc + Number(p.package_cost), 0);
+                      const totalQuoteValue = subtotalValue + quoteAdditional - quoteDiscount;
+
+                      const handleCreateQuote = () => {
+                        const qNum = `QT-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+                        setActiveQuoteNum(qNum);
+                        
+                        // Directly generate a premium PDF blob to keep in-memory
+                        const doc = generateQuotationPDF(
+                          selectedLead,
+                          activePackagesToRender,
+                          qNum,
+                          quotationTerms,
+                          logoBase64,
+                          editableInclusions,
+                          editableDeliverables,
+                          quoteDiscount,
+                          quoteAdditional
+                        );
+                        const pdfBlob = doc.output('blob');
+                        const blobUrl = URL.createObjectURL(pdfBlob);
+                        setGeneratedPDFBlobUrl(blobUrl);
+
+                        // Update lead status to quotation generated/sent
+                        updateLead(selectedLead.lead_id, { status: 'Quotation Sent' });
+                      };
+
+                      const handleViewPDF = () => {
+                        if (!activeQuoteNum) return;
+                        const doc = generateQuotationPDF(
+                          selectedLead,
+                          activePackagesToRender,
+                          activeQuoteNum,
+                          quotationTerms,
+                          logoBase64,
+                          editableInclusions,
+                          editableDeliverables,
+                          quoteDiscount,
+                          quoteAdditional
+                        );
+                        const pdfBlob = doc.output('blob');
+                        const blobUrl = URL.createObjectURL(pdfBlob);
+                        window.open(blobUrl, '_blank');
+                      };
+
+                      const handleDownloadPDF = () => {
+                        if (!activeQuoteNum) return;
+                        const doc = generateQuotationPDF(
+                          selectedLead,
+                          activePackagesToRender,
+                          activeQuoteNum,
+                          quotationTerms,
+                          logoBase64,
+                          editableInclusions,
+                          editableDeliverables,
+                          quoteDiscount,
+                          quoteAdditional
+                        );
+                        doc.save(`Quotation_${activeQuoteNum}.pdf`);
+                      };
+
+                      const handleWhatsAppShare = () => {
+                        if (!activeQuoteNum) return;
+                        const packageList = activePackagesToRender.map(p => `• ${p.package_name}`).join('\n');
+                        const message = `Hello *${selectedLead.customer_name}*! 💍🌟\n\nHere is your premium wedding/event shoot quotation from *Photocrew Pictures* for your upcoming *${selectedLead.event_type}* shoot on *${selectedLead.event_date}*.\n\n*Quotation Details:*\n📄 Quotation #: ${activeQuoteNum}\n💰 Final Quote Value: ₹${totalQuoteValue.toLocaleString('en-IN')}\n\nWe have generated your detailed quotation PDF. Looking forward to capturing your beautiful lifetime memories!\n\nWarm regards,\n*Photocrew Pictures Team*\n+91 9060144016\nwww.photocrewpictures.com`;
+                        
+                        const url = `https://api.whatsapp.com/send?phone=${encodeURIComponent(selectedLead.mobile)}&text=${encodeURIComponent(message)}`;
+                        window.open(url, '_blank');
+                      };
+
+                      return (
+                        <div className="space-y-4">
+                          {!activeQuoteNum ? (
+                            <div className="space-y-4">
+                              <div className="text-[11px] text-slate-400 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80 leading-relaxed text-left">
+                                <span className="font-bold text-amber-500 block mb-0.5">✨ Sales Team Suite</span>
+                                Customize the packages, inclusions, deliverables, prices, and terms dynamically here. Updates will map onto the generated PDF in real-time.
+                              </div>
+
+                              {/* LIST EDITORS */}
+                              <div className="space-y-4">
+                                {activePackagesToRender.map((pkg) => {
+                                  const pkgKey = pkg.package_key;
+                                  const inclusions = editableInclusions[pkgKey] || [];
+                                  const deliverables = editableDeliverables[pkgKey] || [];
+
+                                  return (
+                                    <div key={pkgKey} className="bg-slate-900/60 rounded-xl p-4 border border-slate-800 space-y-4 text-left">
+                                      <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                        <span className="font-bold text-amber-450 text-xs uppercase tracking-wide">📦 {pkg.package_name}</span>
+                                        <span className="text-xs text-slate-355 font-bold font-mono">₹{Number(pkg.package_cost).toLocaleString('en-IN')}</span>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                        {/* Package Includes Block */}
+                                        <div className="bg-slate-950/20 p-3 rounded-lg border border-slate-800/60 space-y-2">
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Inclusions List:</span>
+                                          </div>
+                                          <div className="space-y-1">
+                                            {inclusions.map((inc, idx) => (
+                                              <div key={idx} className="flex items-center gap-1.5 group">
+                                                <span className="text-emerald-500 text-[11px] font-bold">✓</span>
+                                                <input
+                                                  type="text"
+                                                  value={inc}
+                                                  onChange={(e) => handleEditInclusion(pkgKey, idx, e.target.value)}
+                                                  className="bg-transparent border-b border-transparent hover:border-slate-800 focus:border-slate-700 focus:outline-none transition-all py-0.5 text-[11px] text-slate-200 w-full"
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveInclusion(pkgKey, idx)}
+                                                  className="text-slate-400 hover:text-red-400 opacity-20 group-hover:opacity-100 transition-all text-sm px-1 cursor-pointer"
+                                                  title="Remove Item"
+                                                >
+                                                  ×
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {/* Inline Add Component */}
+                                          <div className="flex gap-1.5 pt-1.5">
+                                            <input
+                                              id={`new_inc_input_${pkgKey}`}
+                                              type="text"
+                                              placeholder="Add new item..."
+                                              className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] w-full text-slate-300 focus:outline-none focus:border-slate-700"
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const val = e.currentTarget.value;
+                                                  if (val) {
+                                                    handleAddInclusion(pkgKey, val);
+                                                    e.currentTarget.value = '';
+                                                  }
+                                                }
+                                              }}
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const el = document.getElementById(`new_inc_input_${pkgKey}`) as HTMLInputElement;
+                                                if (el && el.value) {
+                                                  handleAddInclusion(pkgKey, el.value);
+                                                  el.value = '';
+                                                }
+                                              }}
+                                              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1 rounded-lg text-[10px] cursor-pointer font-semibold transition-all"
+                                            >
+                                              Add
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {/* Deliverables Block */}
+                                        <div className="bg-slate-950/20 p-3 rounded-lg border border-slate-800/60 space-y-2">
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Deliverables Scope:</span>
+                                          </div>
+                                          <div className="space-y-1">
+                                            {deliverables.map((del, idx) => (
+                                              <div key={idx} className="flex items-center gap-1.5 group">
+                                                <span className="text-emerald-500 text-[11px] font-bold">✓</span>
+                                                <input
+                                                  type="text"
+                                                  value={del}
+                                                  onChange={(e) => handleEditDeliverable(pkgKey, idx, e.target.value)}
+                                                  className="bg-transparent border-b border-transparent hover:border-slate-800 focus:border-slate-700 focus:outline-none transition-all py-0.5 text-[11px] text-slate-200 w-full"
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveDeliverable(pkgKey, idx)}
+                                                  className="text-slate-400 hover:text-red-400 opacity-20 group-hover:opacity-100 transition-all text-sm px-1 cursor-pointer"
+                                                  title="Remove Deliverable"
+                                                >
+                                                  ×
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {/* Inline Add Deliverable */}
+                                          <div className="flex gap-1.5 pt-1.5">
+                                            <input
+                                              id={`new_del_input_${pkgKey}`}
+                                              type="text"
+                                              placeholder="Add new deliverable..."
+                                              className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] w-full text-slate-300 focus:outline-none focus:border-slate-700"
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const val = e.currentTarget.value;
+                                                  if (val) {
+                                                    handleAddDeliverable(pkgKey, val);
+                                                    e.currentTarget.value = '';
+                                                  }
+                                                }
+                                              }}
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const el = document.getElementById(`new_del_input_${pkgKey}`) as HTMLInputElement;
+                                                if (el && el.value) {
+                                                  handleAddDeliverable(pkgKey, el.value);
+                                                  el.value = '';
+                                                }
+                                              }}
+                                              className="bg-slate-800 hover:bg-slate-700 text-slate-305 border border-slate-700 px-3 py-1 rounded-lg text-[10px] cursor-pointer font-semibold transition-all"
+                                            >
+                                              Add
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* FINANCIAL MODIFIERS */}
+                              <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800 space-y-3.5 text-left">
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">💰 Price Controls & Overrides:</span>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold uppercase font-mono tracking-wide">Addl. Services Cost (₹)</label>
+                                    <input
+                                      type="number"
+                                      value={quoteAdditional || ''}
+                                      onChange={(e) => setQuoteAdditional(Math.max(0, parseInt(e.target.value) || 0))}
+                                      placeholder="0"
+                                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-amber-400 font-mono focus:outline-none focus:border-slate-700 font-bold"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-400 mb-1 font-semibold uppercase font-mono tracking-wide">Discount Amount (₹)</label>
+                                    <input
+                                      type="number"
+                                      value={quoteDiscount || ''}
+                                      onChange={(e) => setQuoteDiscount(Math.max(0, parseInt(e.target.value) || 0))}
+                                      placeholder="0"
+                                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-rose-400 font-mono focus:outline-none focus:border-slate-700 font-bold"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-slate-800/80 pt-3 space-y-1.5 text-[11px] font-mono leading-relaxed">
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Base Package Value</span>
+                                    <span>₹{subtotalValue.toLocaleString('en-IN')}</span>
+                                  </div>
+                                  {quoteAdditional > 0 && (
+                                    <div className="flex justify-between text-amber-500">
+                                      <span>+ Additional charges</span>
+                                      <span>+₹{quoteAdditional.toLocaleString('en-IN')}</span>
+                                    </div>
+                                  )}
+                                  {quoteDiscount > 0 && (
+                                    <div className="flex justify-between text-rose-400">
+                                      <span>- Custom discount</span>
+                                      <span>-₹{quoteDiscount.toLocaleString('en-IN')}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between text-white border-t border-slate-800/60 pt-2.5 font-bold font-sans">
+                                    <span className="text-slate-300 text-xs uppercase tracking-wide">Final Proposal Quotation</span>
+                                    <span className="text-amber-450 text-sm font-black font-mono">₹{totalQuoteValue.toLocaleString('en-IN')}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* TERMS & CONDITIONS BLOCK */}
+                              <div className="space-y-1.5 text-left">
+                                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                                  Quotation Terms & Conditions (Editable)
+                                </label>
+                                <textarea
+                                  value={quotationTerms}
+                                  onChange={(e) => setQuotationTerms(e.target.value)}
+                                  rows={4}
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-[10.5px] text-slate-300 font-mono focus:border-slate-700 focus:outline-none leading-relaxed"
+                                  placeholder="Type Terms Clauses..."
+                                />
+                              </div>
+
+                              {/* GENERATE ACTION */}
+                              <button
+                                type="button"
+                                onClick={handleCreateQuote}
+                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-extrabold py-3 px-4 rounded-xl shadow-lg transition-all text-xs cursor-pointer tracking-wider text-center uppercase"
+                              >
+                                <span>Generate Quotation Proposal</span>
+                              </button>
+                            </div>
+                          ) : (
+                            /* PREMIUM DRAFT PREVIEW & SIMPLE PDF ACTIONS */
+                            <div className="space-y-4">
+                              <div className="bg-gradient-to-br from-slate-900 to-slate-950 p-5 rounded-xl border border-slate-800 text-left space-y-4">
+                                <div className="flex justify-between items-center pb-3 border-b border-slate-804">
+                                  <div>
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Live Proposal Code:</span>
+                                    <strong className="text-amber-500 block font-mono text-xs">{activeQuoteNum}</strong>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Quoted Price:</span>
+                                    <strong className="text-white block font-mono text-xs">₹{totalQuoteValue.toLocaleString('en-IN')}</strong>
+                                  </div>
+                                </div>
+
+                                {/* Standard PDF actions requested by the user: Preview, Download, WhatsApp Share in single row layout */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={handleViewPDF}
+                                    className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 px-4 rounded-xl border border-slate-700 transition-all cursor-pointer font-bold text-[11px] uppercase tracking-wider shadow-sm hover:text-white"
+                                  >
+                                    <span>👁️</span> PREVIEW PDF
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleDownloadPDF}
+                                    className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 px-4 rounded-xl border border-slate-700 transition-all cursor-pointer font-bold text-[11px] uppercase tracking-wider shadow-sm hover:text-white"
+                                  >
+                                    <span>📥</span> DOWNLOAD PDF
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleWhatsAppShare}
+                                    className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer text-[11px] uppercase tracking-wider"
+                                  >
+                                    <span>💬</span> WHATSAPP SHARE
+                                  </button>
+                                </div>
+
+                                <div className="flex justify-between items-center pt-3 border-t border-slate-800/80 text-[10px]">
+                                  <span className="text-slate-500 font-mono">Timestamp: {new Date().toLocaleDateString('en-IN')}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveQuoteNum('');
+                                      setGeneratedPDFBlobUrl('');
+                                    }}
+                                    className="text-amber-400 hover:text-amber-300 font-extrabold transition-all text-right uppercase tracking-wider cursor-pointer flex items-center gap-1"
+                                  >
+                                    ✏️ EDIT PACKAGE DETAILS & PRICING
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* COLUMN 2 : ACTIVITY LOGGER & AUDIT LOGS */}
+                <div className="lg:col-span-12 xl:col-span-4 space-y-5">
+                  <div className="bg-slate-850/60 rounded-xl border border-slate-800 p-5 space-y-4">
+                    <h3 className="text-xs font-bold text-white flex items-center gap-1.5 pb-2.5 border-b border-slate-800 uppercase tracking-widest font-mono">
+                      <span>📝</span> CRM Notes & Follow-up
+                    </h3>
+
+                    {canEdit ? (
+                      <form onSubmit={handleFollowUpSubmit} className="space-y-4">
+                        <div className="space-y-4 text-left">
+                          {/* Status select */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                              Transition ERP Stage *
+                            </label>
+                            <select
+                              value={followUpForm.status}
+                              onChange={(e) => setFollowUpForm({ ...followUpForm, status: e.target.value as CurrentStage })}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2.5 px-3 text-xs text-slate-100 focus:outline-none focus:border-slate-700"
+                            >
+                              <option value="Follow Up">Follow Up</option>
+                              <option value="Quotation Sent">Quotation Sent</option>
+                              <option value="Negotiation">Negotiation</option>
+                              <option value="Order Confirmed">Order Confirmed</option>
+                            </select>
+                          </div>
+
+                          {/* Date picker */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                              Next Follow-up Action Date *
+                            </label>
+                            <input
+                              type="date"
+                              required
+                              value={followUpForm.next_follow_up_date}
+                              onChange={(e) => setFollowUpForm({ ...followUpForm, next_follow_up_date: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2.5 px-3 text-xs text-slate-100 font-mono focus:outline-none focus:border-slate-700"
+                            />
+                          </div>
+
+                          {/* Quotation amount */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                              Negotiated Quotation Amount (₹) *
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              value={followUpForm.quotation_amount}
+                              onChange={(e) => setFollowUpForm({ ...followUpForm, quotation_amount: Number(e.target.value) })}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2.5 px-3 text-xs text-slate-100 font-mono focus:outline-none focus:border-slate-700"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Conversation/Notes */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                            Call / Conversation Notes *
+                          </label>
+                          <textarea
+                            rows={3}
+                            required
+                            placeholder="Log customer concerns, callbacks or package details."
+                            value={followUpForm.call_notes}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, call_notes: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2.5 px-3 text-xs text-zinc-100 font-sans focus:outline-none focus:border-slate-700"
+                          ></textarea>
+                        </div>
+
+                        {/* Negotiation notes */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                            Negotiation Notes (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Price offsets, justifications..."
+                            value={followUpForm.negotiation_notes}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, negotiation_notes: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2.5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-slate-700"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800 font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLead(null)}
+                            className="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-305 rounded-lg cursor-pointer border border-slate-700 font-semibold"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 text-xs bg-indigo-650 hover:bg-indigo-500 text-white rounded-lg shadow-sm cursor-pointer font-bold"
+                          >
+                            Save Follow-up Notes
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="p-8 text-center text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-2">
+                        <Ban className="w-8 h-8 text-slate-650 mx-auto" />
+                        <h4 className="text-xs font-semibold text-slate-355">Access Restricted</h4>
+                        <p className="text-[10px] leading-relaxed max-w-sm mx-auto">
+                          Only the **Sales Team** or the **Business Owner** possess authorized write clearances to log client interaction updates. Keep testing with another persona.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Collection Status Section */}
+                  {(() => {
+                    const associatedOrder = orders.find(o => o.lead_id === selectedLead.lead_id);
+                    if (!associatedOrder) return null;
+                    const p = payments?.find(pay => pay.order_id === associatedOrder.order_id);
+                    if (!p) return null;
+
+                    const optionVal = p.payment_collection_status || (p.payment_status === 'Fully Paid' ? 'Full Payment Received' : p.payment_status === 'Partially Paid' ? 'Partial Payment Received' : 'Payment Pending');
+
+                    return (
+                      <div className="bg-slate-850/65 rounded-xl border border-slate-800 p-5 space-y-4">
+                        <span className="text-[10.5px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5 pb-2.5 border-b border-slate-805">
+                          <span>💰</span> Payment Collection Status
+                        </span>
+                        
+                        <div className="bg-slate-900/45 p-4 rounded-xl border border-slate-800 space-y-3 font-mono text-[11px] text-slate-300">
+                          <div className="flex justify-between border-b border-indigo-500/10 pb-2">
+                            <span className="text-slate-450">Collection Option:</span>
+                            <span className="font-extrabold text-amber-400 uppercase tracking-wide">{optionVal}</span>
+                          </div>
+
+                          {optionVal === 'Full Payment Received' && (
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Total Amount:</span>
+                                <span className="font-bold text-white">₹{p.quotation_amount.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Amount Received:</span>
+                                <span className="font-bold text-emerald-450">₹{p.quotation_amount.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-slate-900">
+                                <span className="text-slate-455 text-[10px]">Payment Status:</span>
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-extrabold uppercase">Paid</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {optionVal === 'Partial Payment Received' && (
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Total Amount:</span>
+                                <span className="font-bold text-white">₹{p.quotation_amount.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Advance Amount:</span>
+                                <span className="font-bold text-slate-400">₹{p.advance_received.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Additional Amount Received:</span>
+                                <span className="font-bold text-emerald-450">₹{(p.additional_received || p.final_payment_received || 0).toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-slate-900">
+                                <span className="text-slate-455 text-[10px]">Remaining Amount:</span>
+                                <span className="font-bold text-amber-500">₹{p.balance_due.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between pt-1">
+                                <span className="text-slate-455 text-[10px]">Status:</span>
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-300/15 text-[9px] font-extrabold uppercase">Partial Payment</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {optionVal === 'Payment Pending' && (
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Total Amount:</span>
+                                <span className="font-bold text-white">₹{p.quotation_amount.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-455 text-[10px]">Advance Received:</span>
+                                <span className="font-bold text-slate-400">₹{p.advance_received.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-slate-900 text-red-405">
+                                <span className="text-slate-455 text-[10px]">Remaining Amount Pending:</span>
+                                <span className="font-bold text-red-405">₹{p.balance_due.toLocaleString('en-IN')}</span>
+                              </div>
+                              <div className="flex justify-between pt-1">
+                                <span className="text-slate-455 text-[10px]">Status:</span>
+                                <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-500/35 border border-red-500/20 text-[9px] font-extrabold uppercase header-f">Payment Pending</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Remarks & Live Audits Log + Order Confirmation Block */}
+                  <div className="bg-slate-850/60 rounded-xl border border-slate-800 p-5 space-y-4">
+                    <span className="text-[10.5px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5 pb-2.5 border-b border-slate-800">
+                      <span>📜</span> Remarks & Live Audits Log
+                    </span>
+                    <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-800 font-mono text-[10.5px] text-slate-300 max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                      {selectedLead.remarks || 'No remarks recorded.'}
+                    </div>
+                    
+                    {/* Convert Lead button directly below the log */}
+                    {canEdit && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmModal(true)}
+                          className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold py-3 px-4 rounded-xl shadow-lg text-xs transition-all cursor-pointer uppercase tracking-wider border border-emerald-500/15"
+                        >
+                          <CheckSquare className="w-4.5 h-4.5" />
+                          <span>CONFIRM ORDER CONTRACT</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>

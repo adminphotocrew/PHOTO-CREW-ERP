@@ -14,6 +14,7 @@ import { ProductionCalendar } from './ProductionCalendar';
 import { StaffManagementModule } from './StaffManagementModule';
 import { NotificationsModule } from './NotificationsModule';
 import { Bell } from 'lucide-react';
+import { CameraLensStatsCard, CameraLensTheme } from './CameraLensStatsCard';
 
 export const MicroSparkline: React.FC<{ points: number[]; color: string }> = ({ points, color }) => {
   const width = 120;
@@ -216,7 +217,7 @@ export const CameraLensGraphic: React.FC<{
 };
 
 export interface ProductionModuleProps {
-  activeSubTab: 'pipeline' | 'production_leads' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications';
+  activeSubTab: 'pipeline' | 'production_leads' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications' | 'crew_roster';
   setActiveSubTab: (tab: any) => void;
 }
 
@@ -230,7 +231,14 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     orders, 
     rawFootage, 
     staff,
-    payments
+    payments,
+    operations,
+    staffAssignments,
+    specialities = [],
+    editorAssignments = [],
+    assignEditorToProject,
+    updateEditorAssignmentStatus,
+    deleteEditorAssignment
   } = useRole();
 
   // Role permissions gate
@@ -252,6 +260,32 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
   // Selected Lead for Custom Detailed Popup
   const [selectedLeadProd, setSelectedLeadProd] = useState<Production | null>(null);
 
+  // Step-by-step action popup modal states
+  const [activeWorkflowProd, setActiveWorkflowProd] = useState<Production | null>(null);
+  const [workflowActionType, setWorkflowActionType] = useState<'assign_editor' | 'send_review' | 'request_revision' | 'deliver_project' | 'manage_payment_close' | null>(null);
+
+  // Form states for each step popup
+  // Step 1: Assign Editor Form
+  const [wfEditor, setWfEditor] = useState('Unassigned');
+  const [wfTargetDeliveryDate, setWfTargetDeliveryDate] = useState('');
+  const [wfPriority, setWfPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
+  const [wfSpeciality, setWfSpeciality] = useState('');
+
+  // Step 4: Send For Review Form
+  const [wfReviewLink, setWfReviewLink] = useState('');
+  const [wfPreviewLink, setWfPreviewLink] = useState('');
+  const [wfReviewNotes, setWfReviewNotes] = useState('');
+
+  // Step 5: Request Revision Form
+  const [wfRevisionNotes, setWfRevisionNotes] = useState('');
+  const [wfRevisionDeadline, setWfRevisionDeadline] = useState('');
+
+  // Step 8: Deliver Project Form
+  const [wfDeliveryLink, setWfDeliveryLink] = useState('');
+  const [wfGoogleDriveLink, setWfGoogleDriveLink] = useState('');
+  const [wfDownloadLink, setWfDownloadLink] = useState('');
+  const [wfDeliveryNotes, setWfDeliveryNotes] = useState('');
+
   // Workloads selector edit fields
   const [leadEditor, setLeadEditor] = useState('');
   const [leadStaff, setLeadStaff] = useState<string[]>([]);
@@ -260,6 +294,11 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
   const [leadProdStatus, setLeadProdStatus] = useState<any>('New Project');
   const [leadProgressPercent, setLeadProgressPercent] = useState<number>(0);
   const [leadRemarks, setLeadRemarks] = useState('');
+
+  // Crew Roster Filter state
+  const [crewSearch, setCrewSearch] = useState('');
+  const [crewSpecialityFilter, setCrewSpecialityFilter] = useState('All');
+  const [crewStatusFilter, setCrewStatusFilter] = useState('All');
 
   // Editing timeline dates inside detailed modal
   const [dateFootageReceived, setDateFootageReceived] = useState('');
@@ -300,15 +339,20 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     return prod.project_priority || 'Medium';
   };
 
-  const getProductionStatus = (prod: Production) => {
-    if (prod.production_status) return prod.production_status;
-    if (prod.editing_status === 'Pending') return 'New Project';
-    if (prod.editing_status === 'Editing') return 'In Progress';
-    if (prod.editing_status === 'Customer Review') return 'Customer Review';
-    if (prod.editing_status === 'Revision Required') return 'Revision Required';
-    if (prod.editing_status === 'Approved') return 'Approved';
-    if (prod.editing_status === 'Delivered') return 'Delivered';
-    return 'New Project';
+  const getProductionStatus = (prod: Production): string => {
+    const status = prod.editing_status || 'Raw Footage Received';
+    if (status as any === 'Pending' || status === 'Raw Footage Received') return 'Raw Footage Received';
+    if (status === 'Editor Assigned') return 'Editor Assigned';
+    if (status === 'Editing Started') return 'Editing Started';
+    if (status as any === 'Editing' || status === 'Editing In Progress') return 'Editing In Progress';
+    if (status === 'Internal QC Review') return 'Internal QC Review';
+    if (status as any === 'Ready For Review' || status === 'Client Review Sent') return 'Client Review Sent';
+    if (status === 'Revision Required') return 'Revision Required';
+    if (status === 'Revision In Progress') return 'Revision In Progress';
+    if (status as any === 'Approved' || status === 'Final Approval') return 'Final Approval';
+    if (status as any === 'Delivered' || status === 'Project Delivered') return 'Project Delivered';
+    if (status as any === 'Closed' || status === 'Project Closed') return 'Project Closed';
+    return status;
   };
 
   const getRawFootageStatus = (prod: Production) => {
@@ -355,7 +399,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
   const [editor, setEditor] = useState('');
   const [startDate, setStartDate] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
-  const [status, setStatus] = useState<EditingStatus>('Pending');
+  const [status, setStatus] = useState<EditingStatus>('Raw Footage Received');
   const [reviewStatus, setReviewStatus] = useState<'Pending Review' | 'Feedback Given' | 'Approved' | 'None'>('None');
   const [notes, setNotes] = useState('');
 
@@ -364,7 +408,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
     setEditor(prod.editor_assigned || '');
     setStartDate(prod.editing_start_date || '');
     setExpectedDate(prod.expected_delivery_date || '');
-    setStatus(prod.editing_status || 'Pending');
+    setStatus((prod.editing_status as any === 'Pending' ? 'Raw Footage Received' : prod.editing_status) || 'Raw Footage Received');
     setReviewStatus(prod.customer_review_status || 'None');
     setNotes(prod.remarks || '');
   };
@@ -400,37 +444,50 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
   // Filter/Derived definitions
   const newProjects = production.filter(p => !p.editor_assigned);
-  const assignedProjects = production.filter(p => p.editor_assigned && p.editing_status !== 'Delivered');
-  const pendingProjects = production.filter(p => p.editing_status === 'Pending' || p.editing_status === 'Editing' || p.editing_status === 'Revision Required');
+  const assignedProjects = production.filter(p => p.editor_assigned && p.editing_status !== 'Project Delivered' && p.editing_status !== 'Delivered');
+  const pendingProjects = production.filter(p => !['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed'].includes(p.editing_status));
   const delayedProjects = production.filter(p => {
-    if (p.editing_status === 'Delivered' || p.editing_status === 'Approved') return false;
+    if (['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed'].includes(p.editing_status)) return false;
     if (!p.expected_delivery_date) return false;
     return new Date(p.expected_delivery_date) < today;
   });
 
   // Calculate stats for pipeline counters
   const statTotalVideo = production.length;
-  const statPendingVideo = production.filter(p => p.editing_status === 'Pending').length;
-  const statEditingVideo = production.filter(p => p.editing_status === 'Editing').length;
-  const statReviewVideo = production.filter(p => p.editing_status === 'Customer Review').length;
-  const statApprovedVideo = production.filter(p => p.editing_status === 'Approved').length;
+  const statPendingVideo = production.filter(p => ['Pending', 'New Raw Footage Arrived', 'Raw Footage Received'].includes(p.editing_status)).length;
+  const statEditingVideo = production.filter(p => ['Editing Started', 'Editing In Progress', 'Editing'].includes(p.editing_status)).length;
+  const statReviewVideo = production.filter(p => ['Internal QC Review', 'Client Review Sent', 'Customer Review', 'Ready For Review'].includes(p.editing_status)).length;
+  const statApprovedVideo = production.filter(p => ['Approved', 'Final Approval'].includes(p.editing_status)).length;
 
   const visibleProduction = production;
 
   // Active workload stats for staff (from useRole().staff + active jobs)
   const getStaffWorkload = (staffName: string) => {
-    const activeJobs = production.filter(p => 
-      p.editor_assigned?.toLowerCase() === staffName.toLowerCase() && 
-      p.editing_status !== 'Delivered'
-    );
-    const completedJobs = production.filter(p => 
-      p.editor_assigned?.toLowerCase() === staffName.toLowerCase() && 
-      p.editing_status === 'Delivered'
-    );
+    const nameLower = staffName.toLowerCase();
+    
+    // Check dynamic assignments table first
+    const staffAssignments = editorAssignments.filter(a => a.staff_name.toLowerCase() === nameLower);
+    
+    const assignedCount = staffAssignments.length;
+    const completedCount = staffAssignments.filter(a => a.status === 'Completed').length;
+    const activeCount = staffAssignments.filter(a => a.status !== 'Completed').length;
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    const overdueCount = staffAssignments.filter(a => 
+      a.status !== 'Completed' && a.target_finish_date && a.target_finish_date < todayStr
+    ).length;
+
+    // Backward compatibility for direct assignments
+    const fallbackActive = production.filter(p => 
+      p.editor_assigned?.toLowerCase() === nameLower && 
+      p.editing_status !== 'Delivered' && p.editing_status !== 'Approved'
+    ).length;
+
     return {
-      activeCount: activeJobs.length,
-      completedCount: completedJobs.length,
-      totalCount: activeJobs.length + completedJobs.length
+      activeCount: Math.max(activeCount, fallbackActive),
+      completedCount,
+      totalCount: Math.max(assignedCount, fallbackActive + completedCount),
+      overdueCount
     };
   };
 
@@ -499,129 +556,78 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
               {
                 label: 'Total Leads',
                 val: totalCount,
-                lensType: 'total_leads',
-                glowClass: 'hover:border-purple-500/40 hover:shadow-[0_8px_30px_rgba(168,85,247,0.18)]',
-                borderColor: 'border-zinc-900',
-                statusDot: 'bg-purple-400 animate-pulse',
+                theme: 'purple' as CameraLensTheme,
                 trend: 'Live Queue',
-                sparklineColor: '#a855f7',
                 chartPoints: [10, 18, 14, 25, 20, 31, 35],
+                filterValue: 'All'
               },
               {
                 label: 'New Projects',
                 val: newCount,
-                lensType: 'new_projects',
-                glowClass: 'hover:border-blue-500/40 hover:shadow-[0_8px_30px_rgba(59,130,246,0.18)]',
-                borderColor: 'border-zinc-900',
-                statusDot: 'bg-blue-400 animate-pulse',
+                theme: 'blue' as CameraLensTheme,
                 trend: 'Ready Ingest',
-                sparklineColor: '#3b82f6',
                 chartPoints: [4, 12, 8, 16, 12, 22, 19],
+                filterValue: 'New Project'
               },
               {
                 label: 'In Editing',
                 val: inEditingCount,
-                lensType: 'in_editing',
-                glowClass: 'hover:border-indigo-500/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.18)]',
-                borderColor: 'border-zinc-900',
-                statusDot: 'bg-indigo-400 animate-pulse',
+                theme: 'purple' as CameraLensTheme,
                 trend: 'Active Edit',
-                sparklineColor: '#6366f1',
                 chartPoints: [15, 10, 19, 14, 22, 18, 26],
+                filterValue: 'In Progress'
               },
               {
                 label: 'In Review',
                 val: inReviewCount,
-                lensType: 'in_review',
-                glowClass: 'hover:border-amber-500/40 hover:shadow-[0_8px_30px_rgba(245,158,11,0.18)]',
-                borderColor: 'border-zinc-900',
-                statusDot: 'bg-amber-400 animate-pulse',
+                theme: 'gold' as CameraLensTheme,
                 trend: 'QC Preview',
-                sparklineColor: '#f59e0b',
                 chartPoints: [5, 9, 7, 14, 11, 16, 15],
+                filterValue: 'Customer Review'
               },
               {
                 label: 'Approved',
                 val: approvedCount,
-                lensType: 'approved',
-                glowClass: 'hover:border-teal-500/40 hover:shadow-[0_8px_30px_rgba(20,184,166,0.18)]',
-                borderColor: 'border-zinc-900',
-                statusDot: 'bg-teal-400',
+                theme: 'green' as CameraLensTheme,
                 trend: 'Client Ok',
-                sparklineColor: '#10b981',
                 chartPoints: [8, 15, 12, 20, 16, 25, 24],
+                filterValue: 'Approved'
               },
               {
                 label: 'Delivered',
                 val: deliveredCount,
-                lensType: 'delivered',
-                glowClass: 'hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgba(16,185,129,0.18)]',
-                borderColor: 'border-zinc-900',
-                statusDot: 'bg-emerald-400',
+                theme: 'cyan' as CameraLensTheme,
                 trend: 'Gallery Sent',
-                sparklineColor: '#06b6d4',
                 chartPoints: [12, 18, 15, 26, 22, 34, 38],
+                filterValue: 'Delivered'
               },
               {
                 label: 'Overdue',
                 val: overdueCount,
-                lensType: 'overdue',
-                glowClass: overdueCount > 0 ? 'hover:border-rose-500/50 hover:shadow-[0_8px_30px_rgba(244,63,94,0.15)]' : 'hover:border-zinc-800',
-                borderColor: overdueCount > 0 ? 'border-rose-950/40' : 'border-zinc-900',
-                statusDot: overdueCount > 0 ? 'bg-red-500 animate-ping' : 'bg-zinc-600',
+                theme: 'red' as CameraLensTheme,
                 trend: overdueCount > 0 ? 'Urgent Attention' : 'All Clear',
-                sparklineColor: '#f43f5e',
                 chartPoints: [2, 4, 1, 5, 3, 6, 2],
+                filterValue: 'Overdue'
               }
             ];
 
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-                {statsCards.map((card, idx) => {
-                  return (
-                    <div 
-                      key={idx} 
-                      style={{ animationDelay: `${idx * 80}ms`, animationFillMode: 'both' }}
-                      className={`bg-zinc-950/65 backdrop-blur-xl border ${card.borderColor} rounded-2xl p-4 flex flex-col justify-between transition-all duration-500 hover:-translate-y-1.5 select-none ${card.glowClass} group/card animate-fade-in-up relative overflow-hidden`}
-                    >
-                      {/* Premium subtle glass light strike overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.01] to-white/[0.04] opacity-50 pointer-events-none" />
-                      
-                      {/* Interactive underlying neon spot glow */}
-                      <div className="absolute -right-6 -bottom-6 w-20 h-20 rounded-full blur-[24px] pointer-events-none opacity-10 transition-all duration-500 group-hover/card:scale-150 group-hover/card:opacity-20" style={{ backgroundColor: card.sparklineColor }} />
-
-                      {/* Top Segment: Lens Graphic Container & Status Flag */}
-                      <div className="flex items-center justify-between z-10">
-                        <CameraLensGraphic type={card.lensType as any} />
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="flex items-center gap-1.5 bg-zinc-900/40 px-2 py-0.5 rounded-lg border border-zinc-900/60 shadow-inner">
-                            <span className={`w-1.5 h-1.5 rounded-full ${card.statusDot}`} />
-                            <span className="text-[9px] font-mono font-medium text-zinc-400 uppercase tracking-widest">{card.trend}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Middle Segment: Title, Count, Details */}
-                      <div className="mt-5 space-y-2 z-10">
-                        <p className="text-[10px] font-bold font-sans tracking-widest text-zinc-500 uppercase group-hover/card:text-zinc-300 transition-colors duration-300">{card.label}</p>
-                        <div className="flex items-baseline justify-between select-none">
-                          <span className="text-2xl sm:text-3xl font-black text-white group-hover/card:scale-105 transition-transform duration-500 origin-left">
-                            <LiveAnimateCounter value={card.val} />
-                          </span>
-                          <span className="text-[9px] font-mono tracking-wider font-extrabold uppercase" style={{ color: card.sparklineColor }}>AF ISO</span>
-                        </div>
-                      </div>
-
-                      {/* Bottom Segment: Micro Sparkline Performance Graph */}
-                      <div className="mt-4 pt-1.5 border-t border-zinc-900/40 flex items-center justify-between gap-4 z-10">
-                        <div className="flex-1">
-                          <MicroSparkline points={card.chartPoints} color={card.sparklineColor} />
-                        </div>
-                        <span className="text-[8px] font-mono text-zinc-550 group-hover/card:text-zinc-455">60 FPS</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {statsCards.map((card, idx) => (
+                  <CameraLensStatsCard
+                    key={idx}
+                    label={card.label}
+                    val={card.val}
+                    theme={card.theme}
+                    trendText={card.trend}
+                    subText="PRO PROD"
+                    chartPoints={card.chartPoints}
+                    activeFilterValue={statusFilter}
+                    currentFilterValue={card.filterValue}
+                    onClick={() => setStatusFilter(statusFilter === card.filterValue ? 'All' : card.filterValue)}
+                    lensLabel={card.label.slice(0, 10).toUpperCase()}
+                  />
+                ))}
               </div>
             );
           })()}
@@ -646,6 +652,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                 className="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer animate-none"
               >
                 <option value="All">All Production Statuses</option>
+                <option value="Overdue">⚠️ Overdue Projects</option>
                 <option value="New Project">New Project</option>
                 <option value="Footage Received">Footage Received</option>
                 <option value="Editor Assigned">Editor Assigned</option>
@@ -677,6 +684,101 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
             </div>
           </div>
 
+          {/* Newly Arrived - Raw Footage Received Queue */}
+          {(() => {
+            const rawFootageLeads = production.filter(prod => {
+              const rf = rawFootage.find(f => f.tracking_id === prod.tracking_id || f.order_id === prod.tracking_id || (f.order_id && prod.tracking_id && f.order_id === prod.tracking_id));
+              if (!rf) return false;
+              const order = orders.find(o => o.order_id === rf.order_id);
+              if (!order) return false;
+              return order.current_stage === 'Raw Footage Received';
+            });
+
+            if (rawFootageLeads.length === 0) return null;
+
+            return (
+              <div id="newly_arrived_raw_footage_section" className="bg-zinc-950/80 border border-purple-900/45 p-5 rounded-2xl mb-6 space-y-4 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping" />
+                    <h3 className="text-xs font-black text-purple-400 uppercase tracking-widest font-mono">
+                      ### Newly Arrived Raw Footage
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">
+                    {rawFootageLeads.length} Action Needed
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border border-zinc-900 rounded-xl">
+                  <table className="w-full border-collapse text-left text-xs text-zinc-300">
+                    <thead>
+                      <tr className="border-b border-zinc-900 bg-zinc-900/40 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+                        <th className="p-3 font-bold">Order ID</th>
+                        <th className="p-3 font-bold">Customer Name</th>
+                        <th className="p-3 font-bold">Event Type</th>
+                        <th className="p-3 font-bold">Event Date</th>
+                        <th className="p-3 font-bold">Assigned Team</th>
+                        <th className="p-3 font-bold">Raw Footage Drive Link</th>
+                        <th className="p-3 font-bold">Current Production Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900">
+                      {rawFootageLeads.map(prod => {
+                        const rf = rawFootage.find(f => f.tracking_id === prod.tracking_id || f.order_id === prod.tracking_id);
+                        const order = rf ? orders.find(o => o.order_id === rf.order_id) : null;
+                        if (!order) return null;
+
+                        const op = operations?.find(o => o.order_id === order.order_id);
+                        const matchedSa = staffAssignments ? staffAssignments.filter(sa => sa.order_id === order.order_id) : [];
+                        const assignedTeamList = [
+                          op?.photographer_assigned,
+                          op?.videographer_assigned,
+                          op?.drone_operator_assigned,
+                          op?.assistant_assigned,
+                          ...matchedSa.map(a => a.staff_name)
+                        ].filter(Boolean);
+                        const assignedTeamText = assignedTeamList.length > 0 ? Array.from(new Set(assignedTeamList)).join(', ') : 'No Team Assigned';
+
+                        const prodStatus = getProductionStatus(prod);
+
+                        return (
+                          <tr key={prod.production_id} className="hover:bg-zinc-900/40 transition-all font-mono">
+                            <td className="p-3 text-violet-400 font-bold">{order.order_id}</td>
+                            <td className="p-3 font-sans font-bold text-white">{order.customer_name}</td>
+                            <td className="p-3 text-zinc-300 font-sans">{order.event_type}</td>
+                            <td className="p-3 text-zinc-400">{order.event_date || 'N/A'}</td>
+                            <td className="p-3 font-sans text-zinc-350">{assignedTeamText}</td>
+                            <td className="p-3">
+                              {rf?.server_path ? (
+                                <a
+                                  href={rf.server_path}
+                                  target="_blank"
+                                  referrerPolicy="no-referrer"
+                                  className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[200px] truncate"
+                                  title={rf.server_path}
+                                >
+                                  <span>🔗</span> Open Drive Link
+                                </a>
+                              ) : (
+                                <span className="text-zinc-650 italic">No link</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[9px] font-extrabold uppercase">
+                                {prodStatus}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* TABLE CONTAINER */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
@@ -686,14 +788,16 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                     <th className="p-4 font-black">Order ID</th>
                     <th className="p-4 font-black">Customer Name</th>
                     <th className="p-4 font-black">Event Type</th>
-                    <th className="p-4 font-black">Event Date</th>
-                    <th className="p-4 font-black">Current Stage</th>
-                    <th className="p-4 font-black">Production Status</th>
-                    <th className="p-4 font-black">Assigned Editor</th>
+                    <th className="p-4 font-black">Editor Assigned</th>
+                    <th className="p-4 font-black">Current Status</th>
                     <th className="p-4 font-black">Target Delivery Date</th>
-                    <th className="p-4 font-black">Days Remaining</th>
-                    <th className="p-2.5 font-black text-center">Priority</th>
-                    <th className="p-4 font-black">Delivery Status</th>
+                    <th className="p-4 font-black">Remaining Days</th>
+                    {currentRole !== 'Production Team' && (
+                      <>
+                        <th className="p-4 font-black">Payment Status</th>
+                        <th className="p-4 font-black">Remaining Amount</th>
+                      </>
+                    )}
                     <th className="p-4 font-black text-center">Actions</th>
                   </tr>
                 </thead>
@@ -722,7 +826,12 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       if (priorityFilter !== 'All' && pVal !== priorityFilter) return false;
 
                       const sVal = getProductionStatus(prod);
-                      if (statusFilter !== 'All' && sVal !== statusFilter) return false;
+                      if (statusFilter === 'Overdue') {
+                        const days = calculateDaysRemaining(prod.target_delivery_date || prod.expected_delivery_date);
+                        if (!(days !== null && days < 0 && prod.editing_status !== 'Delivered')) return false;
+                      } else if (statusFilter !== 'All' && sVal !== statusFilter) {
+                        return false;
+                      }
 
                       return true;
                     });
@@ -730,7 +839,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                     if (filteredLeads.length === 0) {
                       return (
                         <tr>
-                          <td colSpan={12} className="p-10 text-center text-zinc-550 font-mono text-xs">
+                          <td colSpan={10} className="p-10 text-center text-zinc-550 font-mono text-xs">
                             No production leads matching filter parameters found.
                           </td>
                         </tr>
@@ -743,8 +852,16 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       if (!order) return null;
 
                       const priority = getProductionPriority(prod);
-                      const productionStatus = getProductionStatus(prod);
-                      const daysRem = calculateDaysRemaining(prod.expected_delivery_date || prod.target_delivery_date);
+                      const status = prod.editing_status || 'Pending';
+                      const displayStatus = getProductionStatus(prod);
+                      const daysRem = calculateDaysRemaining(prod.target_delivery_date || prod.expected_delivery_date);
+
+                      // Payments calculations
+                      const payment = payments.find(p => p.order_id === order.order_id);
+                      const totalAmount = order.quotation_amount || 0;
+                      const advanceReceived = payment?.advance_received !== undefined ? payment.advance_received : (payment?.advance_paid || 0);
+                      const balanceDue = payment?.balance_due !== undefined ? payment.balance_due : (totalAmount - advanceReceived);
+                      const payStatus = payment?.payment_status || 'Pending';
 
                       let flagBg = 'text-green-400 bg-green-500/5 border-green-500/10';
                       let flagLabel = 'On Time';
@@ -758,6 +875,23 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                         }
                       }
 
+                      let displayStatusColor = 'bg-blue-500/15 text-blue-400 border border-blue-500/20';
+                      if (status === 'Pending') displayStatusColor = 'bg-purple-500/15 text-purple-400 border border-purple-500/20 animate-pulse';
+                      else if (status === 'Editor Assigned') displayStatusColor = 'bg-sky-500/15 text-sky-400 border border-sky-500/20';
+                      else if (status === 'Editing Started' || status === 'Editing') displayStatusColor = 'bg-yellow-500/15 text-yellow-550 border border-yellow-500/20';
+                      else if (status === 'Ready For Review') displayStatusColor = 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20';
+                      else if (status === 'Customer Review') displayStatusColor = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
+                      else if (status === 'Review Ready Again') displayStatusColor = 'bg-violet-500/15 text-violet-450 border border-violet-500/20';
+                      else if (status === 'Revision Required') displayStatusColor = 'bg-red-500/15 text-red-400 border border-red-500/20';
+                      else if (status === 'Approved') displayStatusColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
+                      else if (status === 'Delivered') displayStatusColor = 'bg-teal-500/15 text-teal-400 border border-teal-500/20';
+                      else if (status === 'Payment Pending') displayStatusColor = 'bg-pink-500/15 text-pink-400 border border-pink-500/20';
+                      else if (status === 'Closed') displayStatusColor = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
+
+                      let payBadge = 'bg-amber-500/10 text-amber-400 border border-amber-500/15';
+                      if (payStatus === 'Fully Paid') payBadge = 'bg-green-500/10 text-green-400 border border-green-500/15';
+                      else if (payStatus === 'Partially Paid') payBadge = 'bg-blue-500/10 text-blue-400 border border-blue-500/15';
+
                       return (
                         <tr key={prod.production_id} className="hover:bg-zinc-900/30 transition-all font-mono text-xs">
                           {/* Order ID */}
@@ -768,6 +902,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 setIsDetailModalOpen(true);
                               }}
                               className="font-mono font-bold text-violet-400 hover:underline cursor-pointer block"
+                              title="Click to view full order dossier details"
                             >
                               {order.order_id}
                             </span>
@@ -776,124 +911,281 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
                           {/* Customer Name */}
                           <td className="p-4 font-bold text-white text-left font-sans">
-                            <div>{order.customer_name}</div>
+                            <div className="hover:text-violet-300 transition-colors cursor-pointer" onClick={() => {
+                              setSelectedLeadProd(prod);
+                              setLeadEditor(prod.editor_assigned || 'Unassigned');
+                              setLeadStaff(prod.assigned_staff ? prod.assigned_staff.split(', ').map(s => s.trim()) : []);
+                              setLeadPriority(prod.project_priority || 'Medium');
+                              setLeadFootageStatus(getRawFootageStatus(prod));
+                              setLeadProdStatus(getProductionStatus(prod));
+                              setLeadRemarks(prod.remarks || '');
+                              setLeadStartDate(prod.editing_start_date || '');
+                              setLeadTargetDeliveryDate(prod.target_delivery_date || '');
+                              setLeadExpectedDeliveryDate(prod.expected_delivery_date || '');
+                              setLeadActualDeliveryDate(prod.delivery_date || prod.actual_delivery_date || '');
+                            }}>{order.customer_name}</div>
                             <div className="text-[10px] text-zinc-455 mt-0.5 font-normal">{order.mobile || 'No contact phone'}</div>
                           </td>
 
                           {/* Event Type */}
+                          <td className="p-4 text-left font-sans text-zinc-300">
+                            {order.event_type}
+                          </td>
+
+                          {/* Editor Assigned */}
                           <td className="p-4 text-left font-sans">
-                            <div className="font-semibold text-zinc-200">{order.event_type}</div>
-                          </td>
-
-                          {/* Event Date */}
-                          <td className="p-4 whitespace-nowrap text-zinc-400">
-                            {order.event_date}
-                          </td>
-
-                          {/* Current Stage */}
-                          <td className="p-4">
-                            <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[9px] font-mono tracking-wider uppercase font-extrabold">
-                              {order.current_stage}
-                            </span>
-                          </td>
-
-                          {/* Production Status */}
-                          <td className="p-4 text-left">
-                            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                              productionStatus === 'New Project' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
-                              productionStatus === 'In Progress' || productionStatus === 'Editing Started' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20' :
-                              productionStatus === 'Customer Review' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' :
-                              productionStatus === 'Revision Required' ? 'bg-red-500/15 text-red-400 border border-red-500/20' :
-                              productionStatus === 'Approved' ? 'bg-teal-500/15 text-teal-400 border border-teal-500/20' :
-                              productionStatus === 'Delivered' || productionStatus === 'Closed' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' :
-                              'bg-zinc-900 text-zinc-400 border border-zinc-800'
-                            }`}>
-                              {productionStatus}
-                            </span>
-                          </td>
-
-                          {/* Assigned Editor */}
-                          <td className="p-4 text-left">
-                            <div className="font-bold text-zinc-250">
+                            <div className="font-bold text-zinc-200">
                               {prod.editor_assigned && prod.editor_assigned !== 'Unassigned' ? prod.editor_assigned : 'Unassigned'}
                             </div>
                             {prod.assigned_staff ? (
-                              <div className="text-[9px] text-zinc-500 mt-0.5 truncate max-w-[130px]" title={prod.assigned_staff}>
+                              <div className="text-[9px] text-zinc-550 mt-0.5 truncate max-w-[130px]" title={prod.assigned_staff}>
                                 Staff: {prod.assigned_staff}
                               </div>
                             ) : null}
                           </td>
 
+                          {/* Current Status */}
+                          <td className="p-4">
+                            <span className={`inline-flex px-2.5 py-0.5 rounded text-[10px] font-mono font-bold border ${displayStatusColor}`}>
+                              {displayStatus}
+                            </span>
+                          </td>
+
                           {/* Target Delivery Date */}
                           <td className="p-4 text-zinc-350">
-                            {prod.target_delivery_date || prod.expected_delivery_date || 'N/A'}
+                            {prod.target_delivery_date || 'N/A'}
                           </td>
 
-                          {/* Days Remaining */}
-                          <td className="p-4 text-left">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] border font-bold ${flagBg}`}>
-                                {flagLabel}
-                              </span>
-                              <span className="font-mono text-xs font-extrabold text-white">
-                                {daysRem !== null ? `${daysRem} days` : 'N/A'}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Priority */}
-                          <td className="p-2.5 text-center">
-                            <span className={`px-2 py-0.5 rounded font-mono text-[9px] uppercase tracking-wide font-black border ${
-                              priority === 'Critical' ? 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse' :
-                              priority === 'High' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                              priority === 'Medium' ? 'text-indigo-400 bg-indigo-505/10 border-indigo-505/20' :
-                              'text-zinc-500 bg-zinc-950 border-zinc-900'
-                            }`}>
-                              {priority}
-                            </span>
-                          </td>
-
-                          {/* Delivery Status */}
+                          {/* Remaining Days */}
                           <td className="p-4">
-                            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
-                              prod.editing_status === 'Delivered' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' :
-                              prod.editing_status === 'Approved' ? 'bg-teal-500/15 text-teal-400 border-teal-500/20' :
-                              prod.editing_status === 'Customer Review' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                              prod.editing_status === 'Editing' ? 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' :
-                              'text-zinc-550 bg-zinc-900 border-zinc-800'
-                            }`}>
-                              {prod.editing_status === 'Pending' ? 'In Post-Production' : prod.editing_status}
-                            </span>
+                            {daysRem !== null ? (
+                              <span className={`inline-flex px-2 py-0.5 rounded font-bold border font-mono ${flagBg}`}>
+                                {daysRem} days ({flagLabel})
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600 italic">Not set</span>
+                            )}
                           </td>
 
-                          {/* Actions */}
-                          <td className="p-4 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedLeadProd(prod);
-                                setLeadEditor(prod.editor_assigned || 'Unassigned');
-                                setLeadStaff(prod.assigned_staff ? prod.assigned_staff.split(', ').map(s => s.trim()) : []);
-                                setLeadPriority(prod.project_priority || 'Medium');
-                                setLeadFootageStatus(getRawFootageStatus(prod));
-                                setLeadProdStatus(getProductionStatus(prod));
-                                setLeadRemarks(prod.remarks || '');
-                                
-                                setLeadStartDate(prod.editing_start_date || '');
-                                setLeadTargetDeliveryDate(prod.target_delivery_date || '');
-                                setLeadExpectedDeliveryDate(prod.expected_delivery_date || '');
-                                setLeadActualDeliveryDate(prod.delivery_date || prod.actual_delivery_date || '');
+                          {/* Payment Status */}
+                          {currentRole !== 'Production Team' && (
+                            <td className="p-4">
+                              <span className={`inline-flex px-2.5 py-0.5 rounded text-[10px] font-mono font-black border ${payBadge}`}>
+                                {payStatus}
+                              </span>
+                            </td>
+                          )}
 
-                                setDateFootageReceived(rf?.uploaded_date?.split('T')[0] || '');
-                                setDateEditingStarted(prod.editing_start_date || '');
-                                setDateReview(prod.editing_status === 'Customer Review' ? new Date().toISOString().split('T')[0] : '');
-                                setDateApproval(prod.customer_review_status === 'Approved' ? new Date().toISOString().split('T')[0] : '');
-                                setDateDelivery(prod.delivery_date || '');
-                              }}
-                              className="px-3 py-1.5 bg-gradient-to-r from-violet-600/10 to-indigo-650/10 border border-violet-500/20 text-violet-400 text-[10px] font-black uppercase tracking-wider rounded-lg hover:from-violet-600 hover:to-indigo-650 hover:text-white hover:border-violet-600 transition-all duration-150 cursor-pointer whitespace-nowrap"
-                            >
-                              Manage Lead
-                            </button>
+                          {/* Remaining Amount */}
+                          {currentRole !== 'Production Team' && (
+                            <td className="p-4 font-bold text-zinc-300 font-mono">
+                              <span className={balanceDue > 0 ? 'text-rose-400 font-extrabold' : 'text-emerald-400'}>
+                                {formatINR(balanceDue)}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Actions column */}
+                          <td className="p-4 text-center">
+                            <div className="flex flex-col gap-1.5 items-center justify-center">
+                              {/* Step 1: Assign Editor */}
+                              {(status === 'Pending' || status === 'New Raw Footage Arrived' || status === 'Raw Footage Received') && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setWfEditor(prod.editor_assigned || 'Unassigned');
+                                    setWfTargetDeliveryDate(prod.target_delivery_date || '');
+                                    setWfPriority(prod.project_priority || 'Medium');
+                                    setWorkflowActionType('assign_editor');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-purple-600 border border-purple-500 text-white hover:bg-purple-500 hover:border-purple-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>👤</span> Assign Editor
+                                </button>
+                              )}
+
+                              {/* Step 2: Start Editing */}
+                              {status === 'Editor Assigned' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Editing Started' });
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-yellow-600 border border-yellow-500 text-white hover:bg-yellow-500 hover:border-yellow-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>🎬</span> Start Editing
+                                </button>
+                              )}
+
+                              {/* Step 3: Mark Editing In Progress */}
+                              {status === 'Editing Started' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Editing In Progress' });
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-blue-600 border border-blue-500 text-white hover:bg-blue-500 hover:border-blue-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>▶</span> In Progress
+                                </button>
+                              )}
+
+                              {/* Step 4: Internal QC Review */}
+                              {(status === 'Editing' || status === 'Editing In Progress') && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Internal QC Review' });
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-indigo-650 border border-indigo-600 text-white hover:bg-indigo-600 hover:border-indigo-550 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>🔍</span> Send to QC Review
+                                </button>
+                              )}
+
+                              {/* Step 5: Send for Client Review */}
+                              {status === 'Internal QC Review' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setWfReviewLink('');
+                                    setWfPreviewLink('');
+                                    setWfReviewNotes('');
+                                    setWorkflowActionType('send_review');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-violet-600 border border-violet-500 text-white hover:bg-violet-500 hover:border-violet-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>📩</span> Send Client Review
+                                </button>
+                              )}
+
+                              {/* Step 6: Client Review Sent -> Action Approval or Revision */}
+                              {(status === 'Customer Review' || status === 'Review Ready Again' || status === 'Client Review Sent') && (
+                                <div className="flex flex-col gap-1 w-full max-w-[160px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateProduction(prod.production_id, { editing_status: 'Final Approval' });
+                                    }}
+                                    className="w-full px-3 py-1 bg-emerald-600 border border-emerald-500 text-white hover:bg-emerald-500 hover:border-emerald-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-sm cursor-pointer flex items-center justify-center gap-1"
+                                  >
+                                    <span>✓</span> Final Approval
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveWorkflowProd(prod);
+                                      setWfRevisionNotes('');
+                                      setWfRevisionDeadline('');
+                                      setWorkflowActionType('request_revision');
+                                    }}
+                                    className="w-full px-3 py-1 bg-red-650 border border-red-600 text-white hover:bg-red-600 hover:border-red-505 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-sm cursor-pointer flex items-center justify-center gap-1"
+                                  >
+                                    <span>↩</span> Request Revision
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Step 7: Revision Required */}
+                              {status === 'Revision Required' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Revision In Progress' });
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-cyan-600 border border-cyan-500 text-white hover:bg-cyan-500 hover:border-cyan-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>↩</span> Start Revision
+                                </button>
+                              )}
+
+                              {/* Step 8: Revision In Progress */}
+                              {status === 'Revision In Progress' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Final Approval' });
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-emerald-700 border border-emerald-600 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>✓</span> Send Final Approval
+                                </button>
+                              )}
+
+                              {/* Step 9: Final Approval -> Deliver */}
+                              {(status === 'Approved' || status === 'Final Approval') && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setWfDeliveryLink('');
+                                    setWfGoogleDriveLink(prod.raw_footage_location || '');
+                                    setWfDownloadLink('');
+                                    setWfDeliveryNotes('');
+                                    setWorkflowActionType('deliver_project');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-teal-600 border border-teal-500 text-white hover:bg-teal-500 hover:border-teal-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1 animate-pulse"
+                                >
+                                  <span>📦</span> Deliver Project
+                                </button>
+                              )}
+
+                              {/* Step 10: Project Delivered -> Close Project */}
+                              {(status === 'Delivered' || status === 'Project Delivered') && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Project Closed' });
+                                  }}
+                                  className="w-full max-w-[160px] px-2.5 py-1.5 bg-violet-750 border border-violet-700 text-violet-100 hover:bg-violet-700 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>🔐</span> Close Project
+                                </button>
+                              )}
+
+                              {/* Legacy Payment Pending fallback */}
+                              {status === 'Payment Pending' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateProduction(prod.production_id, { editing_status: 'Project Closed' });
+                                  }}
+                                  className="w-full max-w-[160px] px-2.5 py-1.5 bg-cyan-950 border border-cyan-900 text-cyan-400 hover:bg-cyan-900 hover:text-cyan-200 transition-all text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  🔐 Close Project
+                                </button>
+                              )}
+
+                              {/* Step 11: Project Closed */}
+                              {(status === 'Closed' || status === 'Project Closed') && (
+                                <span className="text-[10px] text-zinc-500 font-extrabold flex items-center gap-1 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-850">
+                                  ✓ Project Closed
+                                </span>
+                              )}
+
+                              {/* Detail Dossier link */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedLeadProd(prod);
+                                  setLeadEditor(prod.editor_assigned || 'Unassigned');
+                                  setLeadStaff(prod.assigned_staff ? prod.assigned_staff.split(', ').map(s => s.trim()) : []);
+                                  setLeadPriority(prod.project_priority || 'Medium');
+                                  setLeadFootageStatus(getRawFootageStatus(prod));
+                                  setLeadProdStatus(getProductionStatus(prod));
+                                  setLeadRemarks(prod.remarks || '');
+                                  setLeadStartDate(prod.editing_start_date || '');
+                                  setLeadTargetDeliveryDate(prod.target_delivery_date || '');
+                                  setLeadExpectedDeliveryDate(prod.expected_delivery_date || '');
+                                  setLeadActualDeliveryDate(prod.delivery_date || prod.actual_delivery_date || '');
+                                }}
+                                className="text-[9px] text-zinc-500 hover:text-zinc-350 hover:underline mt-0.5 cursor-pointer"
+                              >
+                                Edit Full Dossier ✎
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1433,15 +1725,15 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                         const handleStatusChange = (newStat: string) => {
                           let up: Partial<Production> = {};
                           if (newStat === 'Ready for Delivery') {
-                            up = { editing_status: 'Approved', production_status: 'Approved' };
+                            up = { editing_status: 'Final Approval', production_status: 'Approved' };
                           } else if (newStat === 'Sent to Client') {
-                            up = { editing_status: 'Customer Review', production_status: 'Customer Review' };
+                            up = { editing_status: 'Client Review Sent', production_status: 'Customer Review' };
                           } else if (newStat === 'Delivered') {
-                            up = { editing_status: 'Delivered', production_status: 'Delivered', actual_delivery_date: new Date().toISOString().split('T')[0] };
+                            up = { editing_status: 'Project Delivered', production_status: 'Delivered', actual_delivery_date: new Date().toISOString().split('T')[0] };
                           } else if (newStat === 'Pending Approval') {
-                            up = { editing_status: 'Customer Review', production_status: 'Customer Review' };
+                            up = { editing_status: 'Client Review Sent', production_status: 'Customer Review' };
                           } else if (newStat === 'Completed') {
-                            up = { editing_status: 'Delivered', production_status: 'Closed' };
+                            up = { editing_status: 'Project Closed', production_status: 'Closed' };
                           }
                           updateProduction(prod.production_id, up);
                         };
@@ -1707,18 +1999,20 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
             {/* Editor Workload status */}
             <div className="md:col-span-1 bg-zinc-950 border border-zinc-900 rounded-2xl p-5 space-y-4">
               <h3 className="text-xs font-black text-zinc-300 uppercase tracking-widest border-b border-zinc-900 pb-3 font-mono">
-                Editor Capacity Roster
+                Editor Workload & Capacity Roster
               </h3>
               
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                 {staff.map(member => {
                   const wl = getStaffWorkload(member.name);
                   return (
-                    <div key={member.staff_id} className="bg-zinc-900/40 p-3 rounded-xl border border-zinc-900 hover:border-zinc-850 transition-colors">
+                    <div key={member.staff_id} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-900 hover:border-zinc-800 transition-colors">
                       <div className="flex justify-between items-start">
                         <div>
                           <div className="text-xs font-bold text-white leading-tight">{member.name}</div>
-                          <div className="text-[9px] text-zinc-550 font-mono uppercase mt-0.5">{member.role}</div>
+                          <div className="text-[10px] text-violet-400 font-mono uppercase mt-0.5">
+                            {member.production_role_speciality || member.role}
+                          </div>
                         </div>
                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-black ${
                           wl.activeCount >= 3 ? 'bg-rose-500/15 text-rose-400' : wl.activeCount >= 1 ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
@@ -1726,12 +2020,34 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           {wl.activeCount} Active
                         </span>
                       </div>
+
+                      {/* Overload indicator */}
+                      <div className="grid grid-cols-4 gap-1.5 text-[9px] font-mono text-zinc-500 mt-3 pt-2.5 border-t border-zinc-900">
+                        <div className="text-center">
+                          <div className="font-bold text-zinc-350">{wl.totalCount}</div>
+                          <div className="scale-90 overflow-hidden text-[8px]">Assigned</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-bold text-violet-400">{wl.activeCount}</div>
+                          <div className="scale-90 overflow-hidden text-[8px]">Active</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-bold text-emerald-450">{wl.completedCount}</div>
+                          <div className="scale-90 overflow-hidden text-[8px]">Done</div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`font-bold ${wl.overdueCount > 0 ? 'text-rose-500 animate-pulse font-black' : 'text-zinc-500'}`}>
+                            {wl.overdueCount}
+                          </div>
+                          <div className="scale-90 overflow-hidden text-[8px] text-rose-500">Overdue</div>
+                        </div>
+                      </div>
                       
                       {/* capacity bar */}
-                      <div className="w-full bg-zinc-950 h-1 rounded-full overflow-hidden mt-3">
+                      <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden mt-3.5">
                         <div 
-                          className={`h-full rounded-full ${
-                            wl.activeCount >= 3 ? 'bg-rose-500' : wl.activeCount >= 1 ? 'bg-amber-500' : 'bg-emerald-400'
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            wl.overdueCount > 0 ? 'bg-rose-500' : wl.activeCount >= 3 ? 'bg-rose-450' : wl.activeCount >= 1 ? 'bg-amber-500' : 'bg-emerald-400'
                           }`}
                           style={{ width: `${Math.min(100, (wl.activeCount / 4) * 100)}%` }}
                         />
@@ -1742,56 +2058,474 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
               </div>
             </div>
 
-            {/* List and Dropdowns */}
+            {/* List and Dropdowns (Master Crew Task Roster Board) */}
             <div className="md:col-span-2 bg-zinc-950 border border-zinc-900 rounded-2xl p-5 space-y-4">
-              <h3 className="text-xs font-black text-zinc-300 uppercase tracking-widest border-b border-zinc-900 pb-3 font-mono">
-                Assign / Reassign Editor
-              </h3>
+              <div className="border-b border-zinc-900 pb-3 flex justify-between items-center">
+                <h3 className="text-xs font-black text-zinc-300 uppercase tracking-widest font-mono">
+                  Production Crew Task Assignments & Status Tracking
+                </h3>
+                <span className="font-mono text-[9px] px-2.5 py-0.5 bg-zinc-90 w bg-purple-500/10 text-purple-400 rounded-full font-bold border border-purple-500/15">
+                  Real-time Supabase Sync
+                </span>
+              </div>
               
-              <div className="space-y-3">
-                {production.map(prod => {
-                  return (
-                    <div key={prod.production_id} className="bg-[#030303] border border-zinc-900 p-4 rounded-xl flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-xs font-bold text-white">{prod.production_id} ({prod.tracking_id})</div>
-                        <div className="text-[10px] text-zinc-400 mt-1">Current Status: <strong className="text-zinc-300">{prod.editing_status}</strong></div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2.5">
-                        <select
-                          disabled={!canEdit}
-                          value={prod.editor_assigned || ''}
-                          onChange={(e) => {
-                            updateProduction(prod.production_id, { editor_assigned: e.target.value });
-                          }}
-                          className="bg-zinc-900 border border-zinc-800 text-xs text-white rounded-xl py-2 px-3 focus:outline-none focus:border-violet-500 font-mono cursor-pointer"
-                        >
-                          <option value="">Unassigned</option>
-                          {staff.filter(s => s.status === 'Active').map(s => (
-                            <option key={s.staff_id} value={s.name}>{s.name} ({s.role.split(' ')[0]})</option>
-                          ))}
-                        </select>
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                {editorAssignments.map((assign) => {
+                  const correlatedProj = production.find(p => p.production_id === assign.production_id);
+                  const clientName = correlatedProj ? correlatedProj.couple_name || correlatedProj.tracking_id : 'Unknown Project';
 
-                        {prod.editor_assigned && prod.editor_assigned !== 'Unassigned' && (
+                  return (
+                    <div key={assign.assignment_id} className="bg-[#030303] border border-zinc-900 p-4.5 rounded-xl space-y-3.5 hover:border-zinc-800 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-zinc-450 text-[11px] bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{assign.production_id}</span>
+                            <span>{clientName}</span>
+                          </div>
+                          <div className="text-[10px] text-zinc-500 font-mono mt-1 flex items-center gap-2 flex-wrap">
+                            <span>Assigned Date: <strong className="text-zinc-400">{assign.assigned_date}</strong></span>
+                            <span>•</span>
+                            <span>Target Completion Date: <strong className="text-amber-500">{assign.target_finish_date}</strong></span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-mono tracking-wider font-extrabold uppercase ${
+                            assign.status === 'Completed'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                              : assign.status === 'Revision'
+                              ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                              : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                          }`}>
+                            {assign.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Controls layer for editing tracking */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-zinc-900 text-xs">
+                        <div className="flex items-center gap-2 text-[11px] text-zinc-400 font-sans">
+                          <span className="font-bold text-white uppercase">{assign.staff_name}</span>
+                          <span className="text-zinc-650">•</span>
+                          <span className="italic">Role: {assign.speciality}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          {/* Quick Change task status dropdown */}
+                          <select
+                            value={assign.status}
+                            onChange={(e) => {
+                              updateEditorAssignmentStatus(assign.assignment_id, e.target.value as any);
+                            }}
+                            className="bg-zinc-900 border border-zinc-850 text-[10px] font-mono font-bold text-zinc-300 rounded-lg p-1.5 cursor-pointer max-w-[130px]"
+                          >
+                            <option value="Assigned">Assigned</option>
+                            <option value="Editing Started">Editing Started</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Review Pending">Review Pending</option>
+                            <option value="Revision">Revision</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+
+                          {assign.status !== 'Completed' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateEditorAssignmentStatus(assign.assignment_id, 'Completed');
+                              }}
+                              className="p-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-bold rounded-lg transition-all cursor-pointer shadow-sm hover:shadow-emerald-500/10"
+                            >
+                              ✓ Mark Task Completed
+                            </button>
+                          )}
+
                           <button
                             type="button"
-                            onClick={() => handleSendWhatsAppTask(prod, prod.editor_assigned)}
-                            className="px-3 py-2 bg-green-600 hover:bg-green-500 text-black text-[10px] font-mono font-black uppercase rounded-xl tracking-wider cursor-pointer flex items-center gap-1.5 transition-all text-xs font-bold"
-                            title="Send Task Assignment details directly on WhatsApp"
+                            onClick={() => {
+                              if(confirm('Are you sure you want to remove this editor task assignment?')) {
+                                deleteEditorAssignment(assign.assignment_id);
+                              }
+                            }}
+                            className="p-1 text-rose-400 hover:text-rose-350 bg-rose-500/5 hover:bg-rose-500/10 rounded transition-all cursor-pointer"
+                            title="Delete Assignment"
                           >
-                            <span>WhatsApp Task</span>
+                            ✕
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
                   );
                 })}
+
+                {editorAssignments.length === 0 && (
+                  <div className="py-16 text-center text-zinc-500 font-mono uppercase bg-zinc-900/20 rounded-xl border border-dashed border-zinc-900 text-xs">
+                    No active crew roster task assignments registered yet.
+                  </div>
+                )}
               </div>
             </div>
 
           </div>
         </div>
       )}
+
+      {/* CREW ROSTER TAB */}
+      {activeSubTab === 'crew_roster' && (() => {
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Overall Aggregate Metrics
+        const totalAssigned = editorAssignments.length;
+        const activeTasksCount = editorAssignments.filter(a => a.status !== 'Completed').length;
+        const completedTasksCount = editorAssignments.filter(a => a.status === 'Completed').length;
+        const overdueTasksCount = editorAssignments.filter(a => 
+          a.status !== 'Completed' && a.target_finish_date && a.target_finish_date < todayStr
+        ).length;
+
+        // Only display active staff or staff matching production specialties
+        const activeStaffList = staff.filter(s => s.status === 'Active');
+
+        // Filter assignments based on search and dropdown selections
+        const filteredAssignments = editorAssignments.filter(assign => {
+          const matchesSearch = assign.staff_name.toLowerCase().includes(crewSearch.toLowerCase()) || 
+                                assign.speciality.toLowerCase().includes(crewSearch.toLowerCase());
+          const matchesSpeciality = crewSpecialityFilter === 'All' || assign.speciality === crewSpecialityFilter;
+          const matchesStatus = crewStatusFilter === 'All' || assign.status === crewStatusFilter;
+          return matchesSearch && matchesSpeciality && matchesStatus;
+        });
+
+        return (
+          <div className="space-y-6 animate-fade-in">
+            {/* Header section with real-time sync badge */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950/70 border border-zinc-900 p-5 rounded-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-purple-500 to-pink-500" />
+              <div>
+                <h1 className="text-xl font-black text-white tracking-tight uppercase font-mono flex items-center gap-2">
+                  <span>👥</span> Crew Roster & Workspace Tasks Dashboard
+                </h1>
+                <p className="text-xs text-zinc-400 mt-1 font-sans">
+                  Real-time synchronization with Supabase DB. Assign multiple professional specialists, manage tasks, and track individual editor capacities.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <span className="flex items-center gap-1.5 font-mono text-[9px] px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full font-bold border border-emerald-500/15 animate-pulse">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                  Live Syncing Active
+                </span>
+              </div>
+            </div>
+
+            {/* Crew Workload Tracking Counters */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-[#040406] border border-zinc-900 rounded-2xl p-4.5 relative overflow-hidden group hover:border-zinc-800 transition-all">
+                <div className="absolute top-3 right-3 opacity-15">
+                  <PlusSquare className="w-8 h-8 text-violet-400" />
+                </div>
+                <div className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Total Assigned Tasks</div>
+                <div className="text-3xl font-extrabold text-white mt-1.5 font-mono">{totalAssigned}</div>
+                <div className="text-[10px] text-zinc-550 mt-1 font-mono">Workspace Accumulation</div>
+              </div>
+
+              <div className="bg-[#040406] border border-zinc-900 rounded-2xl p-4.5 relative overflow-hidden group hover:border-zinc-800 transition-all">
+                <div className="absolute top-3 right-3 opacity-15">
+                  <Sliders className="w-8 h-8 text-blue-400 animate-pulse" />
+                </div>
+                <div className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Active Ongoing Tasks</div>
+                <div className="text-3xl font-extrabold text-blue-400 mt-1.5 font-mono">{activeTasksCount}</div>
+                <div className="text-[10px] text-zinc-550 mt-1 font-mono">Work in Progress</div>
+              </div>
+
+              <div className="bg-[#040406] border border-zinc-900 rounded-2xl p-4.5 relative overflow-hidden group hover:border-zinc-800 transition-all">
+                <div className="absolute top-3 right-3 opacity-15">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                </div>
+                <div className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Completed Tasks</div>
+                <div className="text-3xl font-extrabold text-emerald-400 mt-1.5 font-mono">{completedTasksCount}</div>
+                <div className="text-[10px] text-zinc-550 mt-1 font-mono">Successfully Reviewed</div>
+              </div>
+
+              <div className="bg-[#040406] border border-zinc-900 rounded-2xl p-4.5 relative overflow-hidden group hover:border-zinc-800 transition-all">
+                <div className="absolute top-3 right-3 opacity-15">
+                  <AlertTriangle className="w-8 h-8 text-rose-500 animate-[bounce_1.5s_infinite]" />
+                </div>
+                <div className="text-[10px] uppercase font-mono tracking-widest text-rose-500 font-black">Overdue Tasks</div>
+                <div className="text-3xl font-extrabold text-rose-500 mt-1.5 font-mono">{overdueTasksCount}</div>
+                <div className="text-[10px] text-rose-450 mt-1 font-mono">Missed Target Deadlines</div>
+              </div>
+            </div>
+
+            {/* Individual Editor Workload Capacity Roster */}
+            <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 space-y-4 shadow-xl">
+              <h3 className="text-xs font-black text-zinc-350 uppercase tracking-widest border-b border-zinc-900 pb-2.5 font-mono">
+                Editor Workload & Performance KPIs
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activeStaffList.map(member => {
+                  const wl = getStaffWorkload(member.name);
+                  return (
+                    <div key={member.staff_id} className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800 rounded-xl p-4 transition-all">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-xs font-black text-white">{member.name}</div>
+                          <div className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-wide">
+                            {member.production_role_speciality || member.role || 'General Editor'}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-mono tracking-widest font-black uppercase ${
+                          wl.activeCount >= 3 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 
+                          wl.activeCount >= 1 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 
+                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          {wl.activeCount} Active
+                        </span>
+                      </div>
+
+                      {/* Cumulative stats */}
+                      <div className="grid grid-cols-4 gap-2 text-center mt-3 pt-2.5 border-t border-zinc-900/60 font-mono text-[10px]">
+                        <div>
+                          <div className="font-bold text-zinc-300">{wl.totalCount}</div>
+                          <div className="text-[8px] text-zinc-550 uppercase">Total</div>
+                        </div>
+                        <div>
+                          <div className="font-bold text-blue-400">{wl.activeCount}</div>
+                          <div className="text-[8px] text-blue-500/80 uppercase">Active</div>
+                        </div>
+                        <div>
+                          <div className="font-bold text-emerald-400">{wl.completedCount}</div>
+                          <div className="text-[8px] text-emerald-500/80 uppercase">Done</div>
+                        </div>
+                        <div>
+                          <div className={`font-bold ${wl.overdueCount > 0 ? 'text-rose-500 font-black scale-105' : 'text-zinc-500'}`}>
+                            {wl.overdueCount}
+                          </div>
+                          <div className="text-[8px] text-rose-500/80 uppercase">Overdue</div>
+                        </div>
+                      </div>
+
+                      {/* Spark capacity slider */}
+                      <div className="mt-3.5">
+                        <div className="flex justify-between text-[8px] font-mono text-zinc-500 mb-1">
+                          <span>Capacity Meter</span>
+                          <span>{Math.min(100, Math.round((wl.activeCount / 4) * 100))}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-950 h-1 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              wl.overdueCount > 0 ? 'bg-rose-500' : wl.activeCount >= 3 ? 'bg-rose-450' : wl.activeCount >= 1 ? 'bg-amber-500' : 'bg-emerald-400'
+                            }`}
+                            style={{ width: `${Math.min(100, (wl.activeCount / 4) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {activeStaffList.length === 0 && (
+                  <div className="col-span-3 text-center py-6 text-zinc-500 font-mono text-xs">
+                    No active staff enrolled in the directory yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Master Crew Roster Table Container */}
+            <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-5 space-y-4 shadow-xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-900 pb-4">
+                <div>
+                  <h3 className="text-xs font-black text-zinc-300 uppercase tracking-widest font-mono">
+                    Master Crew Tasks Table
+                  </h3>
+                  <p className="text-[10px] text-zinc-500 mt-1 font-sans">
+                    Detailed task workflows. Perform one-click status overrides or mark tasks completed.
+                  </p>
+                </div>
+
+                {/* Filter and search controls row */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <input
+                    type="text"
+                    placeholder="Search crew name..."
+                    value={crewSearch}
+                    onChange={(e) => setCrewSearch(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-850 px-3.5 py-1.5 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 max-w-[150px] font-mono"
+                  />
+
+                  {/* Specialty selector dropdown */}
+                  <select
+                    value={crewSpecialityFilter}
+                    onChange={(e) => setCrewSpecialityFilter(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-850 px-3 py-1.5 rounded-lg text-xs text-zinc-300 font-mono focus:outline-none focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="All">All Specialities</option>
+                    {specialities.map(s => (
+                      <option key={s.speciality_id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+
+                  {/* Status selector dropdown */}
+                  <select
+                    value={crewStatusFilter}
+                    onChange={(e) => setCrewStatusFilter(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-850 px-3 py-1.5 rounded-lg text-xs text-zinc-300 font-mono focus:outline-none focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="All">All Task Stages</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="Editing Started">Editing Started</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Review Pending">Review Pending</option>
+                    <option value="Revision">Revision</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Responsive data table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-900 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                      <th className="py-3.5 px-4 font-bold">Staff Name</th>
+                      <th className="py-3.5 px-4 font-bold font-mono">Production Speciality</th>
+                      <th className="py-3.5 px-4 font-bold text-center font-mono">Current Projects</th>
+                      <th className="py-3.5 px-4 font-bold text-center font-mono">Active Tasks</th>
+                      <th className="py-3.5 px-3 font-bold font-mono">Assigned Date</th>
+                      <th className="py-3.5 px-3 font-bold font-mono">Target Finish</th>
+                      <th className="py-3.5 px-4 font-bold font-mono">Current Status</th>
+                      <th className="py-3.5 px-4 font-bold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-900/50">
+                    {filteredAssignments.map((assign) => {
+                      const correlatedProj = production.find(p => p.production_id === assign.production_id);
+                      const projectClient = correlatedProj ? (correlatedProj.couple_name || correlatedProj.tracking_id) : 'Unknown Project';
+
+                      // Find staff element to verify status
+                      const staffMember = staff.find(s => s.name.toLowerCase() === assign.staff_name.toLowerCase());
+                      const isStaffActive = staffMember ? staffMember.status === 'Active' : true;
+
+                      // Workload metrics for this editor
+                      const wl = getStaffWorkload(assign.staff_name);
+
+                      const isOverdue = assign.status !== 'Completed' && assign.target_finish_date && assign.target_finish_date < todayStr;
+
+                      return (
+                        <tr key={assign.assignment_id} className="hover:bg-zinc-900/15 group transition-colors">
+                          {/* Staff Name & Project Details */}
+                          <td className="py-3 px-4">
+                            <div className="font-black text-white hover:text-purple-400 transition-colors flex items-center gap-1.5">
+                              <span>{assign.staff_name}</span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isStaffActive ? 'bg-emerald-450' : 'bg-zinc-650'}`} title={isStaffActive ? 'Staff Active' : 'Staff Inactive/On Leave'} />
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-zinc-400 bg-zinc-900 px-1 py-0.2 rounded border border-zinc-850">{assign.production_id}</span>
+                              <span className="truncate max-w-[120px]">{projectClient}</span>
+                            </div>
+                          </td>
+
+                          {/* Production Role Speciality */}
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/15 rounded text-[10px] font-mono font-bold leading-none">
+                              {assign.speciality}
+                            </span>
+                          </td>
+
+                          {/* Project count */}
+                          <td className="py-3 px-4 text-center font-mono text-zinc-300 font-bold">
+                            {wl.totalCount}
+                          </td>
+
+                          {/* Active tasks count */}
+                          <td className="py-3 px-4 text-center font-mono">
+                            <span className={`px-2 py-0.5 rounded-[4px] font-bold text-[10px] ${
+                              wl.activeCount >= 3 ? 'bg-rose-500/10 text-rose-400' : 
+                              wl.activeCount >= 1 ? 'bg-amber-500/10 text-amber-400' : 
+                              'bg-emerald-500/10 text-emerald-400'
+                            }`}>
+                              {wl.activeCount} Active
+                            </span>
+                          </td>
+
+                          {/* Assigned Date */}
+                          <td className="py-3 px-3 font-mono text-zinc-400">
+                            {assign.assigned_date}
+                          </td>
+
+                          {/* Target Finish Date */}
+                          <td className="py-3 px-3 font-mono">
+                            <div className="flex items-center gap-1">
+                              <span className={isOverdue ? 'text-rose-500 font-extrabold animate-pulse' : 'text-zinc-300'}>
+                                {assign.target_finish_date}
+                              </span>
+                              {isOverdue && (
+                                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" title="This task has exceeded the specified target finish date!" />
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Current Status Selection Dropdown */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={assign.status}
+                                onChange={(e) => {
+                                  updateEditorAssignmentStatus(assign.assignment_id, e.target.value as any);
+                                }}
+                                className={`bg-zinc-900 border text-[11px] font-mono rounded px-2 py-1 cursor-pointer transition-all ${
+                                  assign.status === 'Completed' ? 'border-emerald-500/30 text-emerald-400' :
+                                  assign.status === 'Revision' ? 'border-rose-500/30 text-rose-400 animate-pulse' :
+                                  'border-zinc-800 text-zinc-300 focus:border-purple-500'
+                                }`}
+                              >
+                                <option value="Assigned">Assigned</option>
+                                <option value="Editing Started">Editing Started</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Review Pending">Review Pending</option>
+                                <option value="Revision">Revision</option>
+                                <option value="Completed">Completed</option>
+                              </select>
+                            </div>
+                          </td>
+
+                          {/* Actions layer */}
+                          <td className="py-3 px-4 text-right space-x-2">
+                            {assign.status !== 'Completed' ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateEditorAssignmentStatus(assign.assignment_id, 'Completed');
+                                }}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-bold rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm hover:shadow-emerald-500/10"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Complete</span>
+                              </button>
+                            ) : (
+                              <span className="font-mono text-[9px] text-zinc-550 inline-flex items-center gap-1 px-2.5 py-1 bg-zinc-900 rounded-lg border border-zinc-850">
+                                <CheckCircle2 className="w-3 h-3 text-zinc-600" />
+                                <span>No Actions</span>
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredAssignments.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-16 text-center text-zinc-500 font-mono uppercase bg-zinc-900/5 rounded-2xl border border-dashed border-zinc-900 text-xs">
+                          {crewSearch || crewSpecialityFilter !== 'All' || crewStatusFilter !== 'All' 
+                            ? 'No current tasks matched the specified query filter settings.' 
+                            : 'No professional editor task assignments registered in the workspace system.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* EDITING TRACKER TAB (KANBAN) */}
       {activeSubTab === 'tracker' && (
@@ -1841,18 +2575,26 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             {/* Fast progress trigger */}
                             <button
                               onClick={() => {
-                                let nextStage: EditingStatus = 'Editing';
-                                if (prod.editing_status === 'Pending') nextStage = 'Editing';
-                                else if (prod.editing_status === 'Editing') nextStage = 'Customer Review';
-                                else if (prod.editing_status === 'Customer Review') nextStage = 'Approved';
-                                else if (prod.editing_status === 'Revision Required') nextStage = 'Customer Review';
+                                let nextStage: EditingStatus = 'Editing In Progress';
+                                const cur = prod.editing_status;
+                                if (cur === 'Raw Footage Received') nextStage = 'Editor Assigned';
+                                else if (cur === 'Editor Assigned') nextStage = 'Editing Started';
+                                else if (cur === 'Editing Started') nextStage = 'Editing In Progress';
+                                else if (cur === 'Editing In Progress') nextStage = 'Internal QC Review';
+                                else if (cur === 'Internal QC Review') nextStage = 'Client Review Sent';
+                                { /* Skip Revision Required, handled by standard action buttons workflow */ }
+                                if (cur === 'Client Review Sent') nextStage = 'Final Approval';
+                                else if (cur === 'Revision Required') nextStage = 'Revision In Progress';
+                                else if (cur === 'Revision In Progress') nextStage = 'Final Approval';
+                                else if (cur === 'Final Approval') nextStage = 'Project Delivered';
+                                else if (cur === 'Project Delivered') nextStage = 'Project Closed';
+                                else nextStage = cur;
                                 
-                                if (prod.editing_status !== 'Approved' && prod.editing_status !== 'Delivered') {
+                                if (prod.editing_status !== 'Project Closed') {
                                   updateProduction(prod.production_id, { editing_status: nextStage });
-                                  alert(`Transitioned ${prod.production_id} to ${nextStage}`);
                                 }
                               }}
-                              disabled={prod.editing_status === 'Approved'}
+                              disabled={prod.editing_status === 'Project Closed'}
                               className="text-[9px] font-mono text-violet-400 hover:text-violet-300 font-bold flex items-center gap-1 uppercase"
                             >
                               <span>Next</span>
@@ -2476,23 +3218,24 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
         // Load payments info
         const payment = payments.find(p => p.order_id === order.order_id);
         const totalAmount = order.quotation_amount || 0;
-        const advanceReceived = payment?.advance_paid || 0;
+        const advanceReceived = payment?.advance_received !== undefined ? payment.advance_received : (payment?.advance_paid || 0);
         const balanceDue = payment?.balance_due !== undefined ? payment.balance_due : (totalAmount - advanceReceived);
 
         const handleSaveLeadDossier = (e: React.FormEvent) => {
           e.preventDefault();
           
-          let mainStatus: EditingStatus = 'Pending';
-          if (leadProdStatus === 'New Project') mainStatus = 'Pending';
-          else if (leadProdStatus === 'Footage Received') mainStatus = 'Pending';
-          else if (leadProdStatus === 'Editor Assigned') mainStatus = 'Pending';
-          else if (leadProdStatus === 'Editing Started') mainStatus = 'Editing';
-          else if (leadProdStatus === 'In Progress') mainStatus = 'Editing';
-          else if (leadProdStatus === 'Customer Review') mainStatus = 'Customer Review';
+          let mainStatus: EditingStatus = 'Raw Footage Received';
+          if (leadProdStatus === 'Pending' || leadProdStatus === 'Raw Footage Received') mainStatus = 'Raw Footage Received';
+          else if (leadProdStatus === 'Editor Assigned') mainStatus = 'Editor Assigned';
+          else if (leadProdStatus === 'Editing Started') mainStatus = 'Editing Started';
+          else if (leadProdStatus === 'Editing' || leadProdStatus === 'In Progress' || leadProdStatus === 'Editing In Progress') mainStatus = 'Editing In Progress';
+          else if (leadProdStatus === 'Internal QC Review') mainStatus = 'Internal QC Review';
+          else if (leadProdStatus === 'Customer Review' || leadProdStatus === 'Client Review Sent') mainStatus = 'Client Review Sent';
           else if (leadProdStatus === 'Revision Required') mainStatus = 'Revision Required';
-          else if (leadProdStatus === 'Approved') mainStatus = 'Approved';
-          else if (leadProdStatus === 'Delivered') mainStatus = 'Delivered';
-          else if (leadProdStatus === 'Closed') mainStatus = 'Delivered';
+          else if (leadProdStatus === 'Revision In Progress') mainStatus = 'Revision In Progress';
+          else if (leadProdStatus === 'Approved' || leadProdStatus === 'Final Approval') mainStatus = 'Final Approval';
+          else if (leadProdStatus === 'Delivered' || leadProdStatus === 'Project Delivered') mainStatus = 'Project Delivered';
+          else if (leadProdStatus === 'Closed' || leadProdStatus === 'Project Closed') mainStatus = 'Project Closed';
 
           updateProduction(selectedLeadProd.production_id, {
             editor_assigned: leadEditor,
@@ -2572,26 +3315,28 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                     </div>
 
                     {/* FINANCIAL LEDGER */}
-                    <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-indigo-400 font-mono flex items-center gap-1.5">
-                        <TrendingUp className="w-4 h-4 text-indigo-400" />
-                        <span>FINANCIAL LEDGER STATEMENT</span>
-                      </h4>
-                      <div className="grid grid-cols-3 gap-2.5 text-center">
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-zinc-900">
-                          <span className="text-[8px] text-zinc-500 font-mono block">TOTAL AMOUNT</span>
-                          <span className="text-[11px] font-bold text-zinc-300 block mt-0.5">{formatINR(totalAmount)}</span>
-                        </div>
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-zinc-900">
-                          <span className="text-[8px] text-zinc-500 font-mono block">ADVANCE PAID</span>
-                          <span className="text-[11px] font-bold text-emerald-400 block mt-0.5">{formatINR(advanceReceived)}</span>
-                        </div>
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-zinc-900">
-                          <span className="text-[8px] text-zinc-500 font-mono block">BALANCE DUE</span>
-                          <span className={`text-[11px] font-bold block mt-0.5 ${balanceDue > 0 ? 'text-amber-400' : 'text-green-400'}`}>{formatINR(balanceDue)}</span>
+                    {currentRole !== 'Production Team' && (
+                      <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-indigo-400 font-mono flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-indigo-400" />
+                          <span>FINANCIAL LEDGER STATEMENT</span>
+                        </h4>
+                        <div className="grid grid-cols-3 gap-2.5 text-center">
+                          <div className="bg-zinc-950 p-2 rounded-xl border border-zinc-900">
+                            <span className="text-[8px] text-zinc-500 font-mono block">TOTAL AMOUNT</span>
+                            <span className="text-[11px] font-bold text-zinc-300 block mt-0.5">{formatINR(totalAmount)}</span>
+                          </div>
+                          <div className="bg-zinc-950 p-2 rounded-xl border border-zinc-900">
+                            <span className="text-[8px] text-zinc-500 font-mono block">ADVANCE PAID</span>
+                            <span className="text-[11px] font-bold text-emerald-400 block mt-0.5">{formatINR(advanceReceived)}</span>
+                          </div>
+                          <div className="bg-zinc-950 p-2 rounded-xl border border-zinc-900">
+                            <span className="text-[8px] text-zinc-500 font-mono block">BALANCE DUE</span>
+                            <span className={`text-[11px] font-bold block mt-0.5 ${balanceDue > 0 ? 'text-amber-400' : 'text-green-400'}`}>{formatINR(balanceDue)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* TIMELINE STATEMENT LOGS */}
                     <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3.5">
@@ -2866,6 +3611,523 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
         onClose={() => setIsDetailModalOpen(false)} 
         orderId={masterOrderIdForDetail} 
       />
+
+      {/* STEP-BY-STEP INTERACTIVE WORKFLOW MODALS */}
+      {activeWorkflowProd && workflowActionType && (() => {
+        const order = orders.find(o => {
+          const rf = rawFootage.find(f => f.tracking_id === activeWorkflowProd.tracking_id);
+          return rf?.order_id === o.order_id;
+        });
+        const customerName = order ? order.customer_name : 'Customer';
+        const orderId = order ? order.order_id : 'Order';
+        
+        const payment = order ? payments.find(p => p.order_id === order.order_id) : null;
+        const totalAmount = order?.quotation_amount || 0;
+        const advanceReceived = payment?.advance_received !== undefined ? payment.advance_received : (payment?.advance_paid || 0);
+        const balanceDue = payment?.balance_due !== undefined ? payment.balance_due : (totalAmount - advanceReceived);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <div className="bg-zinc-950 border border-zinc-900 rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl flex flex-col">
+              
+              {/* Header */}
+              <div className="p-4 border-b border-zinc-900 bg-zinc-900/30 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] font-mono font-black uppercase tracking-widest text-violet-400 block mb-0.5">
+                    Step Workflow Wizard • {orderId}
+                  </span>
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider font-mono">
+                    {workflowActionType === 'assign_editor' && 'Step 1: Assign Editor'}
+                    {workflowActionType === 'send_review' && 'Step 4: Send For Review'}
+                    {workflowActionType === 'request_revision' && 'Step 5: Request Revision'}
+                    {workflowActionType === 'deliver_project' && 'Step 8: Deliver Project'}
+                    {workflowActionType === 'manage_payment_close' && 'Release & Close Options'}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => {
+                    setActiveWorkflowProd(null);
+                    setWorkflowActionType(null);
+                  }}
+                  className="text-zinc-500 hover:text-white transition-colors p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Body wrapper */}
+              <div className="p-5 overflow-y-auto max-h-[75vh]">
+                <p className="text-[11px] text-zinc-400 mb-4">
+                  Step workflow update for <strong className="text-white">{customerName}</strong>. 
+                </p>
+
+                {/* FORM: Assign Editor (Step 1) */}
+                {workflowActionType === 'assign_editor' && activeWorkflowProd && (
+                  <div className="space-y-5">
+                    {/* Active Crew Roster for this specific project */}
+                    <div className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/80">
+                      <h4 className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-black mb-3">
+                        Active Project Crew Roster ({editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id).length} Assigned)
+                      </h4>
+                      
+                      <div className="space-y-2.5 max-h-[180px] overflow-y-auto">
+                        {editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id).map((assign) => (
+                          <div key={assign.assignment_id} className="bg-zinc-950 border border-zinc-900 p-2.5 rounded-lg flex items-center justify-between gap-1.5 text-xs">
+                            <div>
+                              <div className="font-bold text-white flex items-center gap-1.5">
+                                <span>{assign.staff_name}</span>
+                                <span className="text-[10px] bg-zinc-900 text-zinc-400 px-1.5 py-0.5 rounded font-mono font-normal">
+                                  {assign.speciality}
+                                </span>
+                              </div>
+                              <div className="text-[10px] mt-1 text-zinc-500 font-mono">
+                                Target: {assign.target_finish_date || 'No Date'} • Status: <strong className="text-violet-400">{assign.status}</strong>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                deleteEditorAssignment(assign.assignment_id);
+                              }}
+                              className="text-rose-450 hover:text-rose-400 font-mono text-[10px] bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded transition-all cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                        {editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id).length === 0 && (
+                          <div className="text-center py-4 text-[11px] text-zinc-500 font-mono uppercase">
+                            No crew members assigned to this workflow yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Add Assignment Sub-Form */}
+                    <div className="bg-[#0b0c10] border border-zinc-900 p-4 rounded-xl space-y-4">
+                      <h4 className="text-[10px] font-mono uppercase tracking-wider text-violet-400 font-black">
+                        Assign A New Speciality Professional
+                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Dropdown 1: Production Role Speciality */}
+                        <div>
+                          <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1.5 font-bold">1. Selected Speciality *</label>
+                          <select
+                            value={wfSpeciality}
+                            onChange={(e) => {
+                              setWfSpeciality(e.target.value);
+                              setWfEditor('Unassigned');
+                            }}
+                            className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded-lg px-3 py-2 cursor-pointer font-mono"
+                          >
+                            <option value="">-- Choose Role Speciality --</option>
+                            {specialities.filter(s => s.active).map(spec => (
+                              <option key={spec.speciality_id} value={spec.name}>{spec.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Dropdown 2: Available Staff matching speciality */}
+                        <div>
+                          <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1.5 font-bold">2. Available Professional *</label>
+                          <select
+                            disabled={!wfSpeciality}
+                            value={wfEditor}
+                            onChange={(e) => setWfEditor(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded-lg px-3 py-2 cursor-pointer font-mono disabled:opacity-55"
+                          >
+                            <option value="Unassigned">-- Select Match Staff --</option>
+                            {staff.filter(s => s.status === 'Active' && s.production_role_speciality === wfSpeciality).map(s => {
+                              const wl = getStaffWorkload(s.name);
+                              return (
+                                <option key={s.staff_id} value={s.staff_id + '|' + s.name}>
+                                  {s.name} ({wl.activeCount} Active Jobs)
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {wfSpeciality && staff.filter(s => s.status === 'Active' && s.production_role_speciality === wfSpeciality).length === 0 && (
+                            <span className="text-[9px] text-amber-500 font-mono mt-1 block">
+                              ⚠️ No active staff assigned to this speciality.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Tasks target finish date */}
+                        <div>
+                          <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1.5 font-bold">Task Finish Deadline *</label>
+                          <input
+                            type="date"
+                            value={wfTargetDeliveryDate}
+                            onChange={(e) => setWfTargetDeliveryDate(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-800 text-xs rounded-lg px-3 py-2 text-white font-mono"
+                          />
+                        </div>
+
+                        {/* Priority tier */}
+                        <div>
+                          <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1.5 font-bold">Project Priority *</label>
+                          <select
+                            value={wfPriority}
+                            onChange={(e) => setWfPriority(e.target.value as any)}
+                            className="w-full bg-zinc-900 border border-zinc-800 text-xs rounded-lg px-3 py-2 cursor-pointer text-white font-mono"
+                          >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={!wfSpeciality || wfEditor === 'Unassigned' || !wfTargetDeliveryDate}
+                        onClick={async () => {
+                          const [sId, sName] = wfEditor.split('|');
+                          await assignEditorToProject({
+                            production_id: activeWorkflowProd.production_id,
+                            staff_id: sId,
+                            staff_name: sName,
+                            speciality: wfSpeciality,
+                            target_finish_date: wfTargetDeliveryDate
+                          });
+                          // Reset individual selector states
+                          setWfEditor('Unassigned');
+                        }}
+                        className="w-full py-2.5 bg-violet-600/30 border border-violet-500/40 hover:bg-violet-600 hover:text-white text-violet-300 font-bold uppercase text-[9px] tracking-widest rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        ➕ Add Professional Crew Assignment
+                      </button>
+                    </div>
+
+                    {/* Finalizer form submit */}
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      
+                      const assignedCrew = editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id);
+                      const primaryEditor = assignedCrew[assignedCrew.length - 1]?.staff_name || 'Unassigned';
+                      
+                      updateProduction(activeWorkflowProd.production_id, {
+                        editor_assigned: primaryEditor, // keep latest or main editor in main slot
+                        target_delivery_date: wfTargetDeliveryDate || activeWorkflowProd.target_delivery_date,
+                        project_priority: wfPriority,
+                        editing_status: 'Editor Assigned'
+                      });
+                      
+                      setActiveWorkflowProd(null);
+                      setWorkflowActionType(null);
+                      setWfSpeciality('');
+                      setWfEditor('Unassigned');
+                    }} className="space-y-4 pt-3 border-t border-zinc-900/60">
+                      <div className="flex justify-end items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveWorkflowProd(null);
+                            setWorkflowActionType(null);
+                            setWfSpeciality('');
+                            setWfEditor('Unassigned');
+                          }}
+                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-[10px] rounded-lg font-mono cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-[10px] tracking-wider rounded-lg transition-all cursor-pointer"
+                        >
+                          Save & Set status: Editor Assigned
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* FORM: Send For Review (Step 4) */}
+                {workflowActionType === 'send_review' && (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    updateProduction(activeWorkflowProd.production_id, {
+                      review_link: wfReviewLink,
+                      preview_link: wfPreviewLink,
+                      remarks: `Send for review: ${wfReviewNotes}`,
+                      editing_status: 'Customer Review'
+                    });
+                    setActiveWorkflowProd(null);
+                    setWorkflowActionType(null);
+                  }} className="space-y-4">
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Review Link * (Frame.io/Youtube/etc)</label>
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={wfReviewLink}
+                        onChange={(e) => setWfReviewLink(e.target.value)}
+                        required
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl px-3 py-2 text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Preview Link (Optional)</label>
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={wfPreviewLink}
+                        onChange={(e) => setWfPreviewLink(e.target.value)}
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl px-3 py-2 text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Notes / Comments</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Notes on draft..."
+                        value={wfReviewNotes}
+                        onChange={(e) => setWfReviewNotes(e.target.value)}
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl p-2.5 text-white"
+                      />
+                    </div>
+
+                    <div className="flex justify-end items-center gap-2 pt-3 border-t border-zinc-900/60 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveWorkflowProd(null);
+                          setWorkflowActionType(null);
+                        }}
+                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-855 text-zinc-400 text-[10px] rounded-lg font-mono"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase text-[10px] tracking-wider rounded-lg transition-all"
+                      >
+                        Confirm Ready
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* FORM: Request Revision (Step 5) */}
+                {workflowActionType === 'request_revision' && (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    updateProduction(activeWorkflowProd.production_id, {
+                      remarks: `Revision requested. Deadline: ${wfRevisionDeadline}. Special remarks: ${wfRevisionNotes}`,
+                      editing_status: 'Revision Required'
+                    });
+                    setActiveWorkflowProd(null);
+                    setWorkflowActionType(null);
+                  }} className="space-y-4">
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Revision Deadline *</label>
+                      <input
+                        type="date"
+                        value={wfRevisionDeadline}
+                        onChange={(e) => setWfRevisionDeadline(e.target.value)}
+                        required
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl px-3 py-2 text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Instructions / Change request notes *</label>
+                      <textarea
+                        rows={4}
+                        placeholder="Special client revision highlights..."
+                        value={wfRevisionNotes}
+                        onChange={(e) => setWfRevisionNotes(e.target.value)}
+                        required
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl p-2.5 text-white"
+                      />
+                    </div>
+
+                    <div className="flex justify-end items-center gap-2 pt-3 border-t border-zinc-900/60 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveWorkflowProd(null);
+                          setWorkflowActionType(null);
+                        }}
+                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-855 text-zinc-400 text-[10px] rounded-lg font-mono"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-red-650 hover:bg-red-600 text-white font-black uppercase text-[10px] tracking-wider rounded-lg transition-all"
+                      >
+                        File Revision
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* FORM: Deliver Project (Step 8) */}
+                {workflowActionType === 'deliver_project' && (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    updateProduction(activeWorkflowProd.production_id, {
+                      remarks: `Release Deliverables: Links logged. Remark: ${wfDeliveryNotes}`,
+                      delivery_link: wfDeliveryLink,
+                      raw_footage_location: wfGoogleDriveLink,
+                      editing_status: 'Delivered',
+                      delivery_date: new Date().toISOString().split('T')[0]
+                    });
+                    setActiveWorkflowProd(null);
+                    setWorkflowActionType(null);
+                  }} className="space-y-4">
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Final HD Gallery Delivery Link *</label>
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={wfDeliveryLink}
+                        onChange={(e) => setWfDeliveryLink(e.target.value)}
+                        required
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl px-3 py-2 text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Google Drive / Archive Location</label>
+                      <input
+                        type="url"
+                        value={wfGoogleDriveLink}
+                        onChange={(e) => setWfGoogleDriveLink(e.target.value)}
+                        placeholder="https://drive.google.com/..."
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl px-3 py-2 text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-mono text-zinc-500 uppercase mb-1 font-bold">Delivery Remarks</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Credentials or links commentary..."
+                        value={wfDeliveryNotes}
+                        onChange={(e) => setWfDeliveryNotes(e.target.value)}
+                        className="w-full bg-zinc-905 border border-zinc-900 text-xs rounded-xl p-2.5 text-white"
+                      />
+                    </div>
+
+                    <div className="flex justify-end items-center gap-2 pt-3 border-t border-zinc-900/60 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveWorkflowProd(null);
+                          setWorkflowActionType(null);
+                        }}
+                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-855 text-zinc-400 text-[10px] rounded-lg font-mono"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-black uppercase text-[10px] tracking-wider rounded-lg transition-all"
+                      >
+                        Confirm Release
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* FORM: Manage Payment & Close (Step 9 & 10) */}
+                {workflowActionType === 'manage_payment_close' && (
+                  <div className="space-y-4 text-xs">
+                    <div className="bg-zinc-900/50 p-4 border border-zinc-900 rounded-xl space-y-1">
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-zinc-500">Order Quotation:</span>
+                        <span className="text-zinc-200 font-bold">{formatINR(totalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-zinc-500">Advance Received:</span>
+                        <span className="text-emerald-400 font-bold">{formatINR(advanceReceived)}</span>
+                      </div>
+                      <div className="border-t border-zinc-900 my-1 pt-1 flex justify-between text-xs font-mono">
+                        <span className="text-zinc-400 font-bold">Total Balance Due:</span>
+                        <span className={`font-black ${balanceDue > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                          {formatINR(balanceDue)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {balanceDue > 0 ? (
+                      <div className="space-y-3">
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/10 rounded-xl">
+                          <p className="text-[10px] text-amber-500 font-semibold leading-relaxed">
+                            ⚠️ Outstanding balance of <strong>{formatINR(balanceDue)}</strong> remains. Mark "Payment Pending" until commercial clearance is log-checked.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateProduction(activeWorkflowProd.production_id, {
+                                editing_status: 'Payment Pending'
+                              });
+                              setActiveWorkflowProd(null);
+                              setWorkflowActionType(null);
+                            }}
+                            className="px-2 py-2 bg-amber-600 hover:bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider rounded-lg transition-all"
+                          >
+                            Set Payment Pending
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateProduction(activeWorkflowProd.production_id, {
+                                editing_status: 'Closed'
+                              });
+                              setActiveWorkflowProd(null);
+                              setWorkflowActionType(null);
+                            }}
+                            className="px-2 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-805 text-[9px] font-semibold uppercase tracking-wider rounded-lg transition-all"
+                          >
+                            Archive Closed
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="p-3 text-green-400 bg-green-500/10 border border-green-500/10 rounded-xl flex items-center gap-2">
+                          <span>✓</span>
+                          <span className="text-[11px] font-semibold">Ready to safe-close and archive!</span>
+                        </div>
+
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateProduction(activeWorkflowProd.production_id, {
+                                editing_status: 'Closed'
+                              });
+                              setActiveWorkflowProd(null);
+                              setWorkflowActionType(null);
+                            }}
+                            className="w-full py-2 bg-gradient-to-r from-violet-600 to-indigo-650 text-white text-[10px] font-black uppercase tracking-wider rounded-lg hover:from-violet-500 hover:to-indigo-500 transition-all shadow-md"
+                          >
+                            🔐 Final Archive & Close Project
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
