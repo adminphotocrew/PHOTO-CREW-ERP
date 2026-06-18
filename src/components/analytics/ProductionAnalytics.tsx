@@ -27,6 +27,31 @@ export const ProductionAnalytics: React.FC = () => {
   const [selectedEditorDetail, setSelectedEditorDetail] = useState<any | null>(null);
   const [activeEditorCardFilter, setActiveEditorCardFilter] = useState<string | null>(null);
 
+  // Local filter form states
+  const [searchText, setSearchText] = useState('');
+  const [startDateStr, setStartDateStr] = useState('');
+  const [endDateStr, setEndDateStr] = useState('');
+
+  // Active filter triggers
+  const [appliedSearchText, setAppliedSearchText] = useState('');
+  const [appliedStartDateStr, setAppliedStartDateStr] = useState('');
+  const [appliedEndDateStr, setAppliedEndDateStr] = useState('');
+
+  const handleApplyFilter = () => {
+    setAppliedSearchText(searchText);
+    setAppliedStartDateStr(startDateStr);
+    setAppliedEndDateStr(endDateStr);
+  };
+
+  const handleResetFilter = () => {
+    setSearchText('');
+    setStartDateStr('');
+    setEndDateStr('');
+    setAppliedSearchText('');
+    setAppliedStartDateStr('');
+    setAppliedEndDateStr('');
+  };
+
   // Active Date Bounds are the global range from context
   const activeRange = globalDateRange;
 
@@ -43,17 +68,59 @@ export const ProductionAnalytics: React.FC = () => {
       'Revision In Progress', 
       'Final Approval', 
       'Project Delivered', 
-      'Project Closed',
-      'Customer Review',
-      'Approved',
-      'Delivered',
-      'Closed'
+      'Project Closed'
     ];
 
     return (leads || []).filter(l => {
       const order = orders.find(o => o.lead_id === l.lead_id);
-      const stage = order?.current_stage || l.status;
-      return productionStages.includes(stage) && isDateInRange(l.event_date, activeRange);
+      const rf = order ? (rawFootage || []).find(f => f.order_id === order.order_id) : null;
+      const p = rf ? (production || []).find(prod => prod.tracking_id === rf.tracking_id) : null;
+
+      // Determine accurate editing status
+      let detailedStatus = p?.editing_status || order?.current_stage || l.status;
+
+      // Normalize
+      if (detailedStatus === 'Pending' || detailedStatus === 'Raw Footage Received') detailedStatus = 'Raw Footage Received';
+      else if (detailedStatus === 'Editor Assigned') detailedStatus = 'Editor Assigned';
+      else if (detailedStatus === 'Editing Started') detailedStatus = 'Editing Started';
+      else if (detailedStatus === 'Editing' || detailedStatus === 'Editing In Progress') detailedStatus = 'Editing In Progress';
+      else if (detailedStatus === 'Internal QC Review') detailedStatus = 'Internal QC Review';
+      else if (detailedStatus === 'Ready For Review' || detailedStatus === 'Client Review Sent' || detailedStatus === 'Customer Review') detailedStatus = 'Client Review Sent';
+      else if (detailedStatus === 'Revision Required') detailedStatus = 'Revision Required';
+      else if (detailedStatus === 'Revision In Progress') detailedStatus = 'Revision In Progress';
+      else if (detailedStatus === 'Approved' || detailedStatus === 'Final Approval') detailedStatus = 'Final Approval';
+      else if (detailedStatus === 'Delivered' || detailedStatus === 'Project Delivered' || detailedStatus === 'Payment Pending') detailedStatus = 'Project Delivered';
+      else if (detailedStatus === 'Closed' || detailedStatus === 'Project Closed') detailedStatus = 'Project Closed';
+
+      // 1. Must be in a production stage
+      if (!productionStages.includes(detailedStatus)) return false;
+
+      // 2. Date Bounds Check
+      const evDate = l.event_date;
+      if (appliedStartDateStr && appliedEndDateStr) {
+        if (evDate < appliedStartDateStr || evDate > appliedEndDateStr) return false;
+      } else if (appliedStartDateStr) {
+        if (evDate < appliedStartDateStr) return false;
+      } else if (appliedEndDateStr) {
+        if (evDate > appliedEndDateStr) return false;
+      } else {
+        // use fallback global date range
+        if (!isDateInRange(evDate, activeRange)) return false;
+      }
+
+      // 3. Search text matching Customer Name or Order ID or Event Type
+      if (appliedSearchText) {
+        const query = appliedSearchText.toLowerCase();
+        const oId = (order?.order_id || rf?.order_id || l.lead_id || '').toLowerCase();
+        const custName = (order?.customer_name || l.customer_name || '').toLowerCase();
+        const evType = (l.event_type || '').toLowerCase();
+        const editor = (p?.editor_assigned || '').toLowerCase();
+        if (!custName.includes(query) && !oId.includes(query) && !evType.includes(query) && !editor.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
     }).map(l => {
       const order = orders.find(o => o.lead_id === l.lead_id);
       const rf = order ? (rawFootage || []).find(f => f.order_id === order.order_id) : null;
@@ -86,10 +153,12 @@ export const ProductionAnalytics: React.FC = () => {
         raw_footage_location: p?.raw_footage_location || rf?.server_path || '',
         expected_delivery_date: p?.expected_delivery_date || l.event_date,
         target_delivery_date: p?.target_delivery_date || l.event_date,
-        original_lead_id: l.lead_id
+        original_lead_id: l.lead_id,
+        event_date: l.event_date,
+        event_type: l.event_type
       };
     });
-  }, [leads, orders, production, rawFootage, activeRange]);
+  }, [leads, orders, production, rawFootage, activeRange, appliedSearchText, appliedStartDateStr, appliedEndDateStr]);
 
   // Compute Card Metrics
   const totalProductionCount = filteredProduction.length;
@@ -151,6 +220,63 @@ export const ProductionAnalytics: React.FC = () => {
               VFX Workflows Engaged
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* CRM Status-management Analytics Local Filters */}
+      <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 flex-1">
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+            <input 
+              type="text"
+              placeholder="Search by customer, or order ID..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="w-full bg-[#08080a] border border-zinc-900 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-zinc-550 outline-none focus:border-indigo-500 transition-all font-sans"
+            />
+          </div>
+
+          {/* Start Date */}
+          <div className="relative flex items-center">
+            <span className="absolute left-3 text-[9px] font-mono uppercase tracking-wider text-zinc-500 pr-2 border-r border-zinc-800 font-extrabold">START:</span>
+            <input 
+              type="date"
+              value={startDateStr}
+              onChange={(e) => setStartDateStr(e.target.value)}
+              className="w-full bg-[#08080a] border border-zinc-900 rounded-xl py-2 pl-16 pr-3 text-xs text-zinc-300 outline-none focus:border-indigo-500 transition-all font-mono"
+            />
+          </div>
+
+          {/* End Date */}
+          <div className="relative flex items-center">
+            <span className="absolute left-3 text-[9px] font-mono uppercase tracking-wider text-zinc-500 pr-2 border-r border-zinc-800 font-extrabold">END:</span>
+            <input 
+              type="date"
+              value={endDateStr}
+              onChange={(e) => setEndDateStr(e.target.value)}
+              className="w-full bg-[#08080a] border border-zinc-900 rounded-xl py-2 pl-14 pr-3 text-xs text-zinc-300 outline-none focus:border-indigo-500 transition-all font-mono"
+            />
+          </div>
+        </div>
+
+        {/* Apply & Reset Buttons */}
+        <div className="flex items-center gap-2 lg:self-stretch">
+          <button
+            onClick={handleApplyFilter}
+            className="flex-1 lg:flex-none px-4 py-2 bg-[#4F46E5] hover:bg-opacity-95 text-white rounded-xl text-xs font-mono font-bold tracking-wider uppercase transition-colors shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>Apply Filter</span>
+          </button>
+          <button
+            onClick={handleResetFilter}
+            className="flex-1 lg:flex-none px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-mono font-bold tracking-wider uppercase transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset Filter</span>
+          </button>
         </div>
       </div>
 

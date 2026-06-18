@@ -114,6 +114,7 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
           return {
             "Order ID": order?.order_id || p.tracking_id || '—',
             "Customer Name": order?.customer_name || p.customer_name || 'CRM Client',
+            "Event Type": order?.event_type || p.event_type || '—',
             "Event Date": order?.event_date || p.event_date || '—',
             "Assigned Editors": p.editor_assigned || 'Unassigned',
             "Current Status": p.editing_status || '—',
