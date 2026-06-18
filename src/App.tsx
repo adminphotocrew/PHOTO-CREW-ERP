@@ -11,6 +11,7 @@ import { OperationsModule } from './components/OperationsModule';
 import { ProductionModule } from './components/ProductionModule';
 import { StaffManagementModule } from './components/StaffManagementModule';
 import { PaymentsModule } from './components/PaymentsModule';
+import { PendingPaymentsReport } from './components/analytics/PendingPaymentsReport';
 import { OrderSearch } from './components/OrderSearch';
 import { LoginScreen } from './components/LoginScreen';
 import { StudioLoader } from './components/StudioLoader';
@@ -61,11 +62,15 @@ const MainAppContent: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isTabAllowed = (tab: string): boolean => {
-    if (currentRole === 'Business Owner') return true;
+    if (currentRole === 'Business Owner') {
+      // Remove deprecated analytics sections
+      if (tab === 'revenue_analytics' || tab === 'payments') return false;
+      return true;
+    }
 
     if (currentRole === 'Sales Team') {
-      // Sales users can only access Leads Directory, Sales Analytics, and Payment Analytics
-      return ['sales', 'sales_analytics', 'payments'].includes(tab);
+      // Sales users can access Leads Directory, Sales Analytics, and Pending Payment Report
+      return ['sales', 'sales_analytics', 'pending_payments'].includes(tab);
     }
 
     if (currentRole === 'Operations Team') {
@@ -120,7 +125,25 @@ const MainAppContent: React.FC = () => {
   const [activeOpSubTab, setActiveOpSubTab] = useState<'operations_leads' | 'operations_calendar' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics'>('operations_leads');
 
   // Initialize correct default tab according to user role to avoid visual flashes
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sales' | 'operations' | 'production' | 'staff_management' | 'notifications' | 'payments' | 'search' | 'users' | 'diagnostics' | 'sales_analytics' | 'operations_analytics' | 'production_analytics' | 'business_overview_analytics' | 'revenue_analytics' | 'staff_performance_analytics'>(() => {
+  const [activeTab, setActiveTab] = useState<
+    | 'dashboard'
+    | 'sales'
+    | 'operations'
+    | 'production'
+    | 'staff_management'
+    | 'notifications'
+    | 'payments'
+    | 'search'
+    | 'users'
+    | 'diagnostics'
+    | 'sales_analytics'
+    | 'operations_analytics'
+    | 'production_analytics'
+    | 'business_overview_analytics'
+    | 'revenue_analytics'
+    | 'staff_performance_analytics'
+    | 'pending_payments'
+  >(() => {
     const savedUser = localStorage.getItem('erp_current_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
@@ -150,7 +173,7 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       if (currentRole === 'Sales Team') {
-        if (!['sales', 'sales_analytics', 'payments'].includes(activeTab)) {
+        if (!['sales', 'sales_analytics', 'pending_payments'].includes(activeTab)) {
           setActiveTab('sales');
         }
       } else if (currentRole === 'Operations Team') {
@@ -375,30 +398,13 @@ const MainAppContent: React.FC = () => {
             </h3>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
           </div>
-
           <nav className="space-y-1.5">
-            <button
-              id="tab_sales"
-              onClick={() => handleTabSelect('sales')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 text-left border cursor-pointer ${
-                activeTab === 'sales'
-                  ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-400 border-emerald-500/30 font-bold shadow-[0_0_12px_rgba(16,185,129,0.06)]'
-                  : 'text-zinc-400 bg-transparent border-transparent hover:bg-zinc-900/50 hover:text-white hover:border-zinc-800'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-                <span className="tracking-wide">Leads Directory</span>
-              </div>
-              <ChevronRightIcon active={activeTab === 'sales'} />
-            </button>
-
             <button
               id="tab_sales_analytics"
               onClick={() => handleTabSelect('sales_analytics')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 text-left border cursor-pointer ${
                 activeTab === 'sales_analytics'
-                  ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-400 border-indigo-500/30 font-bold shadow-[0_0_12px_rgba(99,102,241,0.06)]'
+                  ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-405 border-indigo-500/30 font-bold shadow-[0_0_12px_rgba(99,102,241,0.06)]'
                   : 'text-zinc-400 bg-transparent border-transparent hover:bg-zinc-900/50 hover:text-white hover:border-zinc-800'
               }`}
             >
@@ -410,19 +416,35 @@ const MainAppContent: React.FC = () => {
             </button>
 
             <button
-              id="tab_payments"
-              onClick={() => handleTabSelect('payments')}
+              id="tab_sales"
+              onClick={() => handleTabSelect('sales')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 text-left border cursor-pointer ${
-                activeTab === 'payments'
-                  ? 'bg-gradient-to-r from-rose-500/10 to-pink-500/10 text-rose-405 border-rose-500/30 font-bold shadow-[0_0_12px_rgba(244,63,94,0.06)]'
+                activeTab === 'sales'
+                  ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 text-emerald-455 border-emerald-500/30 font-bold shadow-[0_0_12px_rgba(16,185,129,0.06)]'
                   : 'text-zinc-400 bg-transparent border-transparent hover:bg-zinc-900/50 hover:text-white hover:border-zinc-800'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Landmark className="w-4 h-4 flex-shrink-0 text-rose-400" />
-                <span className="tracking-wide">Payment Analytics</span>
+                <Sparkles className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                <span className="tracking-wide">Leads Directory</span>
               </div>
-              <ChevronRightIcon active={activeTab === 'payments'} />
+              <ChevronRightIcon active={activeTab === 'sales'} />
+            </button>
+
+            <button
+              id="tab_pending_payments"
+              onClick={() => handleTabSelect('pending_payments')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold rounded-xl transition-all duration-200 text-left border cursor-pointer ${
+                activeTab === 'pending_payments'
+                  ? 'bg-gradient-to-r from-rose-500/10 to-pink-500/10 text-rose-455 border-rose-500/30 font-bold shadow-[0_0_12px_rgba(244,63,94,0.06)]'
+                  : 'text-zinc-400 bg-transparent border-transparent hover:bg-zinc-900/50 hover:text-white hover:border-zinc-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                <span className="tracking-wide">Pending Payment Report</span>
+              </div>
+              <ChevronRightIcon active={activeTab === 'pending_payments'} />
             </button>
           </nav>
         </div>
@@ -447,9 +469,7 @@ const MainAppContent: React.FC = () => {
               { id: 'operations_analytics', label: '2. Operations Analytics', icon: Camera, color: 'text-emerald-400' },
               { id: 'production_analytics', label: '3. Production Analytics', icon: Video, color: 'text-purple-400' },
               { id: 'business_overview_analytics', label: '4. Business Overview Analytics', icon: Landmark, color: 'text-amber-500' },
-              { id: 'revenue_analytics', label: '5. Revenue Analytics', icon: TrendingUp, color: 'text-rose-400' },
-              { id: 'payments', label: '6. Payment Analytics', icon: DollarSign, color: 'text-teal-400' },
-              { id: 'staff_performance_analytics', label: '7. Staff Performance Analytics', icon: Users, color: 'text-sky-450' }
+              { id: 'staff_performance_analytics', label: '5. Staff Performance Analytics', icon: Users, color: 'text-sky-450' }
             ].map((tab) => {
               const IconComponent = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -620,6 +640,7 @@ const MainAppContent: React.FC = () => {
                 ) : (
                   <>
                     {activeTab === 'sales_analytics' && <SalesAnalytics />}
+                    {activeTab === 'pending_payments' && (currentRole === 'Business Owner' || currentRole === 'Sales Team') && <PendingPaymentsReport />}
                     {activeTab === 'operations_analytics' && <OperationsAnalytics />}
                     {activeTab === 'production_analytics' && <ProductionAnalytics />}
                     {activeTab === 'business_overview_analytics' && <BusinessOverviewAnalytics />}

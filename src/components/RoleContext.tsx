@@ -2254,179 +2254,174 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updates: Partial<Omit<Production, 'production_id' | 'tracking_id'>>
   ) => {
     let trackingIdToUpdate = '';
-    const targetProd = production.find((p) => p.production_id === productionId);
+    
+    // De-mock production ID if it is PRD-lead_id
+    const inferredTrackingId = productionId.startsWith('PRD-') ? productionId.replace('PRD-', '') : productionId;
+    let targetProd = production.find((p) => p.production_id === productionId || p.tracking_id === inferredTrackingId);
+    
     let previousStage: CurrentStage = 'Raw Footage Received';
     if (targetProd) {
       const rf = rawFootage.find((f) => f.tracking_id === targetProd.tracking_id);
       const linkedOrder = rf ? orders.find((o) => o.order_id === rf.order_id) : undefined;
-      const orderName = linkedOrder?.package_name || 'Project';
-      const oId = linkedOrder?.order_id || '';
-      
       if (linkedOrder) {
         previousStage = linkedOrder.current_stage;
       }
-
-      // 1. Task Assigned & Reassigned
-      if (updates.editor_assigned && updates.editor_assigned !== 'Unassigned') {
-        const oldEditor = targetProd.editor_assigned;
-        if (!oldEditor || oldEditor === 'Unassigned' || oldEditor === '') {
-          addNotification({
-            user_id: updates.editor_assigned,
-            project_id: productionId,
-            task_id: 'Editing',
-            notification_type: 'Task Assigned',
-            title: 'Editing Task Assigned',
-            message: `A new editing task for "${orderName}" (Order: ${oId}) has been assigned to ${updates.editor_assigned}.`,
-            recipient_role: 'Production Team'
-          });
-        } else if (oldEditor !== updates.editor_assigned) {
-          addNotification({
-            user_id: updates.editor_assigned,
-            project_id: productionId,
-            task_id: 'Editing',
-            notification_type: 'Task Reassigned',
-            title: 'Editing Task Reassigned',
-            message: `Editing task for "${orderName}" (Order: ${oId}) has been reassigned from ${oldEditor} to ${updates.editor_assigned}.`,
-            recipient_role: 'Production Team'
-          });
-        }
-      }
-
-      // 2. Status Updates & Task Completed
-      if (updates.editing_status && updates.editing_status !== targetProd.editing_status) {
-        const status = updates.editing_status;
-        if (status === 'Client Review Sent') {
-          addNotification({
-            user_id: targetProd.editor_assigned,
-            project_id: productionId,
-            task_id: 'Editing',
-            notification_type: 'Task Completed',
-            title: 'Editing Task Completed',
-            message: `Editing completed by ${targetProd.editor_assigned || 'Editor'} for "${orderName}" (Order: ${oId}). Sent for customer review.`,
-            recipient_role: 'Operations Team'
-          });
-        } else if (status === 'Revision Required') {
-          addNotification({
-            user_id: targetProd.editor_assigned,
-            project_id: productionId,
-            task_id: 'Review',
-            notification_type: 'Revision Requested',
-            title: 'Project Revision Requested',
-            message: `Revision was requested for "${orderName}" (Order: ${oId}). Status updated to Revision Required.`,
-            recipient_role: 'Production Team'
-          });
-        } else if (status === 'Final Approval') {
-          addNotification({
-            user_id: targetProd.editor_assigned,
-            project_id: productionId,
-            task_id: 'Review',
-            notification_type: 'Project Approved',
-            title: 'Project Customer Approved',
-            message: `Project "${orderName}" (Order: ${oId}) was approved by the customer.`,
-            recipient_role: 'All'
-          });
-          addNotification({
-            user_id: targetProd.editor_assigned,
-            project_id: productionId,
-            task_id: 'Review',
-            notification_type: 'Task Completed',
-            title: 'Review Task Completed',
-            message: `Review completed. "${orderName}" (Order: ${oId}) was approved by the client.`,
-            recipient_role: 'Production Team'
-          });
-        } else if (status === 'Project Delivered') {
-          addNotification({
-            user_id: targetProd.editor_assigned,
-            project_id: productionId,
-            task_id: 'Delivery',
-            notification_type: 'Project Delivered',
-            title: 'Project Delivered to Client',
-            message: `Project "${orderName}" (Order: ${oId}) has been successfully delivered and completed.`,
-            recipient_role: 'All'
-          });
-          addNotification({
-            user_id: targetProd.editor_assigned,
-            project_id: productionId,
-            task_id: 'Delivery',
-            notification_type: 'Task Completed',
-            title: 'Delivery Task Completed',
-            message: `Delivery completed for "${orderName}" (Order: ${oId}).`,
-            recipient_role: 'Production Team'
-          });
-        }
+    } else {
+      // Look up in leads
+      const linkedLead = leads.find(l => l.lead_id === inferredTrackingId);
+      if (linkedLead) {
+        previousStage = linkedLead.status as any;
       }
     }
 
-    setProduction((prev) =>
-      prev.map((prod) => {
-        if (prod.production_id === productionId) {
-          trackingIdToUpdate = prod.tracking_id;
-          const updated = { ...prod, ...updates };
-          pushUpdate('production', 'production_id', productionId, updates);
-          return updated;
-        }
-        return prod;
-      })
-    );
+    const orderName = 'Project';
+    const oId = inferredTrackingId;
+
+    // Send notifications if needed
+    if (updates.editor_assigned && updates.editor_assigned !== 'Unassigned') {
+      const oldEditor = targetProd?.editor_assigned;
+      if (!oldEditor || oldEditor === 'Unassigned' || oldEditor === '') {
+        addNotification({
+          user_id: updates.editor_assigned,
+          project_id: productionId,
+          task_id: 'Editing',
+          notification_type: 'Task Assigned',
+          title: 'Editing Task Assigned',
+          message: `A new editing task (Order: ${oId}) has been assigned to ${updates.editor_assigned}.`,
+          recipient_role: 'Production Team'
+        });
+      } else if (oldEditor !== updates.editor_assigned) {
+        addNotification({
+          user_id: updates.editor_assigned,
+          project_id: productionId,
+          task_id: 'Editing',
+          notification_type: 'Task Reassigned',
+          title: 'Editing Task Reassigned',
+          message: `Editing task (Order: ${oId}) has been reassigned from ${oldEditor} to ${updates.editor_assigned}.`,
+          recipient_role: 'Production Team'
+        });
+      }
+    }
+
+    if (updates.editing_status && (!targetProd || updates.editing_status !== targetProd.editing_status)) {
+      const status = updates.editing_status;
+      if (status === 'Client Review Sent') {
+        addNotification({
+          user_id: targetProd?.editor_assigned || 'Unassigned',
+          project_id: productionId,
+          task_id: 'Editing',
+          notification_type: 'Task Completed',
+          title: 'Editing Task Completed',
+          message: `Editing completed by ${targetProd?.editor_assigned || 'Editor'} (Order: ${oId}). Sent for customer review.`,
+          recipient_role: 'Operations Team'
+        });
+      } else if (status === 'Revision Required') {
+        addNotification({
+          user_id: targetProd?.editor_assigned || 'Unassigned',
+          project_id: productionId,
+          task_id: 'Review',
+          notification_type: 'Revision Requested',
+          title: 'Project Revision Requested',
+          message: `Revision was requested (Order: ${oId}). Status updated to Revision Required.`,
+          recipient_role: 'Production Team'
+        });
+      } else if (status === 'Final Approval') {
+        addNotification({
+          user_id: targetProd?.editor_assigned || 'Unassigned',
+          project_id: productionId,
+          task_id: 'Review',
+          notification_type: 'Project Approved',
+          title: 'Project Customer Approved',
+          message: `Project (Order: ${oId}) was approved by the customer.`,
+          recipient_role: 'All'
+        });
+      }
+    }
+
+    // Set production state
+    setProduction((prev) => {
+      const exists = prev.some((p) => p.production_id === productionId || p.tracking_id === inferredTrackingId || (targetProd && p.production_id === targetProd.production_id));
+      if (exists) {
+        return prev.map((prod) => {
+          if (prod.production_id === productionId || prod.tracking_id === inferredTrackingId || (targetProd && prod.production_id === targetProd.production_id)) {
+            trackingIdToUpdate = prod.tracking_id;
+            const updated = { ...prod, ...updates };
+            pushUpdate('production', 'production_id', prod.production_id, updates);
+            return updated;
+          }
+          return prod;
+        });
+      } else {
+        trackingIdToUpdate = inferredTrackingId;
+        const newPId = productionId.startsWith('PRD-') ? `PRD-${Math.floor(100000 + Math.random() * 899999)}` : productionId;
+        const newProd: Production = {
+          production_id: newPId,
+          tracking_id: inferredTrackingId,
+          editor_assigned: updates.editor_assigned || 'Unassigned',
+          editing_status: (updates.editing_status || previousStage || 'Raw Footage Received') as any,
+          remarks: updates.remarks || '',
+          project_priority: updates.project_priority || 'Medium',
+          raw_footage_location: updates.raw_footage_location || '',
+          target_delivery_date: updates.target_delivery_date || '',
+          expected_delivery_date: updates.expected_delivery_date || '',
+          ...updates
+        };
+        pushInsert('production', newProd);
+        return [newProd, ...prev];
+      }
+    });
+
+    // Find linked order using all possible connections
+    let tgtOrder = orders.find(o => o.order_id === inferredTrackingId || o.lead_id === inferredTrackingId);
+    if (!tgtOrder) {
+      const rf = rawFootage.find(f => f.tracking_id === inferredTrackingId || f.order_id === inferredTrackingId);
+      if (rf) {
+        tgtOrder = orders.find(o => o.order_id === rf.order_id);
+      }
+    }
 
     // Determine Stage to update on Order and Lead
     let nextStage: CurrentStage | null = null;
-    if (updates.editing_status === 'Raw Footage Received') nextStage = 'Raw Footage Received';
-    else if (updates.editing_status === 'Editor Assigned') nextStage = 'Editor Assigned';
-    else if (updates.editing_status === 'Editing Started') nextStage = 'Editing Started';
-    else if (updates.editing_status === 'Editing In Progress') nextStage = 'Editing Started';
-    else if (updates.editing_status === 'Internal QC Review') nextStage = 'Editing Started';
-    else if (updates.editing_status === 'Client Review Sent') nextStage = 'Customer Review';
-    else if (updates.editing_status === 'Revision Required') nextStage = 'Revision Required';
-    else if (updates.editing_status === 'Revision In Progress') nextStage = 'Revision Required';
-    else if (updates.editing_status === 'Final Approval') nextStage = 'Approved';
-    else if (updates.editing_status === 'Project Delivered') {
-      if (targetProd) {
-        const rf = rawFootage.find((f) => f.tracking_id === targetProd.tracking_id);
-        const payment = rf ? payments.find((p) => p.order_id === rf.order_id) : undefined;
-        nextStage = (payment && payment.balance_due === 0) ? 'Closed' : 'Payment Pending';
-      } else {
-        nextStage = 'Payment Pending';
-      }
-    } else if (updates.editing_status === 'Project Closed') {
-      nextStage = 'Closed';
+    if (updates.editing_status) {
+      nextStage = updates.editing_status as any;
     } else if (updates.editor_assigned && updates.editor_assigned !== 'Unassigned') {
       nextStage = 'Editor Assigned';
+    } else if (targetProd) {
+      nextStage = targetProd.editing_status as any;
     }
 
-    if (nextStage && trackingIdToUpdate) {
-      const rf = rawFootage.find((f) => f.tracking_id === trackingIdToUpdate);
-      if (rf) {
-        setOrders((prev) =>
-          prev.map((ord) => {
-            if (ord.order_id === rf.order_id) {
-              pushUpdate('orders', 'order_id', rf.order_id, { 
-                current_stage: nextStage!,
-                updated_by: currentUserName,
-                updated_at: new Date().toISOString()
-              });
-              return { ...ord, current_stage: nextStage!, updated_by: currentUserName, updated_at: new Date().toISOString() };
-            }
-            return ord;
-          })
-        );
-        const tgtOrder = orders.find((o) => o.order_id === rf.order_id);
-        if (tgtOrder) {
-          setLeads((prev) =>
-            prev.map((ld) => {
-              if (ld.lead_id === tgtOrder.lead_id) {
-                pushUpdate('leads', 'lead_id', tgtOrder.lead_id, { 
-                  status: nextStage!,
-                  updated_by: currentUserName,
-                  updated_at: new Date().toISOString()
-                });
-                return { ...ld, status: nextStage!, updated_by: currentUserName, updated_at: new Date().toISOString() };
-              }
-              return ld;
-            })
-          );
-        }
-      }
+    const leadIdToUpdate = tgtOrder?.lead_id || inferredTrackingId;
+
+    if (nextStage && leadIdToUpdate) {
+      setLeads((prev) =>
+        prev.map((ld) => {
+          if (ld.lead_id === leadIdToUpdate) {
+            pushUpdate('leads', 'lead_id', leadIdToUpdate, { 
+              status: nextStage!,
+              updated_by: currentUserName,
+              updated_at: new Date().toISOString()
+            });
+            return { ...ld, status: nextStage!, updated_by: currentUserName, updated_at: new Date().toISOString() };
+          }
+          return ld;
+        })
+      );
+    }
+
+    if (nextStage && tgtOrder) {
+      setOrders((prev) =>
+        prev.map((ord) => {
+          if (ord.order_id === tgtOrder!.order_id) {
+            pushUpdate('orders', 'order_id', tgtOrder!.order_id, { 
+              current_stage: nextStage!,
+              updated_by: currentUserName,
+              updated_at: new Date().toISOString()
+            });
+            return { ...ord, current_stage: nextStage!, updated_by: currentUserName, updated_at: new Date().toISOString() };
+          }
+          return ord;
+        })
+      );
     }
 
     logActivity(

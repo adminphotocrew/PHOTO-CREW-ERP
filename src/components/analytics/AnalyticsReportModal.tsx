@@ -39,6 +39,28 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
 }) => {
   const { globalDateRange } = useRole();
   const [searchQuery, setSearchQuery] = useState('');
+  const [localStartDate, setLocalStartDate] = useState(globalDateRange.start);
+  const [localEndDate, setLocalEndDate] = useState(globalDateRange.end);
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [eventTypeFilter, setEventTypeFilter] = useState('All');
+
+  // Sync initial date range if context changes or component is reopened
+  React.useEffect(() => {
+    setLocalStartDate(globalDateRange.start);
+    setLocalEndDate(globalDateRange.end);
+  }, [globalDateRange, isOpen]);
+
+  const uniqueStatuses = useMemo(() => {
+    if (reportType !== 'sales') return ['All'];
+    const statuses = new Set(leads.map(l => l.status).filter(Boolean));
+    return ['All', ...Array.from(statuses)];
+  }, [leads, reportType]);
+
+  const uniqueEventTypes = useMemo(() => {
+    if (reportType !== 'sales') return ['All'];
+    const types = new Set(leads.map(l => l.event_type).filter(Boolean));
+    return ['All', ...Array.from(types)];
+  }, [leads, reportType]);
 
   // 1. Compute current active range directly from context
   const currentRange = globalDateRange;
@@ -53,27 +75,31 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
           const order = orders.find(o => o.lead_id === l.lead_id || o.customer_name === l.customer_name);
           return {
             "Lead ID": l.lead_id || '—',
-            "Customer Name": l.customer_name || 'CRM Contact',
+            "Order ID": order?.order_id || '—',
+            "Customer Name": l.customer_name || '—',
             "Mobile Number": l.mobile || '—',
-            "Lead Source": l.lead_source || 'Direct Inbound',
-            "Status": l.status || 'New Lead',
-            "Amount": order?.quotation_amount || l.budget || 0,
+            "Event Type": l.event_type || '—',
+            "Event Date": l.event_date || '—',
+            "Current Status": l.status || '—',
+            "Lead Source": l.lead_source || '—',
             "Created Date": l.created_date || '—'
           };
         }).filter(row => {
-          if (!isDateInRange(row["Created Date"], currentRange)) return false;
-
-          if (cardName === 'New Leads') return row["Status"] === 'New Lead';
-          if (cardName === 'Follow-Ups') return row["Status"] === 'Follow Up';
-          if (cardName === 'Negotiation Leads') return row["Status"] === 'Negotiation';
-          if (cardName === 'Quotations Generated') {
-            return row["Status"] === 'Quotation Sent' || row["Status"] === 'Negotiation';
+          const name = cardName.trim();
+          if (name === 'New Leads') return row["Current Status"] === 'New Lead';
+          if (name === 'Follow-up Pending' || name === 'Follow-Ups') return row["Current Status"] === 'Follow Up' || row["Current Status"] === 'Follow-Up';
+          if (name === 'Quotation Sent' || name === 'Quotations Sent') return row["Current Status"] === 'Quotation Sent';
+          if (name === 'Negotiation' || name === 'Negotiation Leads') return row["Current Status"] === 'Negotiation';
+          if (name === 'Order Confirmed' || name === 'Confirmed Orders' || name === 'Conversion Rate' || name === 'Total Event Value') {
+            return row["Current Status"] === 'Order Confirmed' || row["Current Status"] === 'Approved';
           }
-          if (cardName === 'Quotations Sent') return row["Status"] === 'Quotation Sent';
-          if (cardName === 'Confirmed Orders') {
-            return row["Status"] === 'Order Confirmed' || orders.some(o => o.lead_id === row["Lead ID"]);
+          if (name === 'Lost Leads') {
+            return row["Current Status"] === 'Lost Lead' || row["Current Status"] === 'Cancelled' || row["Current Status"] === 'Lost';
           }
-          return true;
+          if (name === 'Upcoming Events') {
+            return (row["Current Status"] === 'Order Confirmed' || row["Current Status"] === 'Approved') && row["Event Date"] >= TODAY_REF;
+          }
+          return true; // "Total Leads"
         });
       }
 
@@ -94,8 +120,6 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
             "Order Date": o.created_at && typeof o.created_at === 'string' ? o.created_at.split('T')[0] : o.event_date
           };
         }).filter(row => {
-          if (!isDateInRange(row["Event Date"], currentRange)) return false;
-
           if (cardName === 'New Orders Received') return row["Event Status"] === 'New Order Received' || row["Event Status"] === 'Order Confirmed';
           if (cardName === 'Events Scheduled') return row["Event Status"] === 'Event Scheduled' || row["Event Status"] === 'Operations Assigned';
           if (cardName === 'Staff Assigned') return row["Assigned Team"] !== 'None' && row["Assigned Team"] !== 'Unassigned';
@@ -121,8 +145,6 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
             "Target Delivery Date": p.target_delivery_date || p.expected_delivery_date || '—'
           };
         }).filter(row => {
-          if (row["Event Date"] !== '—' && !isDateInRange(row["Event Date"], currentRange)) return false;
-
           if (cardName === 'Total Production Projects' || cardName === 'Total Production') return true;
           if (cardName === 'Raw Footage Queue' || cardName === 'Raw Footage Received') return row["Current Status"] === 'Raw Footage Received';
           if (cardName === 'Editor Assigned') return row["Current Status"] === 'Editor Assigned';
@@ -162,7 +184,6 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
               "Created Date": order?.created_at && typeof order.created_at === 'string' ? order.created_at.split('T')[0] : order?.event_date || '—'
             };
           }).filter(row => {
-            if (!isDateInRange(row["Created Date"], currentRange)) return false;
             if (cardName === 'Total Pending Amount' || cardName === 'Outstanding Balance') return row["Balance Due"] > 0;
             if (cardName === 'Partial Payment Amount' || cardName === 'Partially Paid Events') return row["Payment Status"] === 'Partially Paid';
             if (cardName === 'Fully Paid Events') return row["Payment Status"] === 'Fully Paid';
@@ -178,7 +199,7 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
               "Department": s.department || '—',
               "Status": s.status || 'Active',
               "Joining Date": s.joining_date || '—'
-            })).filter(row => isDateInRange(row["Joining Date"], currentRange));
+            }));
           } else if (cardName === 'Active Editors') {
             const activeEditors = Array.from(new Set(production.map(p => p.editor_assigned).filter(e => e && e !== 'Unassigned')));
             return staff.filter(s => activeEditors.includes(s.name)).map(s => ({
@@ -188,7 +209,7 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
               "Department": s.department || '—',
               "Status": s.status || 'Active',
               "Joining Date": s.joining_date || '—'
-            })).filter(row => isDateInRange(row["Joining Date"], currentRange));
+            }));
           } else {
             return production.map(p => {
               const order = orders.find(o => o.order_id === p.tracking_id);
@@ -201,7 +222,6 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
                 "Event Date": order?.event_date || '—'
               };
             }).filter(row => {
-              if (row["Event Date"] !== '—' && !isDateInRange(row["Event Date"], currentRange)) return false;
               if (cardName === 'Active Projects') return row["Editing Status"] !== 'Project Closed';
               return true;
             });
@@ -215,8 +235,6 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
             "Amount": o.quotation_amount || 0,
             "Status": o.current_stage || '—'
           })).filter(row => {
-            if (!isDateInRange(row["Event Date"], currentRange)) return false;
-
             if (cardName === 'Completed Events') return row["Status"] === 'Event Completed' || row["Status"] === 'Closed' || row["Status"] === 'Delivered';
             if (cardName === 'Upcoming Events') return row["Event Date"] >= TODAY_REF;
             if (cardName === 'Ongoing Events') return row["Event Date"] === TODAY_REF;
@@ -228,24 +246,48 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
       default:
         return [];
     }
-  }, [isOpen, reportType, cardName, leads, orders, operations, production, payments, staff, currentRange]);
+  }, [isOpen, reportType, cardName, leads, orders, operations, production, payments, staff]);
 
   // 3. Search and filter rows
   const filteredRows = useMemo(() => {
-    if (!searchQuery) return rawRows;
-    const q = searchQuery.toLowerCase();
-    return rawRows.filter(row => {
-      return (
-        (row.id && row.id.toLowerCase().includes(q)) ||
-        (row.name && row.name.toLowerCase().includes(q)) ||
-        (row.status && row.status.toLowerCase().includes(q)) ||
-        (row.package_name && row.package_name.toLowerCase().includes(q)) ||
-        (row.event_type && row.event_type.toLowerCase().includes(q)) ||
-        (row.editor && row.editor.toLowerCase().includes(q)) ||
-        (row.role && row.role.toLowerCase().includes(q))
-      );
+    let result = rawRows;
+
+    // Filter by local date range
+    result = result.filter(row => {
+      const dateVal = row["Created Date"] || row["Event Date"] || row["Order Date"] || row["Joining Date"] || row["Received Date"] || '';
+      if (!dateVal || dateVal === '—') return true;
+      const cleanDate = dateVal.split('T')[0];
+      return cleanDate >= localStartDate && cleanDate <= localEndDate;
     });
-  }, [rawRows, searchQuery]);
+
+    // Filter by status dropdown
+    if (statusFilter !== 'All') {
+      result = result.filter(row => {
+        const val = row["Current Status"] || row["Status"] || row["Event Status"] || row["Editing Status"] || row["Payment Status"] || '';
+        return String(val).toLowerCase() === statusFilter.toLowerCase();
+      });
+    }
+
+    // Filter by event type dropdown
+    if (eventTypeFilter !== 'All') {
+      result = result.filter(row => {
+        const val = row["Event Type"] || '';
+        return String(val).toLowerCase() === eventTypeFilter.toLowerCase();
+      });
+    }
+
+    // Search query match
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(row => {
+        return Object.values(row).some(val => 
+          String(val ?? '').toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return result;
+  }, [rawRows, localStartDate, localEndDate, statusFilter, eventTypeFilter, searchQuery]);
 
   // 4. Calculate stats summary for the report header
   const reportStats = useMemo(() => {
@@ -518,6 +560,63 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Local Filter Ribbon */}
+        <div className="px-4 py-3 border-b border-zinc-850 bg-zinc-950/70 flex flex-wrap gap-4 items-center">
+          {/* Start Date */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-zinc-500 font-mono font-bold uppercase tracking-wider">Start Date</span>
+            <input
+              type="date"
+              value={localStartDate}
+              onChange={(e) => setLocalStartDate(e.target.value)}
+              className="bg-zinc-900 w-36 border border-zinc-850 rounded-lg px-2.5 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 h-8 font-mono"
+            />
+          </div>
+
+          {/* End Date */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-zinc-500 font-mono font-bold uppercase tracking-wider">End Date</span>
+            <input
+              type="date"
+              value={localEndDate}
+              onChange={(e) => setLocalEndDate(e.target.value)}
+              className="bg-zinc-900 w-36 border border-zinc-850 rounded-lg px-2.5 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 h-8 font-mono"
+            />
+          </div>
+
+          {/* Status Filter */}
+          {reportType === 'sales' && (
+            <div className="flex flex-col gap-1 min-w-[130px]">
+              <span className="text-[10px] text-zinc-500 font-mono font-bold uppercase tracking-wider">Status Option</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-850 rounded-lg px-2 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 h-8 font-mono cursor-pointer"
+              >
+                {uniqueStatuses.map(st => (
+                  <option key={st} value={st} className="bg-zinc-950 text-zinc-300">{st}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Event Type Filter */}
+          {reportType === 'sales' && (
+            <div className="flex flex-col gap-1 min-w-[140px]">
+              <span className="text-[10px] text-zinc-500 font-mono font-bold uppercase tracking-wider">Event Category</span>
+              <select
+                value={eventTypeFilter}
+                onChange={(e) => setEventTypeFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-850 rounded-lg px-2 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 h-8 font-mono cursor-pointer"
+              >
+                {uniqueEventTypes.map(ev => (
+                  <option key={ev} value={ev} className="bg-zinc-950 text-zinc-300">{ev}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Toolbar: Search & Exporter Controls */}

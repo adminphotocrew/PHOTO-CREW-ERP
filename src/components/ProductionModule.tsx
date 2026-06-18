@@ -259,7 +259,9 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       'Revision In Progress', 
       'Final Approval', 
       'Delivered', 
+      'Project Delivered',
       'Closed',
+      'Project Closed',
       'Customer Review',
       'Approved',
       'Payment Pending'
@@ -399,18 +401,18 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
   };
 
   const getProductionStatus = (prod: Production): string => {
-    const status = prod.editing_status || 'Raw Footage Received';
-    if (status as any === 'Pending' || status === 'Raw Footage Received') return 'Raw Footage Received';
+    const status = (prod.editing_status || 'Raw Footage Received') as string;
+    if (status === 'Pending' || status === 'Raw Footage Received') return 'Raw Footage Received';
     if (status === 'Editor Assigned') return 'Editor Assigned';
     if (status === 'Editing Started') return 'Editing Started';
-    if (status as any === 'Editing' || status === 'Editing In Progress') return 'Editing In Progress';
+    if (status === 'Editing' || status === 'Editing In Progress') return 'Editing In Progress';
     if (status === 'Internal QC Review') return 'Internal QC Review';
-    if (status as any === 'Ready For Review' || status === 'Client Review Sent') return 'Client Review Sent';
+    if (status === 'Ready For Review' || status === 'Client Review Sent' || status === 'Customer Review') return 'Client Review Sent';
     if (status === 'Revision Required') return 'Revision Required';
     if (status === 'Revision In Progress') return 'Revision In Progress';
-    if (status as any === 'Approved' || status === 'Final Approval') return 'Final Approval';
-    if (status as any === 'Delivered' || status === 'Project Delivered') return 'Project Delivered';
-    if (status as any === 'Closed' || status === 'Project Closed') return 'Project Closed';
+    if (status === 'Approved' || status === 'Final Approval') return 'Final Approval';
+    if (status === 'Delivered' || status === 'Project Delivered' || status === 'Payment Pending') return 'Project Delivered';
+    if (status === 'Closed' || status === 'Project Closed') return 'Project Closed';
     return status;
   };
 
@@ -587,11 +589,11 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
           {/* Dashboard Widgets specific to Production Leads */}
           {(() => {
             const totalCount = leads.length;
-            const newCount = leads.filter(p => !p.editor_assigned || p.editor_assigned === 'Unassigned' || getProductionStatus(p) === 'New Project').length;
-            const inEditingCount = leads.filter(p => p.editing_status === 'Editing' || getProductionStatus(p) === 'Editing Started' || getProductionStatus(p) === 'In Progress').length;
-            const inReviewCount = leads.filter(p => p.editing_status === 'Customer Review' || getProductionStatus(p) === 'Customer Review').length;
-            const approvedCount = leads.filter(p => p.editing_status === 'Approved' || getProductionStatus(p) === 'Approved').length;
-            const deliveredCount = leads.filter(p => p.editing_status === 'Delivered' || getProductionStatus(p) === 'Delivered' || getProductionStatus(p) === 'Closed').length;
+            const newCount = leads.filter(p => !p.editor_assigned || p.editor_assigned === 'Unassigned' || getProductionStatus(p) === 'New Project' || getProductionStatus(p) === 'Raw Footage Received').length;
+            const inEditingCount = leads.filter(p => p.editing_status === 'Editing' || getProductionStatus(p) === 'Editing Started' || getProductionStatus(p) === 'Editing In Progress' || getProductionStatus(p) === 'In Progress').length;
+            const inReviewCount = leads.filter(p => getProductionStatus(p) === 'Customer Review' || getProductionStatus(p) === 'Internal QC Review' || getProductionStatus(p) === 'Client Review Sent').length;
+            const approvedCount = leads.filter(p => getProductionStatus(p) === 'Approved' || getProductionStatus(p) === 'Final Approval').length;
+            const deliveredCount = leads.filter(p => getProductionStatus(p) === 'Delivered' || getProductionStatus(p) === 'Project Delivered' || getProductionStatus(p) === 'Closed' || getProductionStatus(p) === 'Project Closed').length;
             const overdueCount = leads.filter(p => {
               const days = calculateDaysRemaining(p.expected_delivery_date || p.target_delivery_date);
               return days !== null && days < 0 && p.editing_status !== 'Delivered';
@@ -929,17 +931,17 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       }
 
                       let displayStatusColor = 'bg-blue-500/15 text-blue-400 border border-blue-500/20';
-                      if (status === 'Pending') displayStatusColor = 'bg-purple-500/15 text-purple-400 border border-purple-500/20 animate-pulse';
-                      else if (status === 'Editor Assigned') displayStatusColor = 'bg-sky-500/15 text-sky-400 border border-sky-500/20';
-                      else if (status === 'Editing Started' || status === 'Editing') displayStatusColor = 'bg-yellow-500/15 text-yellow-550 border border-yellow-500/20';
-                      else if (status === 'Ready For Review') displayStatusColor = 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20';
-                      else if (status === 'Customer Review') displayStatusColor = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
-                      else if (status === 'Review Ready Again') displayStatusColor = 'bg-violet-500/15 text-violet-450 border border-violet-500/20';
-                      else if (status === 'Revision Required') displayStatusColor = 'bg-red-500/15 text-red-400 border border-red-500/20';
-                      else if (status === 'Approved') displayStatusColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
-                      else if (status === 'Delivered') displayStatusColor = 'bg-teal-500/15 text-teal-400 border border-teal-500/20';
-                      else if (status === 'Payment Pending') displayStatusColor = 'bg-pink-500/15 text-pink-400 border border-pink-500/20';
-                      else if (status === 'Closed') displayStatusColor = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
+                      if (displayStatus === 'Raw Footage Received') displayStatusColor = 'bg-purple-500/15 text-purple-400 border border-purple-500/20 animate-pulse';
+                      else if (displayStatus === 'Editor Assigned') displayStatusColor = 'bg-sky-500/15 text-sky-400 border border-sky-500/20';
+                      else if (displayStatus === 'Editing Started') displayStatusColor = 'bg-yellow-500/15 text-yellow-500 border border-yellow-500/20';
+                      else if (displayStatus === 'Editing In Progress') displayStatusColor = 'bg-blue-500/15 text-blue-400 border border-blue-500/20';
+                      else if (displayStatus === 'Internal QC Review') displayStatusColor = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
+                      else if (displayStatus === 'Client Review Sent') displayStatusColor = 'bg-pink-500/15 text-pink-400 border border-pink-500/20';
+                      else if (displayStatus === 'Revision Required') displayStatusColor = 'bg-red-500/15 text-red-400 border border-red-500/20';
+                      else if (displayStatus === 'Revision In Progress') displayStatusColor = 'bg-orange-500/15 text-orange-400 border border-orange-500/20';
+                      else if (displayStatus === 'Final Approval') displayStatusColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
+                      else if (displayStatus === 'Project Delivered') displayStatusColor = 'bg-violet-500/15 text-violet-400 border border-violet-500/20';
+                      else if (displayStatus === 'Project Closed') displayStatusColor = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
 
                       let payBadge = 'bg-amber-500/10 text-amber-400 border border-amber-500/15';
                       if (payStatus === 'Fully Paid') payBadge = 'bg-green-500/10 text-green-400 border border-green-500/15';
@@ -1064,7 +1066,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           <td className="p-4 text-center">
                             <div className="flex flex-col gap-1.5 items-center justify-center">
                               {/* Step 1: Assign Editor */}
-                              {(status === 'Pending' || status === 'New Raw Footage Arrived' || status === 'Raw Footage Received') && (
+                              {(displayStatus === 'Raw Footage Received') && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1081,7 +1083,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               )}
 
                               {/* Step 2: Start Editing */}
-                              {status === 'Editor Assigned' && (
+                              {displayStatus === 'Editor Assigned' && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1094,7 +1096,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               )}
 
                               {/* Step 3: Unified Action workflow: open CRM status update popup */}
-                              {['Editing Started', 'Editing In Progress', 'Internal QC Review', 'Client Review Sent', 'Customer Review', 'Revision Required', 'Revision In Progress'].includes(status) && (
+                              {displayStatus === 'Editing Started' && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1118,8 +1120,128 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 </button>
                               )}
 
+                              {displayStatus === 'Editing In Progress' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Editing In Progress');
+                                    setQcNotes(prod.remarks || '');
+                                    setReviewLink(prod.raw_footage_location || '');
+                                    setReviewNotes(prod.remarks || '');
+                                    setRevisionNotes(prod.remarks || '');
+                                    setRevisionDeadline(prod.expected_delivery_date || '');
+                                    setRevisionComments(prod.remarks || '');
+                                    setApprovalNotes(prod.remarks || '');
+                                    setDeliveryLink(prod.raw_footage_location || '');
+                                    setDeliveryDate(prod.delivery_date || '');
+                                    setClosingNotes(prod.remarks || '');
+                                    setWorkflowActionType('manage_status');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-blue-500 border border-blue-400 text-white hover:bg-blue-450 hover:border-blue-350 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>✏️</span> In Progress
+                                </button>
+                              )}
+
+                              {displayStatus === 'Internal QC Review' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Internal QC Review');
+                                    setQcNotes(prod.remarks || '');
+                                    setReviewLink(prod.raw_footage_location || '');
+                                    setReviewNotes(prod.remarks || '');
+                                    setRevisionNotes(prod.remarks || '');
+                                    setRevisionDeadline(prod.expected_delivery_date || '');
+                                    setRevisionComments(prod.remarks || '');
+                                    setApprovalNotes(prod.remarks || '');
+                                    setDeliveryLink(prod.raw_footage_location || '');
+                                    setDeliveryDate(prod.delivery_date || '');
+                                    setClosingNotes(prod.remarks || '');
+                                    setWorkflowActionType('manage_status');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-amber-600 border border-amber-500 text-white hover:bg-amber-500 hover:border-amber-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>🔍</span> In Progress
+                                </button>
+                              )}
+
+                              {displayStatus === 'Client Review Sent' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Client Review Sent');
+                                    setQcNotes(prod.remarks || '');
+                                    setReviewLink(prod.raw_footage_location || '');
+                                    setReviewNotes(prod.remarks || '');
+                                    setRevisionNotes(prod.remarks || '');
+                                    setRevisionDeadline(prod.expected_delivery_date || '');
+                                    setRevisionComments(prod.remarks || '');
+                                    setApprovalNotes(prod.remarks || '');
+                                    setDeliveryLink(prod.raw_footage_location || '');
+                                    setDeliveryDate(prod.delivery_date || '');
+                                    setClosingNotes(prod.remarks || '');
+                                    setWorkflowActionType('manage_status');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-pink-650 border border-pink-600 text-white hover:bg-pink-600 hover:border-pink-550 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>💬</span> In Progress
+                                </button>
+                              )}
+
+                              {displayStatus === 'Revision Required' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Revision Required');
+                                    setQcNotes(prod.remarks || '');
+                                    setReviewLink(prod.raw_footage_location || '');
+                                    setReviewNotes(prod.remarks || '');
+                                    setRevisionNotes(prod.remarks || '');
+                                    setRevisionDeadline(prod.expected_delivery_date || '');
+                                    setRevisionComments(prod.remarks || '');
+                                    setApprovalNotes(prod.remarks || '');
+                                    setDeliveryLink(prod.raw_footage_location || '');
+                                    setDeliveryDate(prod.delivery_date || '');
+                                    setClosingNotes(prod.remarks || '');
+                                    setWorkflowActionType('manage_status');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-red-650 border border-red-600 text-white hover:bg-red-600 hover:border-red-550 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>🔄</span> In Progress
+                                </button>
+                              )}
+
+                              {displayStatus === 'Revision In Progress' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Revision In Progress');
+                                    setQcNotes(prod.remarks || '');
+                                    setReviewLink(prod.raw_footage_location || '');
+                                    setReviewNotes(prod.remarks || '');
+                                    setRevisionNotes(prod.remarks || '');
+                                    setRevisionDeadline(prod.expected_delivery_date || '');
+                                    setRevisionComments(prod.remarks || '');
+                                    setApprovalNotes(prod.remarks || '');
+                                    setDeliveryLink(prod.raw_footage_location || '');
+                                    setDeliveryDate(prod.delivery_date || '');
+                                    setClosingNotes(prod.remarks || '');
+                                    setWorkflowActionType('manage_status');
+                                  }}
+                                  className="w-full max-w-[160px] px-3 py-1.5 bg-orange-600 border border-orange-500 text-white hover:bg-orange-500 hover:border-orange-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <span>🛠️</span> In Progress
+                                </button>
+                              )}
+
                               {/* Step 9: Final Approval -> Deliver */}
-                              {(status === 'Approved' || status === 'Final Approval') && (
+                              {(displayStatus === 'Final Approval') && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1137,7 +1259,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               )}
 
                               {/* Step 10: Project Delivered -> Close Project */}
-                              {(status === 'Delivered' || status === 'Project Delivered') && (
+                              {(displayStatus === 'Project Delivered') && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1163,9 +1285,9 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               )}
 
                               {/* Step 11: Project Closed */}
-                              {(status === 'Closed' || status === 'Project Closed') && (
-                                <span className="text-[10px] text-zinc-500 font-extrabold flex items-center gap-1 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-850">
-                                  ✓ Project Closed
+                              {(displayStatus === 'Project Closed') && (
+                                <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-950/20 border border-emerald-850">
+                                  ✓ Completed
                                 </span>
                               )}
 

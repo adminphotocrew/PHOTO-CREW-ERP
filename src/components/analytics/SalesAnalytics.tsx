@@ -39,20 +39,26 @@ export const SalesAnalytics: React.FC = () => {
     });
   }, [quotations, activeRange]);
 
-  // Compute Card metrics
+  // Compute Card metrics (leads and statuses as single source of truth)
   const totalLeadsCount = filteredLeads.length;
   const newLeadsCount = filteredLeads.filter(l => l.status === 'New Lead').length;
-  const followUpsCount = filteredLeads.filter(l => l.status === 'Follow Up').length;
-  const quotationsGeneratedCount = filteredQuotations.length;
-  const quotationsSentCount = filteredQuotations.filter(q => q.quotation_status === 'Sent' || q.quotation_status === 'Quotation Sent').length || Math.round(quotationsGeneratedCount * 0.8);
-  const negotiationLeadsCount = filteredLeads.filter(l => l.status === 'Negotiation').length;
-  const confirmedOrdersCount = filteredOrders.length;
+  const followUpPendingCount = filteredLeads.filter(l => l.status === 'Follow Up' || l.status === 'Follow-Up' || l.status === 'Follow-up Pending').length;
+  const quotationSentCount = filteredLeads.filter(l => l.status === 'Quotation Sent').length;
+  const negotiationCount = filteredLeads.filter(l => l.status === 'Negotiation').length;
+  const orderConfirmedCount = filteredLeads.filter(l => l.status === 'Order Confirmed' || l.status === 'Approved').length;
+  const lostLeadsCount = filteredLeads.filter(l => l.status === 'Lost Lead' || l.status === 'Cancelled' || l.status === 'Lost').length;
   
-  const conversionRate = totalLeadsCount > 0 
-    ? ((confirmedOrdersCount / totalLeadsCount) * 100).toFixed(1) + '%'
-    : '0.0%';
+  const conversionRateFloat = totalLeadsCount > 0 
+    ? parseFloat(((orderConfirmedCount / totalLeadsCount) * 100).toFixed(1))
+    : 0;
 
-  const revenueGenerated = filteredOrders.reduce((sum, o) => sum + (o.quotation_amount || 0), 0);
+  const totalEventValue = filteredLeads
+    .filter(l => l.status === 'Order Confirmed' || l.status === 'Approved')
+    .reduce((sum, l) => sum + (l.budget || 0), 0);
+
+  const upcomingEventsCount = filteredLeads
+    .filter(l => (l.status === 'Order Confirmed' || l.status === 'Approved') && l.event_date >= TODAY_REF)
+    .length;
 
   // Construct chart dataset (grouped by date)
   const chartData = useMemo(() => {
@@ -115,8 +121,8 @@ export const SalesAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid of 9 Analytics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Grid of 10 Analytics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         
         <CameraLensStatsCard
           label="Total Leads"
@@ -141,63 +147,63 @@ export const SalesAnalytics: React.FC = () => {
         />
 
         <CameraLensStatsCard
-          label="Follow-Ups"
-          val={followUpsCount}
+          label="Follow-up Pending"
+          val={followUpPendingCount}
           theme="gold"
           trendText="Outreach Phase"
           subText="AF Continuous"
           chartPoints={[12, 8, 14, 11, 16, 12, 18]}
-          onClick={() => setSelectedCard('Follow-Ups')}
+          onClick={() => setSelectedCard('Follow-up Pending')}
           lensLabel="PRIME 50mm"
         />
 
         <CameraLensStatsCard
-          label="Quotations Generated"
-          val={quotationsGeneratedCount}
-          theme="purple"
-          trendText="Estimates Built"
-          subText="AF Pre-pro"
-          chartPoints={[6, 9, 8, 12, 10, 15, 13]}
-          onClick={() => setSelectedCard('Quotations Generated')}
-          lensLabel="PRIME 85mm"
-        />
-
-        <CameraLensStatsCard
-          label="Quotations Sent"
-          val={quotationsSentCount}
+          label="Quotation Sent"
+          val={quotationSentCount}
           theme="cyan"
           trendText="Dispatched Logs"
           subText="AF Transmit"
           chartPoints={[8, 12, 9, 14, 11, 17, 15]}
-          onClick={() => setSelectedCard('Quotations Sent')}
+          onClick={() => setSelectedCard('Quotation Sent')}
           lensLabel="TELE 135mm"
         />
 
         <CameraLensStatsCard
-          label="Negotiation Leads"
-          val={negotiationLeadsCount}
+          label="Negotiation"
+          val={negotiationCount}
           theme="orange"
           trendText="Bidding Discussions"
           subText="AF Manual"
           chartPoints={[4, 7, 5, 8, 6, 10, 9]}
-          onClick={() => setSelectedCard('Negotiation Leads')}
+          onClick={() => setSelectedCard('Negotiation')}
           lensLabel="ZOOM 24-70"
         />
 
         <CameraLensStatsCard
-          label="Confirmed Orders"
-          val={confirmedOrdersCount}
+          label="Order Confirmed"
+          val={orderConfirmedCount}
           theme="green"
           trendText="Contracts Signed"
           subText="AF Locked"
           chartPoints={[3, 6, 5, 9, 8, 11, 10]}
-          onClick={() => setSelectedCard('Confirmed Orders')}
+          onClick={() => setSelectedCard('Order Confirmed')}
           lensLabel="PRIME 16mm"
         />
 
         <CameraLensStatsCard
+          label="Lost Leads"
+          val={lostLeadsCount}
+          theme="purple"
+          trendText="Discarded Logs"
+          subText="AF Close"
+          chartPoints={[1, 3, 2, 4, 3, 5, 4]}
+          onClick={() => setSelectedCard('Lost Leads')}
+          lensLabel="TELE 200mm"
+        />
+
+        <CameraLensStatsCard
           label="Conversion Rate"
-          val={parseFloat(conversionRate)}
+          val={conversionRateFloat}
           isPercentage={true}
           theme="cyan"
           trendText="Success Ratio"
@@ -208,16 +214,27 @@ export const SalesAnalytics: React.FC = () => {
         />
 
         <CameraLensStatsCard
-          label="Revenue Generated"
-          val={revenueGenerated}
+          label="Total Event Value"
+          val={totalEventValue}
           isCurrency={true}
           currencyFormatter={formatINR}
           theme="gold"
-          trendText="Financial Capture"
-          subText="Cleared Vol"
+          trendText="Pipeline Locked"
+          subText="AF Capital"
           chartPoints={[20, 35, 28, 45, 52, 60, 75]}
-          onClick={() => setSelectedCard('Revenue Generated')}
+          onClick={() => setSelectedCard('Total Event Value')}
           lensLabel="CINE 35mm"
+        />
+
+        <CameraLensStatsCard
+          label="Upcoming Events"
+          val={upcomingEventsCount}
+          theme="blue"
+          trendText="Production Backlog"
+          subText="AF Schedule"
+          chartPoints={[2, 5, 4, 6, 8, 7, 11]}
+          onClick={() => setSelectedCard('Upcoming Events')}
+          lensLabel="PRIME 85mm"
         />
 
       </div>
