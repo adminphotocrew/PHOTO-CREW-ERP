@@ -487,6 +487,7 @@ export const LoginScreen: React.FC = () => {
 
             </form>
 
+            {false && (
             <div className="mt-6 pt-5 border-t border-zinc-900/40 text-center font-sans">
               <p className="text-xs text-zinc-500">
                 New teammate or crew operator?{" "}
@@ -499,7 +500,8 @@ export const LoginScreen: React.FC = () => {
                   Create Account
                 </button>
               </p>
-          </div>
+            </div>
+            )}
         </div>
 
         {/* Quick Directory - Hidden from user view */}
