@@ -122,7 +122,17 @@ const MainAppContent: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'production_leads' | 'production_calendar' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications' | 'crew_roster' | 'production_staff_directory' | 'production_role_specialities'>('production_leads');
 
   // Sub-tab selection state for operations suite
-  const [activeOpSubTab, setActiveOpSubTab] = useState<'operations_leads' | 'operations_calendar' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics'>('operations_leads');
+  const [activeOpSubTab, setActiveOpSubTab] = useState<
+    | 'operations_leads'
+    | 'operations_calendar'
+    | 'equipment_management'
+    | 'operations_staff'
+    | 'event_scheduling'
+    | 'team_assignments'
+    | 'operations_notifications'
+    | 'operations_analytics'
+    | 'package_catalogue'
+  >('operations_leads');
 
   // Initialize correct default tab according to user role to avoid visual flashes
   const [activeTab, setActiveTab] = useState<
@@ -180,7 +190,7 @@ const MainAppContent: React.FC = () => {
         if (activeTab !== 'operations') {
           setActiveTab('operations');
         }
-        if (!['operations_leads', 'operations_calendar', 'operations_staff', 'operations_analytics'].includes(activeOpSubTab)) {
+        if (!['operations_leads', 'operations_calendar', 'operations_staff', 'operations_analytics', 'team_assignments', 'package_catalogue', 'equipment_management', 'event_scheduling', 'operations_notifications'].includes(activeOpSubTab)) {
           setActiveOpSubTab('operations_leads');
         }
       } else if (currentRole === 'Production Team') {
@@ -262,28 +272,31 @@ const MainAppContent: React.FC = () => {
 
           <nav className="space-y-1.5">
             {[
-              { id: 'operations_leads', label: 'Operations Leads', icon: Sparkles },
-              { id: 'operations_calendar', label: 'Operations Calendar', icon: Calendar },
-              { id: 'equipment_management', label: 'Equipment Management', icon: Camera },
-              { id: 'operations_staff', label: 'Staff Performance', icon: Users },
-              { id: 'event_scheduling', label: 'Event Scheduling', icon: Clock },
-              { id: 'team_assignments', label: 'Team Assignments', icon: Shield },
-              { id: 'operations_notifications', label: 'Notifications', icon: Bell },
-              { id: 'operations_analytics', label: 'Operations Analytics', icon: BarChart3 }
-            ].filter(tab => {
-              if (currentRole === 'Operations Team') {
-                return ['operations_leads', 'operations_calendar', 'operations_staff', 'operations_analytics'].includes(tab.id);
-              }
-              return true;
-            }).map((tab) => {
+              { id: 'core_hub', label: 'Core Operations Hub', icon: Briefcase },
+              { id: 'package_catalogue', label: 'Package Catalogue', icon: Layers },
+              { id: 'equipment_management', label: 'Equipment Kits & Assemblies', icon: Camera },
+              { id: 'operations_staff', label: 'Staff Directory', icon: Users },
+              { id: 'event_scheduling', label: 'Event Reports', icon: Clock },
+              { id: 'operations_notifications', label: 'Settings', icon: Bell }
+            ].map((tab) => {
               const IconComponent = tab.icon;
-              const isSelected = activeOpSubTab === tab.id;
+              const isCoreHub = tab.id === 'core_hub';
+              const isSelected = isCoreHub 
+                ? ['operations_leads', 'operations_calendar', 'operations_analytics', 'team_assignments'].includes(activeOpSubTab)
+                : activeOpSubTab === tab.id;
+              
               return (
                 <button
                   key={tab.id}
                   onClick={() => {
                     handleTabSelect('operations');
-                    setActiveOpSubTab(tab.id as any);
+                    if (isCoreHub) {
+                      if (!['operations_leads', 'operations_calendar', 'operations_analytics', 'team_assignments'].includes(activeOpSubTab)) {
+                        setActiveOpSubTab('operations_leads');
+                      }
+                    } else {
+                      setActiveOpSubTab(tab.id as any);
+                    }
                     if (window.innerWidth < 1024) {
                       setSidebarOpen(false);
                     }

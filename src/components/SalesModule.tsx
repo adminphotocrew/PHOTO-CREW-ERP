@@ -131,7 +131,13 @@ const generateQuotationPDF = (
   let formattedEvDate = 'N/A';
   if (lead.event_date) {
     try {
-      formattedEvDate = new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      const parts = lead.event_date.split('-');
+      if (parts.length === 3) {
+        const localDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        formattedEvDate = localDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      } else {
+        formattedEvDate = new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
     } catch(e) {}
   }
   doc.text(`Event Date      :  ${formattedEvDate}`, 110, clientY + 16.5);

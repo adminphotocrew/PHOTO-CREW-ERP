@@ -174,6 +174,8 @@ export interface Production {
   customer_review_status?: 'Pending Review' | 'Feedback Given' | 'Approved';
   delivery_date?: string;
   remarks?: string;
+  project_notes?: string;
+  internal_comments?: string;
   assigned_staff?: string;
   project_priority?: 'Low' | 'Medium' | 'High' | 'Critical';
   raw_footage_status?: string;
@@ -231,6 +233,9 @@ export interface Staff {
   whatsapp_number?: string;
   production_role_speciality?: string;
   experience?: string;
+  employee_id?: string;
+  address?: string;
+  city?: string;
 }
 
 export interface ProductionSpeciality {

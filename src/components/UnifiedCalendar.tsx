@@ -71,6 +71,16 @@ export interface CalendarEvent {
   raw: any;
 }
 
+const parseLocalDate = (dateStr: string | Date | null | undefined): Date => {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  }
+  return new Date(dateStr);
+};
+
 export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
   const { 
     leads, 
@@ -603,7 +613,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
 
   // Week Grid Days (for selectedDate week)
   const weekDays = useMemo(() => {
-    const baseDate = selectedDate ? new Date(selectedDate) : new Date(currentDate);
+    const baseDate = selectedDate ? parseLocalDate(selectedDate) : parseLocalDate(currentDate);
     const dayOfWeek = baseDate.getDay();
     const list: { name: string; dateStr: string; dateObj: Date }[] = [];
     
@@ -1453,7 +1463,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                           <div className="flex items-start gap-3 w-full sm:w-auto">
                             <div className="flex flex-col items-center bg-zinc-950 px-3 py-2 rounded-xl text-center min-w-[70px] border border-zinc-900">
                               <span className="text-[10px] font-mono text-zinc-400 font-bold uppercase">
-                                {new Date(ev.date).toLocaleDateString('en-US', { month: 'short' })}
+                                {parseLocalDate(ev.date).toLocaleDateString('en-US', { month: 'short' })}
                               </span>
                               <span className="text-base font-black text-yellow-500 font-mono">
                                 {ev.date.split('-')[2]}
@@ -1503,7 +1513,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             <div className="border-b border-zinc-900 pb-3">
               <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">Day Summary</span>
               <h3 className="text-sm font-bold text-white mt-0.5">
-                {selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }) : 'No day selected'}
+                {selectedDate ? parseLocalDate(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }) : 'No day selected'}
               </h3>
             </div>
 

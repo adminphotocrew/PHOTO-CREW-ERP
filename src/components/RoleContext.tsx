@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
@@ -1057,7 +1057,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const dbProductionPromise = supabaseClient.from('production').select('*');
       const dbPaymentsPromise = supabaseClient.from('payments').select('*');
       const dbLogsPromise = supabaseClient.from('activity_logs').select('*').order('timestamp', { ascending: false });
-      const dbStaffPromise = supabaseClient.from('production_staff').select('*').order('created_at', { ascending: false }).then(
+      const dbStaffPromise = supabaseClient.from('production_staff').select('*').then(
         (res) => res,
         () => ({ data: null, error: null })
       );
@@ -1372,8 +1372,90 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (notifRes && notifRes.data) {
         setNotifications(notifRes.data.map(mapNotificationFromDb));
       }
-      if (staffRes && staffRes.data && staffRes.data.length > 0) {
-        setStaff(staffRes.data);
+      let finalStaff = (staffRes && staffRes.data) ? staffRes.data : [];
+      if (staffRes && staffRes.data && staffRes.data.length === 0) {
+        console.log('Post-production staff table is empty in database. Seeding initial editors on-the-fly...');
+        const initialStaffSeed = [
+          {
+            staff_id: 'STF-001',
+            name: 'Emily Watson',
+            mobile: '+1 (555) 234-5678',
+            whatsapp_number: '+1 (555) 234-5678',
+            email: 'emily@photocrew.com',
+            role: 'Production Manager',
+            department: 'Management',
+            status: 'Active',
+            joining_date: '2025-01-10',
+            profile_photo: '',
+            notes: 'Orchestrates chief editing operations and delivery workflows.',
+            production_role_speciality: 'Editor Specialty'
+          },
+          {
+            staff_id: 'STF-002',
+            name: 'Alex Rivera',
+            mobile: '+1 (555) 345-6789',
+            whatsapp_number: '+1 (555) 345-6789',
+            email: 'alex@photocrew.com',
+            role: 'Senior Wedding Editor',
+            department: 'Post-Production',
+            status: 'Active',
+            joining_date: '2024-03-15',
+            profile_photo: '',
+            notes: 'Cinematic storytelling, custom audio layout, color grading master.',
+            production_role_speciality: 'Wedding Highlights'
+          },
+          {
+            staff_id: 'STF-003',
+            name: 'Nisha Sharma',
+            mobile: '+1 (555) 456-7890',
+            whatsapp_number: '+1 (555) 456-7890',
+            email: 'nisha@photocrew.com',
+            role: 'Cinematography Reel Designer',
+            department: 'Creative Reels',
+            status: 'Active',
+            joining_date: '2025-02-01',
+            profile_photo: '',
+            notes: 'Specializes in aesthetic Instagram Reels, vertical formats, sound design hooks.',
+            production_role_speciality: 'Instagram Reels'
+          },
+          {
+            staff_id: 'STF-004',
+            name: 'Marcus Brody',
+            mobile: '+1 (555) 567-8901',
+            whatsapp_number: '+1 (555) 567-8901',
+            email: 'marcus@photocrew.com',
+            role: 'Lead Sound Designer',
+            department: 'Audio Engineering',
+            status: 'Active',
+            joining_date: '2024-08-20',
+            profile_photo: '',
+            notes: 'Acoustic level balance, Foley tracking, multi-microphone sync.',
+            production_role_speciality: 'Sound Designer'
+          },
+          {
+            staff_id: 'STF-005',
+            name: 'Zoe Vance',
+            mobile: '+1 (555) 678-9012',
+            whatsapp_number: '+1 (555) 678-9012',
+            email: 'zoe@photocrew.com',
+            role: 'Colorist Specialist',
+            department: 'Color Grading',
+            status: 'Active',
+            joining_date: '2023-11-05',
+            profile_photo: '',
+            notes: 'LUT adjustments, skin tone correction, high dynamic range setups.',
+            production_role_speciality: 'Color Grading'
+          }
+        ];
+        
+        await supabaseClient.from('production_staff').upsert(initialStaffSeed).then(
+          () => console.log('Successfully seeded 5 production_staff.'),
+          (err) => console.warn('Failed seeding production_staff via client seed:', err)
+        );
+        finalStaff = initialStaffSeed;
+      }
+      if (finalStaff && finalStaff.length > 0) {
+        setStaff(finalStaff);
       }
       if (equipRes && equipRes.data) {
         setEquipment(equipRes.data);
@@ -1584,7 +1666,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Handle auto-logout if user is deactivated
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && users.length > 0) {
       const dbUser = users.find(u => u.id === currentUser.id);
       if (!dbUser || !dbUser.active) {
         logout();
@@ -3510,6 +3592,164 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const augmentedOrders = useMemo(() => {
+    // Post-sales stages that should produce active orders
+    const postSalesStages = [
+      'New Order Received', 'Order Confirmed', 'Operations Assigned', 'Event Scheduled', 'Staff Assigned', 'Event Completed', 'Raw Footage Received',
+      'Editor Assigned', 'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Client Review Sent', 'Revision Required', 'Revision In Progress', 'Final Approval', 'Project Delivered', 'Project Closed',
+      'Customer Review', 'Approved', 'Delivered', 'Payment Pending', 'Closed'
+    ];
+    
+    // Start with existing booked/restored orders from DB
+    const list = [...orders];
+    
+    // For every lead, ensure a mapped order exists if the lead is confirmed
+    leads.forEach(ld => {
+      if (postSalesStages.includes(ld.status)) {
+        const orderExists = list.some(o => o.lead_id === ld.lead_id || o.order_id === ld.lead_id);
+        if (!orderExists) {
+          const ordId = `ORD-${ld.lead_id.replace(/\D/g, '') || ld.lead_id}`;
+          list.push({
+            order_id: ordId,
+            lead_id: ld.lead_id,
+            customer_name: ld.customer_name,
+            mobile: ld.mobile,
+            event_type: ld.event_type,
+            event_date: ld.event_date,
+            event_time: ld.event_time,
+            reporting_time: ld.reporting_time || '08:00',
+            event_location: ld.event_location,
+            package_name: 'Custom Shoot Package',
+            quotation_amount: ld.budget || 0,
+            advance_received: 0,
+            balance_amount: ld.budget || 0,
+            order_status: 'Confirmed',
+            current_stage: ld.status,
+            sales_person: ld.sales_person || ld.created_by || 'Sales Team',
+            created_at: ld.updated_at || new Date().toISOString()
+          });
+        }
+      }
+    });
+
+    // Make sure we override fields so that the leads table remains the single source of truth for status, dates, etc.
+    return list.map(o => {
+      const parentLead = leads.find(l => l.lead_id === o.lead_id);
+      if (parentLead) {
+        return {
+          ...o,
+          current_stage: parentLead.status,
+          customer_name: parentLead.customer_name,
+          mobile: parentLead.mobile,
+          event_type: parentLead.event_type,
+          event_date: parentLead.event_date,
+          event_time: parentLead.event_time,
+          reporting_time: parentLead.reporting_time || o.reporting_time,
+          event_location: parentLead.event_location,
+          quotation_amount: o.quotation_amount || parentLead.budget || 0
+        };
+      }
+      return o;
+    });
+  }, [orders, leads]);
+
+  const augmentedOperations = useMemo(() => {
+    const list = [...operations];
+    augmentedOrders.forEach(o => {
+      const opExists = list.some(op => op.order_id === o.order_id);
+      if (!opExists) {
+        list.push({
+          operation_id: `OP-${o.order_id}`,
+          order_id: o.order_id,
+          photographer_assigned: 'Unassigned',
+          videographer_assigned: 'Unassigned',
+          drone_operator_assigned: 'Unassigned',
+          assistant_assigned: 'Unassigned',
+          equipment_kit: '',
+          reporting_time: o.reporting_time || '08:00',
+          event_status: o.current_stage,
+          updated_by: 'System'
+        });
+      }
+    });
+    return list.map(op => {
+      const ord = augmentedOrders.find(o => o.order_id === op.order_id);
+      if (ord) {
+        return {
+          ...op,
+          event_status: ord.current_stage,
+          reporting_time: ord.reporting_time || op.reporting_time
+        };
+      }
+      return op;
+    });
+  }, [operations, augmentedOrders]);
+
+  const augmentedProduction = useMemo(() => {
+    const list = [...production];
+    augmentedOrders.forEach(o => {
+      const prodExists = list.some(p => p.tracking_id === o.order_id || p.tracking_id === o.lead_id);
+      if (!prodExists) {
+        const defaultTargetDate = o.event_date ? new Date(new Date(o.event_date).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : '';
+        list.push({
+          production_id: `PRD-${o.lead_id}`,
+          tracking_id: o.order_id,
+          editor_assigned: 'Unassigned',
+          raw_footage_location: '',
+          editing_status: o.current_stage as any,
+          remarks: '',
+          project_priority: 'Medium',
+          target_delivery_date: defaultTargetDate,
+          expected_delivery_date: defaultTargetDate
+        });
+      }
+    });
+    return list.map(p => {
+      const ord = augmentedOrders.find(o => o.order_id === p.tracking_id || o.lead_id === p.tracking_id);
+      if (ord) {
+        return {
+          ...p,
+          editing_status: ord.current_stage as any
+        };
+      }
+      return p;
+    });
+  }, [production, augmentedOrders]);
+
+  const augmentedPayments = useMemo(() => {
+    const list = [...payments];
+    augmentedOrders.forEach(o => {
+      const payExists = list.some(p => p.order_id === o.order_id);
+      if (!payExists) {
+        list.push({
+          payment_id: `PAY-${o.order_id}`,
+          order_id: o.order_id,
+          quotation_amount: o.quotation_amount,
+          advance_received: o.advance_received || 0,
+          final_payment_received: 0,
+          balance_due: o.balance_amount || o.quotation_amount,
+          payment_status: 'Pending'
+        });
+      }
+    });
+    return list.map(p => {
+      const ord = augmentedOrders.find(o => o.order_id === p.order_id);
+      if (ord) {
+        const adv = ord.advance_received || 0;
+        const totalPaid = adv + (p.final_payment_received || 0);
+        const bal = ord.quotation_amount - totalPaid;
+        return {
+          ...p,
+          quotation_amount: ord.quotation_amount,
+          advance_received: adv,
+          balance_due: bal >= 0 ? bal : 0,
+          payment_status: totalPaid >= ord.quotation_amount ? 'Fully Paid' : (totalPaid > 0 ? 'Partially Paid' : 'Pending') as any
+        };
+      }
+      return p;
+    });
+  }, [payments, augmentedOrders]);
+
   return (
     <RoleContext.Provider
       value={{
@@ -3522,11 +3762,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         users,
         leads,
-        orders,
-        operations,
+        orders: augmentedOrders,
+        operations: augmentedOperations,
         rawFootage,
-        production,
-        payments,
+        production: augmentedProduction,
+        payments: augmentedPayments,
         logs,
         staff,
         addStaff,
