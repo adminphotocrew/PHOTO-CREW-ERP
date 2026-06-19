@@ -308,4 +308,15 @@ export interface Package {
   updated_at?: string;
 }
 
+export interface EquipmentHandover {
+  handover_id: string;
+  order_id: string;
+  equipment_name: string;
+  return_status: 'Returned' | 'Not Returned' | 'Damaged' | 'Missing';
+  return_date: string;
+  returned_by: string;
+  notes: string;
+  created_at?: string;
+}
+
 

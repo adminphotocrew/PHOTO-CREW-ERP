@@ -10,6 +10,7 @@ import { CameraLensStatsCard, CameraLensTheme } from '../CameraLensStatsCard';
 export const OperationsLeads: React.FC = () => {
   const { 
     currentRole, 
+    currentUserName,
     orders, 
     operations, 
     staff, 
@@ -21,7 +22,9 @@ export const OperationsLeads: React.FC = () => {
     rawFootage,
     staffAssignments,
     saveStaffAssignments,
-    payments
+    payments,
+    equipmentHandovers,
+    addEquipmentHandovers
   } = useRole();
 
   const canEdit = currentRole === 'Operations Team' || currentRole === 'Business Owner';
@@ -35,6 +38,19 @@ export const OperationsLeads: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  // Multi-Select Searchable Equipment States
+  const [selectedKits, setSelectedKits] = useState<string[]>([]);
+  const [equipmentSearchQuery, setEquipmentSearchQuery] = useState('');
+  const [isEquipmentDropdownOpen, setIsEquipmentDropdownOpen] = useState(false);
+
+  // Equipment return handover state
+  const [handoverStates, setHandoverStates] = useState<Record<string, {
+    return_status: 'Returned' | 'Not Returned' | 'Damaged' | 'Missing';
+    returned_by: string;
+    return_date: string;
+    notes: string;
+  }>>({});
 
   // Sorting state
   const [sortBy, setSortBy] = useState<'event_date' | 'customer_name' | 'status' | 'assignment_date'>('event_date');
@@ -279,6 +295,12 @@ export const OperationsLeads: React.FC = () => {
     });
     setAssigningOrderId(order.order_id);
     
+    // Initialize selectedKits
+    const kits = op?.equipment_kit ? op.equipment_kit.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    setSelectedKits(kits);
+    setEquipmentSearchQuery('');
+    setIsEquipmentDropdownOpen(false);
+    
     // Default selected values
     setSelectedRole('Lead Photographer');
     setSelectedStaff('');
@@ -375,13 +397,49 @@ export const OperationsLeads: React.FC = () => {
   const triggerCompletionModal = (orderId: string) => {
     setServerPath(`s3://photocrew-vault-production/2026/${orderId}-shoot/raw/`);
     setClosingOrderId(orderId);
+
+    // Initialize handoverStates for each assigned equipment item
+    const op = getOpDetails(orderId);
+    const kits = op?.equipment_kit ? op.equipment_kit.split(',').map((sName: string) => sName.trim()).filter(Boolean) : [];
+    
+    const initialHandovers: Record<string, {
+      return_status: 'Returned' | 'Not Returned' | 'Damaged' | 'Missing';
+      returned_by: string;
+      return_date: string;
+      notes: string;
+    }> = {};
+    
+    kits.forEach((k: string) => {
+      initialHandovers[k] = {
+        return_status: 'Returned',
+        returned_by: currentUserName || 'Operations Team',
+        return_date: new Date().toISOString().split('T')[0],
+        notes: ''
+      };
+    });
+    setHandoverStates(initialHandovers);
   };
 
   const handleConfirmCompletion = () => {
     if (!closingOrderId) return;
+
+    // Save handovers if any
+    const handoversToSave = (Object.entries(handoverStates) as [string, any][]).map(([equipName, details]) => ({
+      order_id: closingOrderId,
+      equipment_name: equipName,
+      return_status: details.return_status,
+      return_date: details.return_date,
+      returned_by: details.returned_by,
+      notes: details.notes
+    }));
+    
+    if (handoversToSave.length > 0) {
+      addEquipmentHandovers(handoversToSave);
+    }
+
     markEventCompleted(closingOrderId, serverPath);
     setClosingOrderId(null);
-    alert(`Shoot marked completed for [${closingOrderId}]! Raw storage recorded, sent to Editor pipeline.`);
+    alert(`Shoot marked completed for [${closingOrderId}]! Equipment handover saved successfully.`);
   };
 
   const stats = useMemo(() => {
@@ -414,6 +472,32 @@ export const OperationsLeads: React.FC = () => {
       readyForProduction
     };
   }, [operationsOrders, rawFootage]);
+
+  const availableGearOptions = useMemo(() => {
+    // Basic preloaded checklist options in case equipment state is small
+    const presets = [
+      "Camera Kit A",
+      "Camera Kit B",
+      "Drone Kit",
+      "Drone Battery Kit",
+      "Drone Accessories",
+      "Lighting Kit",
+      "Audio Recording Kit",
+      "Gimbal Kit",
+      "LED Wall Kit",
+      "Live Streaming Kit",
+      "Crane/Jib Kit",
+      "Backup Camera Kit",
+      "Kit Gold: Sony A7iv, RED Komodo, DJI Inspire 3 Drone",
+      "Kit Platinum Max: Hasselblad H6D, RED V-Raptor"
+    ];
+
+    const dbItems = equipment ? equipment.filter((eq: any) => eq.status === 'Available').map((eq: any) => `${eq.name} [${eq.brand} ${eq.model}]`) : [];
+    
+    // Combine both and remove duplicates
+    const combined = Array.from(new Set([...presets, ...dbItems]));
+    return combined;
+  }, [equipment]);
 
   const toggleSort = (field: 'event_date' | 'customer_name' | 'status' | 'assignment_date') => {
     if (sortBy === field) {
@@ -688,7 +772,16 @@ export const OperationsLeads: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4 font-bold text-zinc-100">
-                      {ord.customer_name}
+                      <div>{ord.customer_name}</div>
+                      {op?.equipment_kit && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {op.equipment_kit.split(',').map((kit: string, idx: number) => (
+                            <span key={idx} className="bg-amber-400/10 text-amber-400 px-1.5 py-0.5 rounded text-[9.5px] font-mono border border-amber-400/10 whitespace-nowrap" title="Assigned Gear">
+                              ⚙️ {kit.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 font-mono text-zinc-300">
                       {ord.event_date || <span className="text-zinc-600 italic">—</span>}
@@ -1037,24 +1130,117 @@ export const OperationsLeads: React.FC = () => {
                 </div>
 
                 {/* Equipment Custom Selection */}
-                <div className="col-span-2">
+                <div className="col-span-2 relative">
                   <label className="block text-[11px] font-mono font-extrabold uppercase text-zinc-400 mb-1">
-                    Assign Equipment Kits & Assemblies
+                    Assign Equipment Kits & Assemblies *
                   </label>
-                  <select
-                    value={assignForm.equipment_kit}
-                    onChange={(e) => setAssignForm({ ...assignForm, equipment_kit: e.target.value })}
-                    className="w-full bg-zinc-955 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-100"
-                  >
-                    <option value="">-- Select Gear Package --</option>
-                    {equipment && equipment.filter(eq => eq.status === 'Available').map(eq => (
-                      <option key={eq.equipment_id} value={`${eq.brand} ${eq.model} (${eq.serial_number})`}>
-                        {eq.name} [{eq.type}] - {eq.brand}
-                      </option>
-                    ))}
-                    <option value="Kit Gold: Sony A7iv, RED Komodo, DJI Inspire 3 Drone">Kit Gold: Sony A7iv, RED Komodo, DJI Inspire 3 Drone (Master Preset)</option>
-                    <option value="Kit Platinum Max: Hasselblad H6D, RED V-Raptor, ARRI Cines">Kit Platinum Max: Hasselblad H6D, RED V-Raptor (Studio Premium)</option>
-                  </select>
+                  
+                  {/* Search and drop-down clicker */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="Type to search equipment (e.g. Drone, Camera...)"
+                        value={equipmentSearchQuery}
+                        onFocus={() => setIsEquipmentDropdownOpen(true)}
+                        onChange={(e) => setEquipmentSearchQuery(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-805 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-505 focus:border-amber-400 focus:outline-none"
+                      />
+                      {equipmentSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setEquipmentSearchQuery('')}
+                          className="absolute right-2.5 top-2.5 text-zinc-500 hover:text-zinc-300"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEquipmentDropdownOpen(!isEquipmentDropdownOpen)}
+                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold font-mono border border-zinc-750"
+                    >
+                      {isEquipmentDropdownOpen ? 'Close ▴' : 'Browse ▾'}
+                    </button>
+                  </div>
+
+                  {/* Dropdown Options List */}
+                  {isEquipmentDropdownOpen && (() => {
+                    const filteredGearOptions = availableGearOptions.filter(opt =>
+                      opt.toLowerCase().includes(equipmentSearchQuery.toLowerCase())
+                    );
+                    
+                    return (
+                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl divide-y divide-zinc-900">
+                        {filteredGearOptions.length > 0 ? (
+                          filteredGearOptions.map((opt, i) => {
+                            const isSelected = selectedKits.includes(opt);
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    const updated = selectedKits.filter(k => k !== opt);
+                                    setSelectedKits(updated);
+                                    setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
+                                  } else {
+                                    const updated = [...selectedKits, opt];
+                                    setSelectedKits(updated);
+                                    setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
+                                  }
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-xs transition-colors cursor-pointer flex items-center justify-between ${
+                                  isSelected 
+                                    ? 'bg-amber-400/10 text-amber-300 font-bold' 
+                                    : 'hover:bg-zinc-900 text-zinc-300'
+                                }`}
+                              >
+                                <span>{opt}</span>
+                                {isSelected ? (
+                                  <span className="text-amber-500 text-[10px] font-mono">✓ Selected</span>
+                                ) : (
+                                  <span className="text-zinc-600 text-[10px] font-mono">+ Add</span>
+                                )}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="p-4 text-xs text-zinc-500 italic text-center">
+                            No equipment found matching "{equipmentSearchQuery}"
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Selected Equipment Display: removable chips/tags */}
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    {selectedKits.length > 0 ? (
+                      selectedKits.map((kit, index) => (
+                        <span 
+                          key={index} 
+                          className="bg-amber-400/10 text-amber-300 px-2.5 py-1 rounded-lg text-[10.5px] font-mono font-medium flex items-center gap-1.5 border border-amber-400/15"
+                        >
+                          <span>{kit}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const updated = selectedKits.filter(k => k !== kit);
+                              setSelectedKits(updated);
+                              setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
+                            }} 
+                            className="text-amber-500 hover:text-rose-400 font-bold text-xs"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[10px] text-zinc-500 italic">No equipment kits or assemblies selected for this operation shoot. Please browse and select.</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Event Date */}
@@ -1184,7 +1370,7 @@ export const OperationsLeads: React.FC = () => {
       {/* Mark Completed Modal */}
       {closingOrderId && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-850 rounded-2xl w-full max-w-md shadow-2xl relative p-5 space-y-4">
+          <div className="bg-zinc-900 border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl relative p-5 space-y-4">
             <h3 className="text-xs font-mono font-black uppercase text-amber-500 flex items-center gap-1.5">
               <span>🎬</span> Close event shoot ~ {closingOrderId}
             </h3>
@@ -1202,10 +1388,97 @@ export const OperationsLeads: React.FC = () => {
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-100 font-mono"
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            {/* Equipment return handover tracking */}
+            {Object.keys(handoverStates).length > 0 && (
+              <div className="space-y-3 border-t border-zinc-800 pt-3 max-h-[250px] overflow-y-auto pr-1">
+                <h4 className="text-[11px] font-mono font-black uppercase text-amber-500 tracking-wider flex items-center gap-1.5">
+                  🤖 Equipment Handover Checklist
+                </h4>
+                <p className="text-[10px] text-zinc-500">
+                  Update the return logs and status for each kit assigned to this shoot.
+                </p>
+                <div className="space-y-3">
+                  {(Object.entries(handoverStates) as [string, any][]).map(([kitName, details]) => (
+                    <div key={kitName} className="bg-zinc-955 p-3 rounded-xl border border-zinc-850 space-y-2 text-xs">
+                      <div className="font-sans font-bold text-zinc-200 truncate flex items-center justify-between">
+                        <span>🛠️ {kitName}</span>
+                        <span className={`text-[10px] font-mono px-1.5 rounded ${
+                          details.return_status === 'Returned' ? 'bg-emerald-500/10 text-emerald-400' :
+                          details.return_status === 'Damaged' ? 'bg-rose-500/10 text-rose-450 border border-rose-500/20' :
+                          details.return_status === 'Missing' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/25' :
+                          'bg-zinc-800 text-zinc-400'
+                        }`}>
+                          {details.return_status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="block text-[9px] text-zinc-500 font-bold uppercase mb-1">Return Status</label>
+                          <select
+                            value={details.return_status}
+                            onChange={(e: any) => setHandoverStates(prev => ({
+                              ...prev,
+                              [kitName]: { ...prev[kitName], return_status: e.target.value }
+                            }))}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-100 focus:border-amber-400 focus:outline-none"
+                          >
+                            <option value="Returned">Returned</option>
+                            <option value="Not Returned">Not Returned</option>
+                            <option value="Damaged">Damaged</option>
+                            <option value="Missing">Missing</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-zinc-500 font-bold uppercase mb-1">Returned By</label>
+                          <input
+                            type="text"
+                            value={details.returned_by}
+                            onChange={(e: any) => setHandoverStates(prev => ({
+                              ...prev,
+                              [kitName]: { ...prev[kitName], returned_by: e.target.value }
+                            }))}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-100 focus:border-amber-400 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="block text-[9px] text-zinc-500 font-bold uppercase mb-1">Return Date</label>
+                          <input
+                            type="date"
+                            value={details.return_date}
+                            onChange={(e: any) => setHandoverStates(prev => ({
+                              ...prev,
+                              [kitName]: { ...prev[kitName], return_date: e.target.value }
+                            }))}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-100 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-zinc-500 font-bold uppercase mb-1">Notes / Remarks</label>
+                          <input
+                            type="text"
+                            placeholder="Lens cleaned, sensor checked..."
+                            value={details.notes}
+                            onChange={(e: any) => setHandoverStates(prev => ({
+                              ...prev,
+                              [kitName]: { ...prev[kitName], notes: e.target.value }
+                            }))}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-100 placeholder-zinc-650"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
               <button
                 onClick={() => setClosingOrderId(null)}
-                className="px-4 py-2 bg-zinc-800 text-zinc-300 text-xs rounded-xl cursor-pointer"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-xl cursor-pointer"
               >
                 Cancel
               </button>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus } from '../types';
+import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
@@ -134,6 +134,7 @@ interface RoleContextType {
   addSpeciality: (name: string) => Promise<void>;
   updateSpeciality: (id: string, name: string) => Promise<void>;
   deactivateSpeciality: (id: string, active: boolean) => Promise<void>;
+  deleteSpeciality: (id: string) => Promise<void>;
   
   editorAssignments: EditorAssignment[];
   assignEditorToProject: (assignment: Omit<EditorAssignment, 'assignment_id' | 'status' | 'assigned_date'>) => Promise<void>;
@@ -142,6 +143,9 @@ interface RoleContextType {
   globalDateRange: { start: string; end: string };
   setGlobalDateRange: (range: { start: string; end: string }) => void;
   resetGlobalDateRange: () => void;
+  equipmentHandovers: EquipmentHandover[];
+  addEquipmentHandover: (handover: Omit<EquipmentHandover, 'handover_id'>) => Promise<void>;
+  addEquipmentHandovers: (handovers: Omit<EquipmentHandover, 'handover_id'>[]) => Promise<void>;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -901,6 +905,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [equipmentHandovers, setEquipmentHandovers] = useState<EquipmentHandover[]>(() => {
+    const saved = localStorage.getItem('erp_equipment_handovers');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+
   useEffect(() => {
     localStorage.setItem('erp_production_specialities', JSON.stringify(specialities));
   }, [specialities]);
@@ -908,6 +918,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('erp_editor_assignments', JSON.stringify(editorAssignments));
   }, [editorAssignments]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_equipment_handovers', JSON.stringify(equipmentHandovers));
+  }, [equipmentHandovers]);
 
   useEffect(() => {
     localStorage.setItem('erp_staff_assignments', JSON.stringify(staffAssignments));
@@ -1384,6 +1398,16 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (err) {
         console.warn('Could not read editor_assignments from Supabase:', err);
+      }
+
+      try {
+        const { data: dbHandovers } = await supabaseClient.from('equipment_handovers').select('*');
+        if (dbHandovers && dbHandovers.length > 0) {
+          setEquipmentHandovers(dbHandovers);
+          localStorage.setItem('erp_equipment_handovers', JSON.stringify(dbHandovers));
+        }
+      } catch (err) {
+        console.warn('Could not read equipment_handovers from Supabase:', err);
       }
 
       updateDiagnosticMetric('read', 'ok');
@@ -3250,6 +3274,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity(`${active ? 'Activated' : 'Deactivated'} Speciality: ${id}`, 'Production', id);
   };
 
+  const deleteSpeciality = async (id: string) => {
+    setSpecialities(prev => prev.filter(s => s.speciality_id !== id));
+    await pushDelete('production_specialties', 'speciality_id', id);
+    logActivity(`Deleted Speciality: ${id}`, 'Production', id);
+  };
+
   const assignEditorToProject = async (assignment: Omit<EditorAssignment, 'assignment_id' | 'status' | 'assigned_date'>) => {
     const id = `EDR-${Math.floor(1000 + Math.random() * 9000)}`;
     const newAssign: EditorAssignment = {
@@ -3438,6 +3468,31 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 10);
   };
 
+  const addEquipmentHandover = async (handover: Omit<EquipmentHandover, 'handover_id'>) => {
+    const handoverId = `HND-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newHandover: EquipmentHandover = {
+      ...handover,
+      handover_id: handoverId,
+      created_at: new Date().toISOString()
+    };
+    setEquipmentHandovers(prev => [newHandover, ...prev]);
+    await pushInsert('equipment_handovers', newHandover);
+    logActivity(`Registered Equipment Handover status for ${handover.equipment_name}: ${handover.return_status}`, 'Operations', handover.order_id);
+  };
+
+  const addEquipmentHandovers = async (handovers: Omit<EquipmentHandover, 'handover_id'>[]) => {
+    const newHandovers: EquipmentHandover[] = handovers.map((h, index) => ({
+      ...h,
+      handover_id: `HND-${Math.floor(1000 + Math.random() * 9000)}-${index}`,
+      created_at: new Date().toISOString()
+    }));
+    setEquipmentHandovers(prev => [...newHandovers, ...prev]);
+    for (const h of newHandovers) {
+      await pushInsert('equipment_handovers', h);
+      logActivity(`Registered Equipment Handover status for ${h.equipment_name}: ${h.return_status}`, 'Operations', h.order_id);
+    }
+  };
+
   const updateLead = (leadId: string, updates: Partial<Lead>) => {
     setLeads((prev) =>
       prev.map((ld) => {
@@ -3518,6 +3573,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addSpeciality,
         updateSpeciality,
         deactivateSpeciality,
+        deleteSpeciality,
         editorAssignments,
         assignEditorToProject,
         updateEditorAssignmentStatus,
@@ -3525,6 +3581,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         globalDateRange,
         setGlobalDateRange,
         resetGlobalDateRange,
+        equipmentHandovers,
+        addEquipmentHandover,
+        addEquipmentHandovers,
       }}
     >
       {children}

@@ -25,18 +25,18 @@ body {
 
 /* Fluid responsive typography and spacing system */
 html {
-  font-size: 12.5px; /* Mobile: smaller fonts and compact spacing */
+  font-size: 13.5px; /* Mobile: slightly larger fonts and compact spacing */
 }
 
 @media (min-width: 640px) {
   html {
-    font-size: 14px; /* Tablet: medium font sizes */
+    font-size: 14.5px; /* Tablet: enhanced readability */
   }
 }
 
 @media (min-width: 1024px) {
   html {
-    font-size: 15.5px; /* Desktop: standard font sizes */
+    font-size: 16px; /* Laptop: standard legible font sizes */
   }
 }
 
@@ -291,6 +291,163 @@ option, select option {
   background-color: #1e293b !important;
   color: #FFFFFF !important;
   opacity: 1 !important;
+}
+
+/* ==========================================
+   VISIBILITY AND READABILITY IMPROVEMENTS FOR SMALL SCREENS
+   Surgical overrides matching exact requirements on Mobile & Tablet
+   ========================================== */
+
+/* Mobile Devices (320px - 767px) */
+@media (min-width: 320px) and (max-width: 767px) {
+  /* Menu Text: Change to 14px - 15px */
+  aside nav button,
+  aside button,
+  aside nav a,
+  aside button span,
+  aside select,
+  .sidebar-menu-item,
+  aside h3,
+  aside .text-xs,
+  aside .text-\[10px\],
+  aside .text-\[11px\] {
+    font-size: 14.5px !important;
+  }
+
+  /* Analytics Card Title: Change to 14px - 15px */
+  .group\/card span.uppercase,
+  .group\/card span[class*="text-zinc-500"],
+  .group\/card .text-\[10px\],
+  .group\/card .text-\[11px\],
+  .group\/card span[class*="text-[10px]"],
+  .group\/card span[class*="text-[11px]"],
+  .group\/card label,
+  .group\/card .text-xs,
+  .analytics-card-title,
+  div[class*="StatsCard"] span:first-of-type,
+  .p-4.sm:p-5 span.text-zinc-500 {
+    font-size: 14px !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  /* Analytics Count: Change to 18px - 22px */
+  .group\/card .font-black.text-white,
+  .group\/card [class*="text-3xl"],
+  .group\/card [class*="text-2xl"],
+  .group\/card [class*="text-xl"],
+  .group\/card span.font-black,
+  .analytics-card-count {
+    font-size: 21px !important;
+  }
+
+  /* Table Content: Change to 13px - 14px */
+  table th,
+  table td,
+  table tr,
+  table span,
+  table div,
+  .table-content,
+  thead th,
+  tbody td {
+    font-size: 13.5px !important;
+  }
+
+  /* Buttons: Change to 14px */
+  button:not(aside button):not(.group\/card button),
+  .btn,
+  input[type="button"],
+  input[type="submit"] {
+    font-size: 14px !important;
+  }
+
+  /* Status Badges: Change to 12px - 13px */
+  table td span[class*="bg-"],
+  table td span[class*="inline-flex"],
+  span[class*="bg-"][class*="text-"],
+  span[class*="/10"][class*="text-"],
+  span[class*="/20"][class*="text-"],
+  span[class*="rounded"][class*="text-[10px]"],
+  span[class*="rounded"][class*="text-[11px]"],
+  span[class*="inline-flex"][class*="items-center"],
+  .status-badge {
+    font-size: 12.5px !important;
+  }
+}
+
+/* Tablet / Small Laptop Devices (768px - 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Menu Text: Change to 15px - 16px */
+  aside nav button,
+  aside button,
+  aside nav a,
+  aside button span,
+  aside select,
+  .sidebar-menu-item,
+  aside h3,
+  aside .text-xs,
+  aside .text-\[10px\],
+  aside .text-\[11px\] {
+    font-size: 15.5px !important;
+  }
+
+  /* Analytics Titles: Change to 15px - 16px */
+  .group\/card span.uppercase,
+  .group\/card span[class*="text-zinc-500"],
+  .group\/card .text-\[10px\],
+  .group\/card .text-\[11px\],
+  .group\/card span[class*="text-[10px]"],
+  .group\/card span[class*="text-[11px]"],
+  .group\/card label,
+  .group\/card .text-xs,
+  .analytics-card-title,
+  div[class*="StatsCard"] span:first-of-type,
+  .p-4.sm:p-5 span.text-zinc-500 {
+    font-size: 15.5px !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  /* Analytics Numbers: Change to 20px - 24px */
+  .group\/card .font-black.text-white,
+  .group\/card [class*="text-3xl"],
+  .group\/card [class*="text-2xl"],
+  .group\/card [class*="text-xl"],
+  .group\/card span.font-black,
+  .analytics-card-count {
+    font-size: 22px !important;
+  }
+
+  /* Table Text: Change to 14px - 15px */
+  table th,
+  table td,
+  table tr,
+  table span,
+  table div,
+  .table-content,
+  thead th,
+  tbody td {
+    font-size: 14.5px !important;
+  }
+
+  /* Buttons: Change to 14px - 15px */
+  button:not(aside button):not(.group\/card button),
+  .btn,
+  input[type="button"],
+  input[type="submit"] {
+    font-size: 14.5px !important;
+  }
+
+  /* Status Badges */
+  table td span[class*="bg-"],
+  table td span[class*="inline-flex"],
+  span[class*="bg-"][class*="text-"],
+  span[class*="/10"][class*="text-"],
+  span[class*="/20"][class*="text-"],
+  span[class*="rounded"][class*="text-[10px]"],
+  span[class*="rounded"][class*="text-[11px]"],
+  span[class*="inline-flex"][class*="items-center"],
+  .status-badge {
+    font-size: 13px !important;
+  }
 }
 
 

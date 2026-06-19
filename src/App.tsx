@@ -119,7 +119,7 @@ const MainAppContent: React.FC = () => {
   }, [sidebarOpen]);
 
   // Sub-tab selection state for production suite
-  const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'production_leads' | 'production_calendar' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications' | 'crew_roster'>('production_leads');
+  const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'production_leads' | 'production_calendar' | 'project_queue' | 'assignments' | 'tracker' | 'delivery' | 'resources' | 'analytics' | 'staff_performance' | 'overall_performance' | 'deliveries_desk' | 'staff_management' | 'notifications' | 'crew_roster' | 'production_staff_directory' | 'production_role_specialities'>('production_leads');
 
   // Sub-tab selection state for operations suite
   const [activeOpSubTab, setActiveOpSubTab] = useState<'operations_leads' | 'operations_calendar' | 'equipment_management' | 'operations_staff' | 'event_scheduling' | 'team_assignments' | 'operations_notifications' | 'operations_analytics'>('operations_leads');
@@ -337,6 +337,8 @@ const MainAppContent: React.FC = () => {
 
           <nav className="space-y-1.5">
             {[
+              { id: 'production_staff_directory', label: 'Production Staff Directory', icon: Users },
+              { id: 'production_role_specialities', label: 'Production Role Specialities', icon: Target },
               { id: 'production_leads', label: 'Production Leads', icon: Sparkles },
               { id: 'production_calendar', label: 'Production Calendar', icon: Calendar },
               { id: 'staff_management', label: 'Staff Management', icon: UserPlus },

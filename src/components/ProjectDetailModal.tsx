@@ -34,7 +34,7 @@ const STAGES_ORDER: CurrentStage[] = [
 ];
 
 export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, onClose, orderId }) => {
-  const { orders, leads, operations, rawFootage, production, payments, logs, currentRole } = useRole();
+  const { orders, leads, operations, rawFootage, production, payments, logs, currentRole, equipmentHandovers } = useRole();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'operations' | 'production' | 'billing'>('overview');
 
   if (!isOpen || !orderId) return null;
@@ -49,6 +49,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
   const prod = footage ? production.find((p) => p.tracking_id === footage.tracking_id) : undefined;
   const payment = payments.find((p) => p.order_id === orderId);
   const projectLogs = logs.filter((log) => log.record_id === orderId || log.record_id === order.lead_id);
+  const orderHandovers = equipmentHandovers ? equipmentHandovers.filter((eh) => eh.order_id === orderId) : [];
 
   // Stage sequence mapping helper
   const currentIndex = STAGES_ORDER.indexOf(order.current_stage);
@@ -395,11 +396,49 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                       </div>
                     </div>
 
-                    <div className="border-t border-zinc-900 pt-3 text-xs">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">Reporting Equipment Kits</span>
-                      <p className="text-zinc-300 mt-1 text-xs font-mono">
-                        {operation.equipment_kit || "Standard Alpha-Tier Kit setup deployed."}
-                      </p>
+                     <div className="border-t border-zinc-900 pt-3 text-xs space-y-3">
+                      <div>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">Reporting Equipment Kits</span>
+                        {operation.equipment_kit ? (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {operation.equipment_kit.split(',').map((kit: string, idx: number) => (
+                              <span key={idx} className="bg-amber-400/10 text-amber-400 px-2 py-0.5 border border-amber-400/10 rounded-lg text-[9.5px] font-mono whitespace-nowrap">
+                                ⚙️ {kit.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-zinc-500 mt-1 italic text-xs font-mono">
+                            No equipment kits logged.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Equipment Return Log Tracking block */}
+                      {orderHandovers.length > 0 && (
+                        <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-900 space-y-2">
+                          <span className="text-[10px] text-amber-500 uppercase tracking-widest font-mono font-bold block">⚙️ Gear Return Handover Statuses</span>
+                          <div className="space-y-2">
+                            {orderHandovers.map((eh) => (
+                              <div key={eh.id} className="text-[11px] font-mono border-b border-zinc-900 pb-1.5 last:border-0 last:pb-0 flex flex-col justify-between md:flex-row md:items-center">
+                                <div className="space-y-0.5">
+                                  <div className="font-sans font-bold text-zinc-250 text-xs">{eh.equipment_name}</div>
+                                  <div className="text-zinc-500 text-[10px]">Returned by: <span className="text-zinc-400">{eh.returned_by}</span> | Date: <span className="text-zinc-400">{eh.return_date}</span></div>
+                                  {eh.notes && <div className="text-zinc-400 italic text-[10.5px]">Notes: "{eh.notes}"</div>}
+                                </div>
+                                <span className={`px-1.5 py-0.5 text-[9px] rounded font-bold uppercase self-start md:self-auto ${
+                                  eh.return_status === 'Returned' ? 'bg-emerald-500/10 text-emerald-400' :
+                                  eh.return_status === 'Damaged' ? 'bg-rose-500/10 text-rose-455 border border-rose-550/20' :
+                                  eh.return_status === 'Missing' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                                  'bg-zinc-800 text-zinc-400'
+                                }`}>
+                                  {eh.return_status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

@@ -188,8 +188,19 @@ export const TeamAssignments: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="font-mono text-[10px] text-zinc-400">
-                      <div>🛠️ Gear: <span className="text-zinc-200 font-semibold">{op.equipment_kit}</span></div>
+                    <div className="font-mono text-[10px] text-zinc-400 pt-1">
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-455 font-bold mb-1 font-sans">🛠️ Assigned Gear:</div>
+                      {op.equipment_kit ? (
+                        <div className="flex flex-wrap gap-1">
+                          {op.equipment_kit.split(',').map((kit: string, idx: number) => (
+                            <span key={idx} className="bg-amber-400/10 text-amber-300 px-1.5 py-0.5 border border-amber-400/10 rounded text-[9.5px] font-mono whitespace-nowrap">
+                              {kit.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-550 italic">No specific kits assigned.</span>
+                      )}
                     </div>
                   </div>
                 );
