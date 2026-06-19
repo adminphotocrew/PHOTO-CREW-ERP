@@ -2472,8 +2472,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           expected_delivery_date: updates.expected_delivery_date || '',
           ...updates
         };
-        pushInsert('production', newProd);
-        return [newProd, ...prev];
+        // OMIT inserting into production table since we persist in leads table for these stages
+        return prev;
       }
     });
 
@@ -2502,12 +2502,22 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLeads((prev) =>
         prev.map((ld) => {
           if (ld.lead_id === leadIdToUpdate) {
-            pushUpdate('leads', 'lead_id', leadIdToUpdate, { 
-              status: nextStage!,
+            const leadUpdates: any = {
               updated_by: currentUserName,
               updated_at: new Date().toISOString()
-            });
-            return { ...ld, status: nextStage!, updated_by: currentUserName, updated_at: new Date().toISOString() };
+            };
+            if (nextStage) {
+               leadUpdates.status = nextStage;
+            }
+            if (updates.editor_assigned) {
+              leadUpdates.assigned_editor = updates.editor_assigned;
+            }
+            if (updates.assigned_staff) leadUpdates.assigned_editors = updates.assigned_staff;
+            if (updates.target_delivery_date) leadUpdates.delivery_target_date = updates.target_delivery_date;
+            
+            console.log("Updating lead:", leadIdToUpdate, leadUpdates);
+            pushUpdate('leads', 'lead_id', leadIdToUpdate, leadUpdates);
+            return { ...ld, ...leadUpdates };
           }
           return ld;
         })
@@ -2515,15 +2525,19 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (nextStage && tgtOrder) {
+      const isAllowedInOrders = !['Editor Assigned', 'Internal QC Review', 'Revision Required', 'Revision In Progress'].includes(nextStage);
+      
       setOrders((prev) =>
         prev.map((ord) => {
           if (ord.order_id === tgtOrder!.order_id) {
-            pushUpdate('orders', 'order_id', tgtOrder!.order_id, { 
-              current_stage: nextStage!,
+            const ordUpdates: any = {
               updated_by: currentUserName,
               updated_at: new Date().toISOString()
-            });
-            return { ...ord, current_stage: nextStage!, updated_by: currentUserName, updated_at: new Date().toISOString() };
+            };
+            if (isAllowedInOrders) ordUpdates.current_stage = nextStage;
+            
+            pushUpdate('orders', 'order_id', tgtOrder!.order_id, ordUpdates);
+            return { ...ord, ...ordUpdates };
           }
           return ord;
         })

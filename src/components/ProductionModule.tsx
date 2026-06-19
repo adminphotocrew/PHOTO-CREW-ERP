@@ -279,7 +279,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
 
     return (leadsData || []).filter(l => {
       const order = orders.find(o => o.lead_id === l.lead_id);
-      const stage = order?.current_stage || l.status;
+      const stage = l.status || order?.current_stage;
       return postProdStages.includes(stage);
     }).map(l => {
       const order = orders.find(o => o.lead_id === l.lead_id);
@@ -291,13 +291,14 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       return prod || {
         production_id: `PRD-${l.lead_id}`,
         tracking_id: rf?.tracking_id || order?.order_id || l.lead_id,
-        editor_assigned: 'Unassigned',
+        editor_assigned: (l as any).assigned_editor || 'Unassigned',
+        assigned_staff: (l as any).assigned_editors || '',
         raw_footage_location: rf?.server_path || '',
-        editing_status: (order?.current_stage || l.status) as any,
+        editing_status: l.status as any,
         remarks: l.remarks || '',
         project_priority: 'Medium',
-        target_delivery_date: defaultTargetDate,
-        expected_delivery_date: defaultTargetDate
+        target_delivery_date: (l as any).delivery_target_date || defaultTargetDate,
+        expected_delivery_date: (l as any).delivery_target_date || defaultTargetDate
       };
     });
   }, [leadsData, orders, rawFootage, production]);
@@ -1144,8 +1145,8 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
   const today = new Date();
 
   // Filter/Derived definitions
-  const newProjects = production.filter(p => !p.editor_assigned);
-  const assignedProjects = production.filter(p => p.editor_assigned && p.editing_status !== 'Project Delivered' && p.editing_status !== 'Delivered');
+  const newProjects = production.filter(p => !p.editor_assigned || p.editor_assigned === 'Unassigned');
+  const assignedProjects = production.filter(p => p.editor_assigned && p.editor_assigned !== 'Unassigned' && p.editing_status !== 'Project Delivered' && p.editing_status !== 'Delivered');
   const pendingProjects = production.filter(p => !['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed'].includes(p.editing_status));
   const delayedProjects = production.filter(p => {
     if (['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed'].includes(p.editing_status)) return false;
@@ -1155,9 +1156,9 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
   // Calculate stats for pipeline counters
   const statTotalVideo = production.length;
-  const statPendingVideo = production.filter(p => ['Pending', 'New Raw Footage Arrived', 'Raw Footage Received'].includes(p.editing_status)).length;
+  const statPendingVideo = production.filter(p => ['Pending', 'New Raw Footage Arrived', 'Raw Footage Received', 'Editor Assigned'].includes(p.editing_status)).length;
   const statEditingVideo = production.filter(p => ['Editing Started', 'Editing In Progress', 'Editing'].includes(p.editing_status)).length;
-  const statReviewVideo = production.filter(p => ['Internal QC Review', 'Client Review Sent', 'Customer Review', 'Ready For Review'].includes(p.editing_status)).length;
+  const statReviewVideo = production.filter(p => ['Internal QC Review', 'Client Review Sent', 'Customer Review', 'Ready For Review', 'Revision Required', 'Revision In Progress'].includes(p.editing_status)).length;
   const statApprovedVideo = production.filter(p => ['Approved', 'Final Approval'].includes(p.editing_status)).length;
 
   const visibleProduction = production;
@@ -1516,7 +1517,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
               const rf = rawFootage.find(f => f.tracking_id === prod.tracking_id || f.order_id === prod.tracking_id);
               const order = rf ? orders.find(o => o.order_id === rf.order_id) : orders.find(o => o.lead_id === prod.production_id.replace('PRD-', ''));
               if (!order) return false;
-              return order.current_stage === 'Raw Footage Received';
+              return prod.editing_status === 'Raw Footage Received';
             });
 
             if (rawFootageLeads.length === 0) return null;

@@ -82,6 +82,11 @@ export interface Lead {
   created_by: string;
   updated_by?: string;
   updated_at?: string;
+  assigned_editor?: string;
+  assigned_editors?: string;
+  production_role?: string;
+  delivery_target_date?: string;
+  current_status?: string;
 }
 
 export interface LeadPackage {
