@@ -43,7 +43,8 @@ export type EditingStatus =
   | 'Revision In Progress'
   | 'Final Approval'
   | 'Project Delivered'
-  | 'Project Closed';
+  | 'Project Closed'
+  | 'Completed';
 
 export type PaymentStatus = 'Pending' | 'Partially Paid' | 'Fully Paid';
 

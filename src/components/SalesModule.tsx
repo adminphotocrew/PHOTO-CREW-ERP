@@ -2262,13 +2262,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
             {/* In-place Add / Edit Package Modal */}
             {(isAddFormOpen || editingPackage) && (
-              <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto animate-fade-in text-left text-xs bg-black/70">
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl md:w-[90%] p-4 md:p-6 space-y-3.5 shadow-2xl relative text-slate-350">
+              <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-3 md:p-5 overflow-y-auto animate-fade-in text-left text-xs bg-black/70">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl md:w-[90%] p-3.5 md:p-5 space-y-2.5 shadow-2xl relative text-slate-350">
                   <h4 className="text-sm font-bold text-slate-100 font-mono tracking-wide border-b border-slate-800 pb-2 flex items-center gap-2">
                     {editingPackage ? '✏️ Edit Service Package' : '✨ Define New Service Package'}
                   </h4>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3.5 text-xs text-slate-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-2.5 text-xs text-slate-300">
                     {/* Row 1: Package Name | Package Category */}
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Package Name</label>
@@ -2701,16 +2701,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             </div>
 
             {/* Scrollable Body: Content Fields */}
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 space-y-3.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
               
               {/* Section 1: Customer Contact details */}
-              <div className="bg-slate-950/30 border border-slate-800/60 rounded-xl p-4.5 space-y-4 shadow-sm">
+              <div className="bg-slate-950/30 border border-slate-800/60 rounded-xl p-3.5 space-y-3 shadow-sm">
                 <div className="flex items-center gap-2 border-b border-slate-800/50 pb-2 mb-1">
                   <Users className="w-4 h-4 text-emerald-400" />
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">1. Customer Details</span>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Cust Name */}
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">
@@ -3624,7 +3624,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               <p className="text-slate-400">Address: <strong className="text-slate-200">{selectedLead.event_location}</strong></p>
             </div>
 
-            <form onSubmit={handleConfirmOrderSubmit} className="space-y-3.5 text-xs">
+            <form onSubmit={handleConfirmOrderSubmit} className="space-y-2.5 text-xs">
               
               {/* Product package */}
               <div>
@@ -3637,12 +3637,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                   placeholder="Royal Destination Platinum"
                   value={confirmForm.package_name}
                   onChange={(e) => setConfirmForm({ ...confirmForm, package_name: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1 px-2.5 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
               </div>
 
               {/* Event Date & Time Block */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-medium text-slate-400 mb-1">
                     Event Date * (Required)
@@ -3652,7 +3652,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                     required
                     value={confirmForm.event_date}
                     onChange={(e) => setConfirmForm({ ...confirmForm, event_date: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1 px-2.5 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
                   />
                 </div>
                 <div>

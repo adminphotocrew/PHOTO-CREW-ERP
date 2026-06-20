@@ -539,7 +539,7 @@ export const ProductionAnalytics: React.FC = () => {
             let deliveryDateCount = 0;
             allMyProjects.forEach(p => {
               const start = p.editing_start_date;
-              const end = p.actual_delivery_date || p.expected_delivery_date;
+              const end = p.delivery_date || p.actual_delivery_date || p.expected_delivery_date;
               if (start && end) {
                 const diffTime = Math.abs(new Date(end).getTime() - new Date(start).getTime());
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

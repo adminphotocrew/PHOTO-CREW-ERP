@@ -780,7 +780,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem('erp_user_name') || 'Rupand Das';
   });
 
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    const cached = localStorage.getItem('erp_leads');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [quotations, setQuotations] = useState<any[]>(() => {
     const cached = localStorage.getItem('erp_quotations');
     return cached ? JSON.parse(cached) : [];
@@ -793,13 +796,34 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cached = localStorage.getItem('erp_packages');
     return cached ? JSON.parse(cached) : INITIAL_PACKAGES;
   });
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [operations, setOperations] = useState<Operation[]>([]);
-  const [rawFootage, setRawFootage] = useState<RawFootage[]>([]);
-  const [production, setProduction] = useState<Production[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const cached = localStorage.getItem('erp_orders');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [operations, setOperations] = useState<Operation[]>(() => {
+    const cached = localStorage.getItem('erp_operations');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [rawFootage, setRawFootage] = useState<RawFootage[]>(() => {
+    const cached = localStorage.getItem('erp_raw_footage');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [production, setProduction] = useState<Production[]>(() => {
+    const cached = localStorage.getItem('erp_production');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [payments, setPayments] = useState<Payment[]>(() => {
+    const cached = localStorage.getItem('erp_payments');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [logs, setLogs] = useState<ActivityLog[]>(() => {
+    const cached = localStorage.getItem('erp_activity_logs');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    const cached = localStorage.getItem('erp_notifications');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [staff, setStaff] = useState<Staff[]>(() => {
     const saved = localStorage.getItem('erp_production_staff');
     return saved ? JSON.parse(saved) : [
@@ -1117,33 +1141,96 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [payments, augmentedOrders]);
 
   // Helper to strip non-database properties like customer_id before saving to Supabase
-  const stripClientOnlyFields = (record: any) => {
+  const stripClientOnlyFields = (table: string, record: any) => {
     if (!record || typeof record !== 'object') return record;
-    const { customer_id, ...cloned } = record;
+    
+    const cloned = { ...record };
+    delete cloned.customer_id;
+
+    const allowedColumns: Record<string, string[]> = {
+      users: ['id', 'email', 'role', 'full_name', 'phone', 'active', 'created_at', 'password', 'username'],
+      leads: [
+        'lead_id', 'created_date', 'lead_source', 'customer_name', 'mobile', 'alternate_mobile', 
+        'email', 'event_type', 'event_date', 'event_time', 'event_location', 'budget', 
+        'sales_person', 'status', 'remarks', 'created_by', 'updated_by', 'updated_at', 
+        'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status'
+      ],
+      orders: [
+        'order_id', 'lead_id', 'customer_name', 'mobile', 'event_type', 'event_date', 
+        'event_time', 'event_location', 'package_name', 'quotation_amount', 'advance_received', 
+        'balance_amount', 'order_status', 'current_stage', 'sales_person', 'created_at', 
+        'updated_by', 'updated_at'
+      ],
+      operations: [
+        'operation_id', 'order_id', 'photographer_assigned', 'videographer_assigned', 
+        'drone_operator_assigned', 'assistant_assigned', 'equipment_kit', 'reporting_time', 
+        'event_status', 'remarks', 'updated_by'
+      ],
+      raw_footage: [
+        'tracking_id', 'order_id', 'event_completed_date', 'raw_received', 'server_path', 
+        'uploaded_by', 'uploaded_date', 'status'
+      ],
+      production: [
+        'production_id', 'tracking_id', 'editor_assigned', 'raw_footage_location', 
+        'editing_start_date', 'expected_delivery_date', 'editing_status', 
+        'customer_review_status', 'delivery_date', 'remarks'
+      ],
+      payments: [
+        'payment_id', 'order_id', 'quotation_amount', 'advance_received', 'balance_due', 
+        'final_payment_received', 'payment_date', 'payment_proof_url', 'payment_status'
+      ],
+      activity_logs: [
+        'log_id', 'user_name', 'role', 'action', 'module', 'record_id', 'timestamp', 
+        'previous_stage', 'new_stage'
+      ],
+      notifications: [
+        'notification_id', 'title', 'message', 'sender_name', 'sender_role', 'timestamp', 
+        'is_read', 'recipient_role'
+      ],
+      production_staff: [
+        'staff_id', 'name', 'mobile', 'email', 'role', 'department', 'status', 'joining_date', 
+        'profile_photo', 'notes', 'created_at'
+      ]
+    };
+
+    const validCols = allowedColumns[table];
+    if (validCols) {
+      const sanitized: any = {};
+      for (const col of validCols) {
+        if (col in cloned) {
+          sanitized[col] = cloned[col];
+        }
+      }
+      return sanitized;
+    }
+
     return cloned;
   };
 
   // Synchronous CRUD wrappers for updating Supabase in backgrounds
   const pushInsert = async (table: string, record: any) => {
-    if (!supabaseClient) return;
+    if (!supabaseClient) return { success: true };
     try {
-      const sanitized = stripClientOnlyFields(record);
+      const sanitized = stripClientOnlyFields(table, record);
       const { error } = await supabaseClient.from(table).insert(sanitized);
       if (error) {
         console.error(`Supabase Insert error in ${table}:`, error);
         updateDiagnosticMetric('insert', 'fail', error.message);
+        return { success: false, error: error.message };
       } else {
         updateDiagnosticMetric('insert', 'ok');
+        return { success: true };
       }
     } catch (err: any) {
       updateDiagnosticMetric('insert', 'fail', err?.message || String(err));
+      return { success: false, error: err?.message || String(err) };
     }
   };
 
   const pushUpdate = async (table: string, matchColumn: string, matchValue: any, updates: any) => {
     if (!supabaseClient) return { success: true };
     try {
-      const sanitized = stripClientOnlyFields(updates);
+      const sanitized = stripClientOnlyFields(table, updates);
       console.log(`[pushUpdate START] table: ${table}, match: ${matchColumn}=${matchValue}`, sanitized);
 
       // --- CONSTRAINT BYPASS LOGIC ---
@@ -1162,12 +1249,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             'Pending', 'Editing', 'Customer Review', 'Revision Required', 'Approved', 'Delivered'
           ];
           if (!allowedProductionStages.includes(sanitized.editing_status)) {
-            delete sanitized.editing_status;
+            if (['Closed', 'Project Closed', 'Completed', 'Project Delivered'].includes(sanitized.editing_status)) {
+              sanitized.editing_status = 'Delivered';
+            } else {
+              delete sanitized.editing_status;
+            }
           }
         }
       }
       // -------------------------------
       
+      if (Object.keys(sanitized).length === 0) {
+        console.log(`[pushUpdate SKIPPED] No valid columns to update for ${table}.`);
+        return { success: true };
+      }
+
       console.log(`[pushUpdate EXECUTING] on ${table}:`, sanitized);
       let { error, data } = await supabaseClient.from(table).update(sanitized).eq(matchColumn, matchValue).select();
       
@@ -1211,18 +1307,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const pushUpsert = async (table: string, record: any) => {
-    if (!supabaseClient) return;
+    if (!supabaseClient) return { success: true };
     try {
-      const sanitized = stripClientOnlyFields(record);
+      const sanitized = stripClientOnlyFields(table, record);
       const { error } = await supabaseClient.from(table).upsert(sanitized);
       if (error) {
         console.error(`Supabase Upsert error in ${table}:`, error);
         updateDiagnosticMetric('insert', 'fail', error.message);
+        return { success: false, error: error.message };
       } else {
         updateDiagnosticMetric('insert', 'ok');
+        return { success: true };
       }
     } catch (err: any) {
       updateDiagnosticMetric('insert', 'fail', err?.message || String(err));
+      return { success: false, error: err?.message || String(err) };
     }
   };
 
@@ -1446,10 +1545,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       if (dbLeads) {
-        setLeads(dbLeads.map(ld => ({
+        const mappedLeads = dbLeads.map(ld => ({
           ...ld,
           status: ld.current_status || ld.status
-        })));
+        }));
+        setLeads(mappedLeads);
+        localStorage.setItem('erp_leads', JSON.stringify(mappedLeads));
       }
       if (leadPackagesRes && leadPackagesRes.data) {
         setLeadPackages(leadPackagesRes.data as LeadPackage[]);
@@ -1467,19 +1568,27 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       if (dbOrders) {
-        setOrders(dbOrders.map((ord: any) => {
+        const mappedOrders = dbOrders.map((ord: any) => {
           const associatedLead = dbLeads?.find(ld => ld.lead_id === ord.lead_id);
           const leadStatus = associatedLead?.current_status || associatedLead?.status;
           return {
             ...ord,
             current_stage: leadStatus || ord.current_stage
           };
-        }) as any);
+        }) as any;
+        setOrders(mappedOrders);
+        localStorage.setItem('erp_orders', JSON.stringify(mappedOrders));
       }
-      if (dbOperations) setOperations(dbOperations);
-      if (dbRawFootage) setRawFootage(dbRawFootage as any);
+      if (dbOperations) {
+        setOperations(dbOperations);
+        localStorage.setItem('erp_operations', JSON.stringify(dbOperations));
+      }
+      if (dbRawFootage) {
+        setRawFootage(dbRawFootage as any);
+        localStorage.setItem('erp_raw_footage', JSON.stringify(dbRawFootage));
+      }
       if (dbProduction) {
-        setProduction(dbProduction.map((prod: any) => {
+        const mappedProduction = dbProduction.map((prod: any) => {
           let leadId = '';
           if (prod.production_id && prod.production_id.startsWith('PRD-')) {
             leadId = prod.production_id.replace('PRD-', '');
@@ -1495,10 +1604,18 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...prod,
             editing_status: leadStatus || prod.editing_status
           };
-        }) as any);
+        }) as any;
+        setProduction(mappedProduction);
+        localStorage.setItem('erp_production', JSON.stringify(mappedProduction));
       }
-      if (dbPayments) setPayments(dbPayments as any);
-      if (dbLogs) setLogs(dbLogs as any);
+      if (dbPayments) {
+        setPayments(dbPayments as any);
+        localStorage.setItem('erp_payments', JSON.stringify(dbPayments));
+      }
+      if (dbLogs) {
+        setLogs(dbLogs as any);
+        localStorage.setItem('erp_activity_logs', JSON.stringify(dbLogs));
+      }
       if (staffAssignmentsRes && staffAssignmentsRes.data) {
         setStaffAssignments(staffAssignmentsRes.data as StaffAssignment[]);
         localStorage.setItem('erp_staff_assignments', JSON.stringify(staffAssignmentsRes.data));
@@ -2134,7 +2251,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // 1. Create Lead
-  const addLead = (
+  const addLead = async (
     leadDetails: Omit<Lead, 'lead_id' | 'status' | 'created_by' | 'sales_person' | 'created_date'>,
     packages?: Omit<LeadPackage, 'lead_package_id' | 'lead_id'>[]
   ) => {
@@ -2147,8 +2264,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'New Lead',
       created_by: currentUserName,
     };
-    setLeads((prev) => [newLead, ...prev]);
-    pushInsert('leads', newLead);
+    
+    const res = await pushInsert('leads', newLead);
+    if (!res?.success) {
+      throw new Error(res?.error || "Failed to save lead in database.");
+    }
 
     if (packages && packages.length > 0) {
       const formattedPackages: LeadPackage[] = packages.map((pkg, index) => ({
@@ -2157,22 +2277,19 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lead_id: leadId,
         created_at: new Date().toISOString()
       }));
-      setLeadPackages((prev) => {
-        const next = [...formattedPackages, ...prev];
-        localStorage.setItem('erp_lead_packages', JSON.stringify(next));
-        return next;
-      });
-      formattedPackages.forEach((pkgItem) => {
-        pushInsert('lead_packages', pkgItem);
-      });
+      for (const p of formattedPackages) {
+        await pushInsert('lead_packages', p);
+      }
     }
+
+    await fetchFromDb();
 
     logActivity(`Created Lead: ${newLead.customer_name}`, 'Sales', leadId, 'N/A', 'New Lead');
     return leadId;
   };
 
   // 2. Lead Follow-Up (Screen 3)
-  const updateLeadFollowUp = (
+  const updateLeadFollowUp = async (
     leadId: string, 
     status: CurrentStage, 
     callNotes: string, 
@@ -2182,35 +2299,26 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const targetLead = leads.find((ld) => ld.lead_id === leadId);
     const previousStage = targetLead ? targetLead.status : 'New Lead';
+    const timestamp = new Date().toISOString();
 
-    setLeads((prev) =>
-      prev.map((ld) => {
-        if (ld.lead_id === leadId) {
-          const updated = {
-            ...ld,
-            status,
-            budget: quotationAmount !== undefined ? quotationAmount : ld.budget,
-            remarks: `${ld.remarks || ''}\n[Update ${new Date().toISOString().split('T')[0]}]: ${callNotes}. ${negotiationNotes ? 'Neg Notes: ' + negotiationNotes : ''}. Next follow-up: ${nextFollowUpDate}`,
-            updated_by: currentUserName,
-            updated_at: new Date().toISOString()
-          };
-          pushUpdate('leads', 'lead_id', leadId, {
-            status: updated.status,
-            budget: updated.budget,
-            remarks: updated.remarks,
-            updated_by: updated.updated_by,
-            updated_at: updated.updated_at
-          });
-          return updated;
-        }
-        return ld;
-      })
-    );
+    const res = await pushUpdate('leads', 'lead_id', leadId, {
+      status,
+      budget: quotationAmount !== undefined ? quotationAmount : targetLead?.budget,
+      remarks: `${targetLead?.remarks || ''}\n[Update ${timestamp.split('T')[0]}]: ${callNotes}. ${negotiationNotes ? 'Neg Notes: ' + negotiationNotes : ''}. Next follow-up: ${nextFollowUpDate}`,
+      updated_by: currentUserName,
+      updated_at: timestamp
+    });
+
+    if (!res?.success) {
+      throw new Error(res?.error || "Failed to save follow-up details in database.");
+    }
+
+    await fetchFromDb();
     logActivity(`Updated Lead Follow-up, stage: ${status}`, 'Sales', leadId, previousStage, status);
   };
 
   // 3. Confirm Order (Action button)
-  const confirmOrder = (
+  const confirmOrder = async (
     leadId: string, 
     packageName: string, 
     quotationAmount: number, 
@@ -2225,29 +2333,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!targetLead) return '';
 
     const resolvedRemarks = `${targetLead.remarks || ''}\n[Booking Confirmed Update ${new Date().toISOString().split('T')[0]}]: ${notes || 'No extra notes'}. Payment Mode: ${paymentMode || 'N/A'}`;
+    const timestamp = new Date().toISOString();
 
-    // Update lead stage
-    setLeads((prev) =>
-      prev.map((ld) => (ld.lead_id === leadId ? { 
-        ...ld, 
-        status: 'Order Confirmed', 
-        event_date: eventDate || ld.event_date,
-        event_time: eventTime || ld.event_time,
-        reporting_time: reportingTime || ld.reporting_time,
-        remarks: resolvedRemarks,
-        updated_by: currentUserName, 
-        updated_at: new Date().toISOString() 
-      } : ld))
-    );
-    pushUpdate('leads', 'lead_id', leadId, { 
-      status: 'Order Confirmed',
+    const resLead = await pushUpdate('leads', 'lead_id', leadId, { 
+      status: 'Order Confirmed', 
       event_date: eventDate || targetLead.event_date,
       event_time: eventTime || targetLead.event_time,
       reporting_time: reportingTime || targetLead.reporting_time,
       remarks: resolvedRemarks,
-      updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_by: currentUserName, 
+      updated_at: timestamp
     });
+
+    if (!resLead?.success) {
+      throw new Error(resLead?.error || "Failed to update lead during order confirmation.");
+    }
 
     const orderId = `ORD-${Math.floor(1012 + Math.random() * 800)}`;
     const newOrder: Order = {
@@ -2267,9 +2367,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       order_status: 'Confirmed',
       current_stage: 'Order Confirmed',
       sales_person: currentUserName,
-      created_at: new Date().toISOString(),
+      created_at: timestamp,
       updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_at: timestamp
     };
 
     const paymentId = `PAY-${Math.floor(3012 + Math.random() * 800)}`;
@@ -2280,6 +2380,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       advance_received: advanceReceived,
       balance_due: quotationAmount - advanceReceived,
       final_payment_received: 0,
+      payment_proof_url: undefined,
       payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
     };
 
@@ -2298,13 +2399,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_by: currentUserName,
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
-    setPayments((prev) => [newPayment, ...prev]);
-    setOperations((prev) => [newOp, ...prev]);
-
-    pushInsert('orders', newOrder);
-    pushInsert('payments', newPayment);
-    pushInsert('operations', newOp);
+    await Promise.all([
+      pushInsert('orders', newOrder),
+      pushInsert('payments', newPayment),
+      pushInsert('operations', newOp)
+    ]);
 
     addNotification({
       user_id: 'All',
@@ -2316,13 +2415,15 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       recipient_role: 'Operations Team'
     });
 
+    await fetchFromDb();
+
     logActivity(`Confirmed Order for ${targetLead.customer_name}. Package: ${packageName}`, 'Sales', orderId, targetLead.status, 'Order Confirmed');
 
     return orderId;
   };
 
   // 4. Assign Operations
-  const assignOperations = (
+  const assignOperations = async (
     orderId: string, 
     opData: {
       photographer_assigned: string;
@@ -2355,51 +2456,39 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
     const previousStage = targetOrder ? targetOrder.current_stage : 'Order Confirmed';
+    const timestamp = new Date().toISOString();
 
-    // Update order & lead stage, and event_date / event_time
-    setOrders((prev) =>
-      prev.map((ord) => (ord.order_id === orderId ? { 
-        ...ord, 
-        current_stage: targetStageNum, 
-        event_date: event_date || ord.event_date,
-        event_time: event_time || ord.event_time,
-        updated_by: currentUserName, 
-        updated_at: new Date().toISOString() 
-      } : ord))
-    );
-    pushUpdate('orders', 'order_id', orderId, { 
+    const resOrd = await pushUpdate('orders', 'order_id', orderId, { 
       current_stage: targetStageNum,
       event_date: event_date || (targetOrder ? targetOrder.event_date : undefined),
       event_time: event_time || (targetOrder ? targetOrder.event_time : undefined),
       updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_at: timestamp
     });
 
+    if (!resOrd?.success) {
+      throw new Error(resOrd?.error || "Failed to update order status.");
+    }
+
     if (targetOrder) {
-      setLeads((prev) =>
-        prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { 
-          ...ld, 
-          status: targetStageNum, 
-          event_date: event_date || ld.event_date,
-          event_time: event_time || ld.event_time,
-          updated_by: currentUserName, 
-          updated_at: new Date().toISOString() 
-        } : ld))
-      );
-      pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
+      const resLead = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: targetStageNum,
         event_date: event_date || targetOrder.event_date,
         event_time: event_time || targetOrder.event_time,
         updated_by: currentUserName,
-        updated_at: new Date().toISOString()
+        updated_at: timestamp
       });
+      if (!resLead?.success) {
+        throw new Error(resLead?.error || "Failed to update lead status.");
+      }
     }
 
-    setOperations((prev) => {
-      const filtered = prev.filter((o) => o.order_id !== orderId); // remove old if exists
-      return [newOp, ...filtered];
-    });
-    pushUpsert('operations', newOp);
+    const resOp = await pushUpsert('operations', newOp);
+    if (!resOp?.success) {
+      throw new Error(resOp?.error || "Failed to update operation crew data.");
+    }
+
+    await fetchFromDb();
 
     logActivity(`Assigned Crew for Order: ${orderId} (Status: ${targetStatus})`, 'Operations', opId, previousStage, targetStageNum);
   };
@@ -2457,12 +2546,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    setStaffAssignments((prev) => {
-      const filtered = prev.filter((x) => x.order_id !== orderId);
-      const combined = [...filtered, ...newAssignments];
-      localStorage.setItem('erp_staff_assignments', JSON.stringify(combined));
-      return combined;
-    });
+    await fetchFromDb();
 
     // Create notifications for assigned staff
     newAssignments.forEach((a) => {
@@ -2542,7 +2626,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // 5. Mark Event Completed (Action button in Operations)
-  const markEventCompleted = (orderId: string, serverPath: string) => {
+  const markEventCompleted = async (orderId: string, serverPath: string) => {
     const trackingId = `TRK-${Math.floor(2012 + Math.random() * 800)}`;
     const pId = `PRD-${Math.floor(4012 + Math.random() * 800)}`;
 
@@ -2568,45 +2652,39 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
     const previousStage = targetOrder ? targetOrder.current_stage : 'Event Scheduled';
+    const timestamp = new Date().toISOString();
 
     // Update Operations status to completed
-    setOperations((prev) =>
-      prev.map((op) => (op.order_id === orderId ? { ...op, event_status: 'Completed' } : op))
-    );
-    pushUpdate('operations', 'order_id', orderId, { event_status: 'Completed' });
+    const r1 = await pushUpdate('operations', 'order_id', orderId, { event_status: 'Completed' });
+    if (!r1?.success) throw new Error("Failed to update operations status");
 
     // Update order & lead stage to 'Event Completed'
-    setOrders((prev) =>
-      prev.map((ord) => (ord.order_id === orderId ? { ...ord, current_stage: 'Event Completed', updated_by: currentUserName, updated_at: new Date().toISOString() } : ord))
-    );
-    pushUpdate('orders', 'order_id', orderId, { 
+    const r2 = await pushUpdate('orders', 'order_id', orderId, { 
       current_stage: 'Event Completed',
       updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_at: timestamp
     });
+    if (!r2?.success) throw new Error("Failed to update order status");
 
     if (targetOrder) {
-      setLeads((prev) =>
-        prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { ...ld, status: 'Event Completed', updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
-      );
-      pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
+      const r3 = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: 'Event Completed',
         updated_by: currentUserName,
-        updated_at: new Date().toISOString()
+        updated_at: timestamp
       });
+      if (!r3?.success) throw new Error("Failed to update lead status");
     }
 
-    setRawFootage((prev) => [newRawFootage, ...prev]);
-    setProduction((prev) => [newProd, ...prev]);
+    await pushInsert('raw_footage', newRawFootage);
+    await pushInsert('production', newProd);
 
-    pushInsert('raw_footage', newRawFootage);
-    pushInsert('production', newProd);
+    await fetchFromDb();
 
     logActivity(`Marked Event Completed for Order ${orderId}. Raw Footage recorded: ${trackingId}`, 'Operations', orderId, previousStage, 'Event Completed');
   };
 
   // 6. Production updates (Editing progress, review, approval)
-  const updateProduction = (
+  const updateProduction = async (
     productionId: string, 
     updates: Partial<Omit<Production, 'production_id' | 'tracking_id'>>
   ) => {
@@ -2695,38 +2773,33 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Set production state
-    setProduction((prev) => {
-      const exists = prev.some((p) => p.production_id === productionId || p.tracking_id === inferredTrackingId || (targetProd && p.production_id === targetProd.production_id));
-      if (exists) {
-        return prev.map((prod) => {
-          if (prod.production_id === productionId || prod.tracking_id === inferredTrackingId || (targetProd && prod.production_id === targetProd.production_id)) {
-            trackingIdToUpdate = prod.tracking_id;
-            const updated = { ...prod, ...updates };
-            pushUpdate('production', 'production_id', prod.production_id, updates);
-            return updated;
-          }
-          return prod;
-        });
-      } else {
-        trackingIdToUpdate = inferredTrackingId;
-        const newPId = productionId.startsWith('PRD-') ? `PRD-${Math.floor(100000 + Math.random() * 899999)}` : productionId;
-        const newProd: Production = {
-          production_id: newPId,
-          tracking_id: inferredTrackingId,
-          editor_assigned: updates.editor_assigned || 'Unassigned',
-          editing_status: (updates.editing_status || previousStage || 'Raw Footage Received') as any,
-          remarks: updates.remarks || '',
-          project_priority: updates.project_priority || 'Medium',
-          raw_footage_location: updates.raw_footage_location || '',
-          target_delivery_date: updates.target_delivery_date || '',
-          expected_delivery_date: updates.expected_delivery_date || '',
-          ...updates
-        };
-        // OMIT inserting into production table since we persist in leads table for these stages
-        return prev;
+    const timestamp = new Date().toISOString();
+
+    // Set production state in Supabase
+    if (targetProd) {
+      const rProd = await pushUpdate('production', 'production_id', targetProd.production_id, updates);
+      if (!rProd?.success) {
+        throw new Error("Failed to update production data: " + rProd?.error);
       }
-    });
+    } else {
+      const newPId = productionId.startsWith('PRD-') ? `PRD-${Math.floor(100000 + Math.random() * 899999)}` : productionId;
+      const newProd: Production = {
+        production_id: newPId,
+        tracking_id: inferredTrackingId,
+        editor_assigned: updates.editor_assigned || 'Unassigned',
+        editing_status: (updates.editing_status || previousStage || 'Raw Footage Received') as any,
+        remarks: updates.remarks || '',
+        project_priority: updates.project_priority || 'Medium',
+        raw_footage_location: updates.raw_footage_location || '',
+        target_delivery_date: updates.target_delivery_date || '',
+        expected_delivery_date: updates.expected_delivery_date || '',
+        ...updates
+      };
+      const rProd = await pushInsert('production', newProd);
+      if (!rProd?.success) {
+        throw new Error("Failed to insert production data: " + rProd?.error);
+      }
+    }
 
     // Find linked order using all possible connections
     let tgtOrder = augmentedOrders.find(o => o.order_id === inferredTrackingId || o.lead_id === inferredTrackingId);
@@ -2747,53 +2820,60 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       nextStage = targetProd.editing_status as any;
     }
 
+    // Map strings to satisfy database constraints for orders & leads
+    if (nextStage === 'Project Closed' || (nextStage as any) === 'Completed') {
+      nextStage = 'Closed';
+    } else if (nextStage === 'Project Delivered') {
+      nextStage = 'Delivered';
+    }
+
     const leadIdToUpdate = tgtOrder?.lead_id || inferredTrackingId;
 
     if (nextStage && leadIdToUpdate) {
-      setLeads((prev) =>
-        prev.map((ld) => {
-          if (ld.lead_id === leadIdToUpdate) {
-            const leadUpdates: any = {
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            };
-            if (nextStage) {
-               leadUpdates.status = nextStage;
-            }
-            if (updates.editor_assigned) {
-              leadUpdates.assigned_editor = updates.editor_assigned;
-            }
-            if (updates.assigned_staff) leadUpdates.assigned_editors = updates.assigned_staff;
-            if (updates.target_delivery_date) leadUpdates.delivery_target_date = updates.target_delivery_date;
-            
-            console.log("Updating lead:", leadIdToUpdate, leadUpdates);
-            pushUpdate('leads', 'lead_id', leadIdToUpdate, leadUpdates);
-            return { ...ld, ...leadUpdates };
-          }
-          return ld;
-        })
-      );
+      const leadUpdates: any = {
+        updated_by: currentUserName,
+        updated_at: timestamp
+      };
+      if (nextStage) {
+        leadUpdates.status = nextStage;
+      }
+      if (updates.editor_assigned) {
+        leadUpdates.assigned_editor = updates.editor_assigned;
+      }
+      if (updates.assigned_staff) {
+        leadUpdates.assigned_editors = updates.assigned_staff;
+      }
+      if (updates.target_delivery_date) {
+        leadUpdates.delivery_target_date = updates.target_delivery_date;
+      }
+      
+      console.log("Updating lead:", leadIdToUpdate, leadUpdates);
+      const rLead = await pushUpdate('leads', 'lead_id', leadIdToUpdate, leadUpdates);
+      if (!rLead?.success) {
+        throw new Error("Failed to update lead: " + rLead?.error);
+      }
     }
 
     if (nextStage && tgtOrder) {
-      const isAllowedInOrders = !['Editor Assigned', 'Internal QC Review', 'Revision Required', 'Revision In Progress'].includes(nextStage);
-      
-      setOrders((prev) =>
-        prev.map((ord) => {
-          if (ord.order_id === tgtOrder!.order_id) {
-            const ordUpdates: any = {
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            };
-            if (isAllowedInOrders) ordUpdates.current_stage = nextStage;
-            
-            pushUpdate('orders', 'order_id', tgtOrder!.order_id, ordUpdates);
-            return { ...ord, ...ordUpdates };
-          }
-          return ord;
-        })
-      );
+      let orderStage = nextStage;
+      if (orderStage === 'Client Review Sent') orderStage = 'Customer Review';
+      if (orderStage === 'Final Approval') orderStage = 'Approved';
+
+      const isAllowedInOrders = !['Editing In Progress', 'Editor Assigned', 'Internal QC Review', 'Revision Required', 'Revision In Progress'].includes(orderStage);
+      if (isAllowedInOrders) {
+        const ordUpdates: any = {
+          current_stage: orderStage,
+          updated_by: currentUserName,
+          updated_at: timestamp
+        };
+        const rOrd = await pushUpdate('orders', 'order_id', tgtOrder.order_id, ordUpdates);
+        if (!rOrd?.success) {
+          throw new Error("Failed to update order: " + rOrd?.error);
+        }
+      }
     }
+
+    await fetchFromDb();
 
     logActivity(
       `Updated Production ${productionId}: status=${updates.editing_status || 'unchanged'}`, 
@@ -2805,60 +2885,46 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // accept raw footage as post-production audit step
-  const acceptRawFootage = (trackingId: string) => {
+  const acceptRawFootage = async (trackingId: string) => {
     const rf = rawFootage.find((f) => f.tracking_id === trackingId);
     if (!rf) return;
 
     const orderId = rf.order_id;
     const previousStage = augmentedOrders.find((o) => o.order_id === orderId)?.current_stage || 'Event Completed';
+    const timestamp = new Date().toISOString();
 
-    // Update raw footage state status
-    setRawFootage((prev) =>
-      prev.map((footage) => {
-        if (footage.tracking_id === trackingId) {
-          pushUpdate('raw_footage', 'tracking_id', trackingId, { status: 'Received' });
-          return { ...footage, status: 'Received' as const };
-        }
-        return footage;
-      })
-    );
+    const r1 = await pushUpdate('raw_footage', 'tracking_id', trackingId, { status: 'Received' });
+    if (!r1?.success) {
+      throw new Error("Failed to update raw footage status in database.");
+    }
 
-    // Update order & lead stage
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.order_id === orderId) {
-          pushUpdate('orders', 'order_id', orderId, { 
-            current_stage: 'Raw Footage Received',
-            updated_by: currentUserName,
-            updated_at: new Date().toISOString()
-          });
-          return { ...ord, current_stage: 'Raw Footage Received', updated_by: currentUserName, updated_at: new Date().toISOString() };
-        }
-        return ord;
-      })
-    );
+    const r2 = await pushUpdate('orders', 'order_id', orderId, { 
+      current_stage: 'Raw Footage Received',
+      updated_by: currentUserName,
+      updated_at: timestamp
+    });
+    if (!r2?.success) {
+      throw new Error("Failed to update order status in database.");
+    }
 
     const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
     if (targetOrder) {
-      setLeads((prev) =>
-        prev.map((ld) => {
-          if (ld.lead_id === targetOrder.lead_id) {
-            pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
-              status: 'Raw Footage Received',
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            });
-            return { ...ld, status: 'Raw Footage Received', updated_by: currentUserName, updated_at: new Date().toISOString() };
-          }
-          return ld;
-        })
-      );
+      const r3 = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
+        status: 'Raw Footage Received',
+        updated_by: currentUserName,
+        updated_at: timestamp
+      });
+      if (!r3?.success) {
+        throw new Error("Failed to update lead status in database.");
+      }
     }
+
+    await fetchFromDb();
 
     logActivity(`Audited & accepted Raw Footage for Order: ${orderId}. Assigned to editing pipelines.`, 'Production', orderId, previousStage, 'Raw Footage Received');
   };
 
-  const confirmRawFootageReceived = (
+  const confirmRawFootageReceived = async (
     orderId: string,
     footageLink?: string,
     storageType?: string,
@@ -2872,15 +2938,16 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetStage: CurrentStage = 'Raw Footage Received';
 
     const resolvedLink = footageLink || `s3://photocrew-vault-production/2026/${orderId}-shoot/raw/`;
+    const timestamp = new Date().toISOString();
 
-    setOrders((prev) =>
-      prev.map((ord) => (ord.order_id === orderId ? { ...ord, current_stage: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ord))
-    );
-    pushUpdate('orders', 'order_id', orderId, { 
+    const rOrd = await pushUpdate('orders', 'order_id', orderId, { 
       current_stage: targetStage,
       updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_at: timestamp
     });
+    if (!rOrd?.success) {
+      throw new Error("Failed to update order stage: " + rOrd?.error);
+    }
 
     // Handle Payment Capture if provided
     if (paymentCollectionStatus) {
@@ -2917,34 +2984,34 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       if (existingPayment) {
-        setPayments(prev => prev.map(p => p.payment_id === payId ? updatedPayment : p));
-        pushUpdate('payments', 'payment_id', payId, updatedPayment);
+        const rPay = await pushUpdate('payments', 'payment_id', payId, updatedPayment);
+        if (!rPay?.success) {
+          throw new Error("Failed to update payment details: " + rPay?.error);
+        }
       } else {
-        setPayments(prev => [updatedPayment, ...prev]);
-        pushInsert('payments', updatedPayment);
+        const rPay = await pushInsert('payments', updatedPayment);
+        if (!rPay?.success) {
+          throw new Error("Failed to insert payment details: " + rPay?.error);
+        }
       }
     }
 
-    setLeads((prev) =>
-      prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { ...ld, status: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
-    );
-    pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
+    const rLead = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
       status: targetStage,
       updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_at: timestamp
     });
+    if (!rLead?.success) {
+      throw new Error("Failed to update lead status: " + rLead?.error);
+    }
 
     // Also update event_status of corresponding Operations record to 'Raw Footage Received' if exists
-    setOperations((prev) =>
-      prev.map((op) => (op.order_id === orderId ? { ...op, event_status: 'Raw Footage Received' } : op))
-    );
-    pushUpdate('operations', 'order_id', orderId, { event_status: 'Raw Footage Received' });
+    await pushUpdate('operations', 'order_id', orderId, { event_status: 'Raw Footage Received' });
 
     let existingRf = rawFootage.find(f => f.order_id === orderId);
     let trackingId = existingRf?.tracking_id || `TRK-${Math.floor(2012 + Math.random() * 850)}`;
 
-    const nowIso = new Date().toISOString();
-    const todayYyyyMmDd = nowIso.split('T')[0];
+    const todayYyyyMmDd = timestamp.split('T')[0];
 
     const finalRf: RawFootage = {
       tracking_id: trackingId,
@@ -2953,36 +3020,34 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       raw_received: true,
       server_path: resolvedLink,
       uploaded_by: currentUserName,
-      uploaded_date: nowIso,
+      uploaded_date: timestamp,
       status: 'Received',
       storage_type: storageType || 'Google Drive',
       upload_notes: uploadNotes || '',
     };
 
     if (existingRf) {
-      setRawFootage((prev) =>
-        prev.map((rf) => (rf.order_id === orderId ? finalRf : rf))
-      );
-      pushUpdate('raw_footage', 'tracking_id', trackingId, finalRf);
+      const rRf = await pushUpdate('raw_footage', 'tracking_id', trackingId, finalRf);
+      if (!rRf?.success) {
+        throw new Error("Failed to update raw footage table: " + rRf?.error);
+      }
     } else {
-      setRawFootage((prev) => [finalRf, ...prev]);
-      pushInsert('raw_footage', finalRf);
+      const rRf = await pushInsert('raw_footage', finalRf);
+      if (!rRf?.success) {
+        throw new Error("Failed to insert raw footage to database: " + rRf?.error);
+      }
     }
 
     // Ensure production entry exists or update it
     let existingProd = augmentedProduction.find(p => p.tracking_id === trackingId);
     if (existingProd) {
-      setProduction((prev) =>
-        prev.map((prod) => (prod.tracking_id === trackingId ? {
-          ...prod,
-          raw_footage_location: resolvedLink,
-          remarks: `Raw footage received via ${storageType || 'Google Drive'}. ${uploadNotes || ''}`,
-        } : prod))
-      );
-      pushUpdate('production', 'tracking_id', trackingId, {
+      const rProd = await pushUpdate('production', 'tracking_id', trackingId, {
         raw_footage_location: resolvedLink,
         remarks: `Raw footage received via ${storageType || 'Google Drive'}. ${uploadNotes || ''}`,
       });
+      if (!rProd?.success) {
+        throw new Error("Failed to update production data: " + rProd?.error);
+      }
     } else {
       const pId = `PRD-${Math.floor(4012 + Math.random() * 850)}`;
       const newProd: Production = {
@@ -2993,8 +3058,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         editing_status: 'Raw Footage Received',
         remarks: `Raw footage received via ${storageType || 'Google Drive'}. ${uploadNotes || ''}`,
       };
-      setProduction((prev) => [newProd, ...prev]);
-      pushInsert('production', newProd);
+      const rProd = await pushInsert('production', newProd);
+      if (!rProd?.success) {
+        throw new Error("Failed to insert production data: " + rProd?.error);
+      }
     }
 
     addNotification({
@@ -3007,38 +3074,43 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       recipient_role: 'Production Team'
     });
 
+    await fetchFromDb();
+
     logActivity(`Raw Footage Received and Confirmed in system for Order: ${orderId}. Drive Link: ${resolvedLink}. Storage: ${storageType || 'Google Drive'}`, 'Operations', orderId, previousStage, targetStage);
   };
 
-  const updateOrderStage = (orderId: string, stage: CurrentStage) => {
+  const updateOrderStage = async (orderId: string, stage: CurrentStage) => {
     const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
     const previousStage = targetOrder ? targetOrder.current_stage : 'Order Confirmed';
+    const timestamp = new Date().toISOString();
 
-    setOrders((prev) =>
-      prev.map((ord) => (ord.order_id === orderId ? { ...ord, current_stage: stage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ord))
-    );
-    pushUpdate('orders', 'order_id', orderId, { 
+    const rOrd = await pushUpdate('orders', 'order_id', orderId, { 
       current_stage: stage,
       updated_by: currentUserName,
-      updated_at: new Date().toISOString()
+      updated_at: timestamp
     });
+    if (!rOrd?.success) {
+      throw new Error("Failed to update order stage: " + rOrd?.error);
+    }
 
     if (targetOrder) {
-      setLeads((prev) =>
-        prev.map((ld) => (ld.lead_id === targetOrder.lead_id ? { ...ld, status: stage, updated_by: currentUserName, updated_at: new Date().toISOString() } : ld))
-      );
-      pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
+      const rLead = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: stage,
         updated_by: currentUserName,
-        updated_at: new Date().toISOString()
+        updated_at: timestamp
       });
+      if (!rLead?.success) {
+        throw new Error("Failed to update lead status: " + rLead?.error);
+      }
     }
+
+    await fetchFromDb();
 
     logActivity(`Updated stage for Order ${orderId}`, 'Operations', orderId, previousStage, stage);
   };
 
   // 7. Mark Delivered (Action button)
-  const markDelivered = (trackingId: string, remarks?: string) => {
+  const markDelivered = async (trackingId: string, remarks?: string) => {
     const targetFootage = rawFootage.find((rf) => rf.tracking_id === trackingId);
     if (!targetFootage) return;
 
@@ -3048,6 +3120,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const payment = augmentedPayments.find((p) => p.order_id === orderId);
     const balanceDue = payment ? payment.balance_due : 1;
     const targetStage: CurrentStage = balanceDue === 0 ? 'Closed' : 'Payment Pending';
+    const timestamp = new Date().toISOString();
 
     const targetProd = augmentedProduction.find((p) => p.tracking_id === trackingId);
     if (targetProd) {
@@ -3074,115 +3147,81 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Update production status
-    setProduction((prev) =>
-      prev.map((prod) => {
-        if (prod.tracking_id === trackingId) {
-          const updated = {
-            ...prod,
-            editing_status: 'Delivered' as const,
-            customer_review_status: 'Approved' as const,
-            delivery_date: new Date().toISOString().split('T')[0],
-            remarks: `${prod.remarks || ''}\n${remarks || 'Delivered to client.'}`,
-          };
-          pushUpdate('production', 'production_id', prod.production_id, {
-            editing_status: 'Delivered',
-            customer_review_status: 'Approved',
-            delivery_date: updated.delivery_date,
-            remarks: updated.remarks
-          });
-          return updated;
-        }
-        return prod;
-      })
-    );
-
-    // Update order & lead stage
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.order_id === orderId) {
-          pushUpdate('orders', 'order_id', orderId, { 
-            current_stage: targetStage, 
-            order_status: 'Delivered',
-            updated_by: currentUserName,
-            updated_at: new Date().toISOString()
-          });
-          return { ...ord, current_stage: targetStage, order_status: 'Delivered', updated_by: currentUserName, updated_at: new Date().toISOString() };
-        }
-        return ord;
-      })
-    );
-    const tgtOrder = augmentedOrders.find((o) => o.order_id === orderId);
-    if (tgtOrder) {
-      setLeads((prev) =>
-        prev.map((ld) => {
-          if (ld.lead_id === tgtOrder.lead_id) {
-            pushUpdate('leads', 'lead_id', tgtOrder.lead_id, { 
-              status: targetStage,
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            });
-            return { ...ld, status: targetStage, updated_by: currentUserName, updated_at: new Date().toISOString() };
-          }
-          return ld;
-        })
-      );
+    if (targetProd) {
+      const finalRemarks = `${targetProd.remarks || ''}\n${remarks || 'Delivered to client.'}`;
+      const rProd = await pushUpdate('production', 'production_id', targetProd.production_id, {
+        editing_status: 'Delivered',
+        customer_review_status: 'Approved',
+        delivery_date: timestamp.split('T')[0],
+        remarks: finalRemarks
+      });
+      if (!rProd?.success) {
+        throw new Error("Failed to update production: " + rProd?.error);
+      }
     }
 
-    // Since delivery happened, we set payments status and stage
-    setPayments((prev) =>
-      prev.map((pay) => {
-        if (pay.order_id === orderId) {
-          return {
-            ...pay,
-          };
-        }
-        return pay;
-      })
-    );
+    // Update order & lead stage
+    const rOrd = await pushUpdate('orders', 'order_id', orderId, { 
+      current_stage: targetStage, 
+      order_status: 'Delivered',
+      updated_by: currentUserName,
+      updated_at: timestamp
+    });
+    if (!rOrd?.success) {
+      throw new Error("Failed to update order status: " + rOrd?.error);
+    }
+
+    const tgtOrder = augmentedOrders.find((o) => o.order_id === orderId);
+    if (tgtOrder) {
+      const rLead = await pushUpdate('leads', 'lead_id', tgtOrder.lead_id, { 
+        status: targetStage,
+        updated_by: currentUserName,
+        updated_at: timestamp
+      });
+      if (!rLead?.success) {
+        throw new Error("Failed to update lead status: " + rLead?.error);
+      }
+    }
+
+    await fetchFromDb();
 
     logActivity(`Marked Project Delivered to client for Order: ${orderId}`, 'Production', trackingId, previousStage, targetStage);
   };
 
   // 8. Payments update
-  const recordPayment = (
+  const recordPayment = async (
     orderId: string, 
     amountReceived: number, 
     paymentDate: string, 
     proofUrl?: string
   ) => {
     let isFullyPaid = false;
-    setPayments((prev) =>
-      prev.map((pay) => {
-        if (pay.order_id === orderId) {
-          const totalPaid = pay.advance_received + pay.final_payment_received + amountReceived;
-          const outstanding = Math.max(0, pay.quotation_amount - totalPaid);
-          isFullyPaid = outstanding === 0;
-          const updated = {
-            ...pay,
-            final_payment_received: pay.final_payment_received + amountReceived,
-            balance_due: outstanding,
-            payment_date: paymentDate,
-            payment_proof_url: proofUrl || 'https://photocrew-receipts.s3.amazonaws.com/rec-custom.pdf',
-            payment_status: isFullyPaid ? ('Fully Paid' as const) : ('Partially Paid' as const),
-          };
-          pushUpdate('payments', 'payment_id', pay.payment_id, {
-            final_payment_received: updated.final_payment_received,
-            balance_due: updated.balance_due,
-            payment_date: updated.payment_date,
-            payment_proof_url: updated.payment_proof_url,
-            payment_status: updated.payment_status
-          });
-          return updated;
-        }
-        return pay;
-      })
-    );
+    const targetPayment = augmentedPayments.find((p) => p.order_id === orderId);
+    if (!targetPayment) return;
+
+    const totalPaid = targetPayment.advance_received + targetPayment.final_payment_received + amountReceived;
+    const outstanding = Math.max(0, targetPayment.quotation_amount - totalPaid);
+    isFullyPaid = outstanding === 0;
+    const resolvedProofUrl = proofUrl || 'https://photocrew-receipts.s3.amazonaws.com/rec-custom.pdf';
+
+    const rPay = await pushUpdate('payments', 'payment_id', targetPayment.payment_id, {
+      final_payment_received: targetPayment.final_payment_received + amountReceived,
+      balance_due: outstanding,
+      payment_date: paymentDate,
+      payment_proof_url: resolvedProofUrl,
+      payment_status: isFullyPaid ? 'Fully Paid' : 'Partially Paid'
+    });
+    if (!rPay?.success) {
+      throw new Error("Failed to record payment in database: " + rPay?.error);
+    }
 
     // If fully paid, move order status to next transition or check if delivered first.
     // If fully paid AND previous stage was delivered, we can transition stage to Closed!
     let nextStage: CurrentStage = 'Payment Pending';
     const currentOrder = augmentedOrders.find((o) => o.order_id === orderId);
     const previousStage = currentOrder ? currentOrder.current_stage : 'Payment Pending';
+    const timestamp = new Date().toISOString();
+
     if (currentOrder) {
       if (isFullyPaid) {
         nextStage = 'Closed';
@@ -3190,44 +3229,29 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         nextStage = 'Payment Pending';
       }
 
-      setOrders((prev) =>
-        prev.map((ord) => {
-          if (ord.order_id === orderId) {
-            const nextOutstanding = Math.max(0, ord.balance_amount - amountReceived);
-            pushUpdate('orders', 'order_id', orderId, {
-              current_stage: nextStage,
-              order_status: nextStage === 'Closed' ? 'Closed' : ord.order_status,
-              balance_amount: nextOutstanding,
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            });
-            return {
-              ...ord,
-              current_stage: nextStage,
-              order_status: nextStage === 'Closed' ? ('Closed' as const) : ord.order_status,
-              balance_amount: nextOutstanding,
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            };
-          }
-          return ord;
-        })
-      );
+      const nextOutstanding = Math.max(0, currentOrder.balance_amount - amountReceived);
+      const rOrd = await pushUpdate('orders', 'order_id', orderId, {
+        current_stage: nextStage,
+        order_status: nextStage === 'Closed' ? 'Closed' : currentOrder.order_status,
+        balance_amount: nextOutstanding,
+        updated_by: currentUserName,
+        updated_at: timestamp
+      });
+      if (!rOrd?.success) {
+        throw new Error("Failed to update order status: " + rOrd?.error);
+      }
 
-      setLeads((prev) =>
-        prev.map((ld) => {
-          if (ld.lead_id === currentOrder.lead_id) {
-            pushUpdate('leads', 'lead_id', currentOrder.lead_id, { 
-              status: nextStage,
-              updated_by: currentUserName,
-              updated_at: new Date().toISOString()
-            });
-            return { ...ld, status: nextStage, updated_by: currentUserName, updated_at: new Date().toISOString() };
-          }
-          return ld;
-        })
-      );
+      const rLead = await pushUpdate('leads', 'lead_id', currentOrder.lead_id, { 
+        status: nextStage,
+        updated_by: currentUserName,
+        updated_at: timestamp
+      });
+      if (!rLead?.success) {
+        throw new Error("Failed to update lead: " + rLead?.error);
+      }
     }
+
+    await fetchFromDb();
 
     logActivity(`Recorded payment of ₹${amountReceived} for Order ${orderId}. Fully paid: ${isFullyPaid}`, 'Finance', orderId, previousStage, nextStage);
   };

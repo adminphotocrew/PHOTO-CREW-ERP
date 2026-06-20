@@ -64,7 +64,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-500" />
         
         {/* Header section with viewport frame corner highlights */}
-        <div className="p-4 sm:p-6 border-b border-zinc-850 bg-zinc-900/60 flex items-center justify-between">
+        <div className="p-3 sm:p-4 border-b border-zinc-850 bg-zinc-900/60 flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="p-0.5 px-2 bg-rose-500/15 text-rose-450 border border-rose-500/25 rounded text-[9px] font-mono tracking-widest font-bold">
@@ -74,7 +74,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                 Order ID: {order.order_id}
               </span>
             </div>
-            <h2 className="text-base sm:text-lg font-black text-white uppercase tracking-tight font-sans">
+            <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-tight font-sans">
               {order.customer_name} &mdash; {order.package_name || 'Premium Shoot'}
             </h2>
           </div>
@@ -88,7 +88,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
         </div>
 
         {/* Tab Selection */}
-        <div className="px-4 sm:px-6 bg-zinc-950 flex border-b border-zinc-900 overflow-x-auto gap-1">
+        <div className="px-3 sm:px-4.5 bg-zinc-950 flex border-b border-zinc-900 overflow-x-auto gap-0.5">
           {[
             { id: 'overview', label: 'Master Overview', icon: Layers },
             { id: 'sales', label: 'Contact & Sales', icon: FileText },
@@ -107,7 +107,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-3 px-3.5 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`py-2 px-2.5 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   isActive 
                     ? 'border-amber-500 text-amber-400 bg-amber-500/5' 
                     : 'border-transparent text-zinc-450 hover:text-zinc-200'
@@ -121,7 +121,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
         </div>
 
         {/* Scrollable Content Pane */}
-        <div className="flex-1 p-5 sm:p-6 overflow-y-auto space-y-6 text-xs text-zinc-300">
+        <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-4 text-xs text-zinc-300">
           
           {/* TAB 1: OVERVIEW & SYSTEM WORKFLOW TIMELINE */}
           {activeTab === 'overview' && (

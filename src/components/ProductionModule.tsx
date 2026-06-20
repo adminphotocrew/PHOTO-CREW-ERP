@@ -270,6 +270,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       'Final Approval', 
       'Delivered', 
       'Project Delivered',
+      'Completed',
       'Closed',
       'Project Closed',
       'Customer Review',
@@ -367,6 +368,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       prod.editing_status === 'Project Delivered' || 
       prod.editing_status === 'Closed' || 
       prod.editing_status === 'Project Closed' ||
+      prod.editing_status === 'Completed' ||
       prod.editing_status === 'Approved' ||
       prod.production_status === 'Closed'
     );
@@ -377,6 +379,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       prod.editing_status !== 'Project Delivered' && 
       prod.editing_status !== 'Closed' && 
       prod.editing_status !== 'Project Closed' &&
+      prod.editing_status !== 'Completed' &&
       prod.editing_status !== 'Approved' &&
       prod.production_status !== 'Closed'
     );
@@ -651,7 +654,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     if (status === 'Revision In Progress') return 'Revision In Progress';
     if (status === 'Approved' || status === 'Final Approval') return 'Final Approval';
     if (status === 'Delivered' || status === 'Project Delivered' || status === 'Payment Pending') return 'Project Delivered';
-    if (status === 'Closed' || status === 'Project Closed') return 'Project Closed';
+    if (status === 'Closed' || status === 'Project Closed' || status === 'Completed') return 'Completed';
     return status;
   };
 
@@ -671,7 +674,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
   const isClientApproved = (prod: Production) => {
     const s = getProductionStatus(prod);
     const raw = prod.editing_status as string;
-    return s === 'Final Approval' || s === 'Project Delivered' || s === 'Project Closed' || raw === 'Approved' || raw === 'Final Approval' || raw === 'Delivered' || raw === 'Project Delivered' || raw === 'Closed' || raw === 'Project Closed' || raw === 'Payment Pending';
+    return s === 'Final Approval' || s === 'Project Delivered' || s === 'Completed' || raw === 'Approved' || raw === 'Final Approval' || raw === 'Delivered' || raw === 'Project Delivered' || raw === 'Closed' || raw === 'Project Closed' || raw === 'Completed' || raw === 'Payment Pending';
   };
 
   const isClientNotApproved = (prod: Production) => {
@@ -683,7 +686,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
   const isTotalProjectsCompleted = (prod: Production) => {
     const s = getProductionStatus(prod);
     const raw = prod.editing_status as string;
-    return s === 'Project Delivered' || s === 'Project Closed' || raw === 'Delivered' || raw === 'Project Delivered' || raw === 'Closed' || raw === 'Project Closed';
+    return s === 'Project Delivered' || s === 'Completed' || raw === 'Delivered' || raw === 'Project Delivered' || raw === 'Closed' || raw === 'Project Closed' || raw === 'Completed';
   };
 
   // Base list filtered by applied date range, customer name, and order ID (Supabase leads table data source)
@@ -960,7 +963,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
 
   // Step-by-step action popup modal states
   const [activeWorkflowProd, setActiveWorkflowProd] = useState<Production | null>(null);
-  const [workflowActionType, setWorkflowActionType] = useState<'assign_editor' | 'send_review' | 'request_revision' | 'deliver_project' | 'manage_payment_close' | 'manage_status' | null>(null);
+  const [workflowActionType, setWorkflowActionType] = useState<'assign_editor' | 'send_review' | 'request_revision' | 'deliver_project' | 'manage_payment_close' | 'manage_status' | 'close_project' | null>(null);
 
   // Form states for each step popup
   // Step 1: Assign Editor Form
@@ -1146,10 +1149,10 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
   // Filter/Derived definitions
   const newProjects = leads.filter(p => !p.editor_assigned || p.editor_assigned === 'Unassigned');
-  const assignedProjects = leads.filter(p => p.editor_assigned && p.editor_assigned !== 'Unassigned' && p.editing_status !== 'Project Delivered' && p.editing_status !== 'Delivered');
-  const pendingProjects = leads.filter(p => !['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed'].includes(p.editing_status));
+  const assignedProjects = leads.filter(p => p.editor_assigned && p.editor_assigned !== 'Unassigned' && p.editing_status !== 'Project Delivered' && p.editing_status !== 'Delivered' && p.editing_status !== 'Completed');
+  const pendingProjects = leads.filter(p => !['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed', 'Completed'].includes(p.editing_status));
   const delayedProjects = leads.filter(p => {
-    if (['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed'].includes(p.editing_status)) return false;
+    if (['Final Approval', 'Approved', 'Project Delivered', 'Delivered', 'Project Closed', 'Closed', 'Completed'].includes(p.editing_status)) return false;
     if (!p.expected_delivery_date) return false;
     return new Date(p.expected_delivery_date) < today;
   });
@@ -1396,16 +1399,17 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                 >
                   <option value="All">All Statuses</option>
                   <option value="Overdue">⚠️ Overdue Projects</option>
-                  <option value="New Project">New Project</option>
-                  <option value="Footage Received">Footage Received</option>
+                  <option value="Raw Footage Received">Raw Footage Received</option>
                   <option value="Editor Assigned">Editor Assigned</option>
                   <option value="Editing Started">Editing Started</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Customer Review">Customer Review</option>
+                  <option value="Editing In Progress">Editing In Progress</option>
+                  <option value="Internal QC Review">Internal QC Review</option>
+                  <option value="Client Review Sent">Client Review Sent</option>
                   <option value="Revision Required">Revision Required</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Delivered">Delivered</option>
-                  <option value="Closed">Closed</option>
+                  <option value="Revision In Progress">Revision In Progress</option>
+                  <option value="Final Approval">Final Approval</option>
+                  <option value="Project Delivered">Project Delivered</option>
+                  <option value="Completed">Completed</option>
                 </select>
               </div>
 
@@ -1663,7 +1667,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       const sVal = getProductionStatus(prod);
                       if (statusFilter === 'Overdue') {
                         const days = calculateDaysRemaining(prod.target_delivery_date || prod.expected_delivery_date);
-                        if (!(days !== null && days < 0 && prod.editing_status !== 'Delivered' && prod.editing_status !== 'Closed' && prod.editing_status as any !== 'Project Closed' && prod.editing_status as any !== 'Project Delivered')) return false;
+                        if (!(days !== null && days < 0 && prod.editing_status !== 'Delivered' && prod.editing_status !== 'Closed' && prod.editing_status as any !== 'Project Closed' && prod.editing_status as any !== 'Project Delivered' && prod.editing_status as any !== 'Completed')) return false;
                       } else if (statusFilter !== 'All' && sVal !== statusFilter) {
                         return false;
                       }
@@ -1730,7 +1734,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       else if (displayStatus === 'Revision In Progress') displayStatusColor = 'bg-orange-500/15 text-orange-400 border border-orange-500/20';
                       else if (displayStatus === 'Final Approval') displayStatusColor = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20';
                       else if (displayStatus === 'Project Delivered') displayStatusColor = 'bg-violet-500/15 text-violet-400 border border-violet-500/20';
-                      else if (displayStatus === 'Project Closed') displayStatusColor = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
+                      else if (displayStatus === 'Completed') displayStatusColor = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
 
                       let payBadge = 'bg-amber-500/10 text-amber-400 border border-amber-500/15';
                       if (payStatus === 'Fully Paid') payBadge = 'bg-green-500/10 text-green-400 border border-green-500/15';
@@ -2070,8 +2074,13 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               {(displayStatus === 'Project Delivered') && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateProduction(prod.production_id, { editing_status: 'Project Closed' });
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Completed' as any);
+                                    setDeliveryDate(new Date().toISOString().split('T')[0]);
+                                    setClosingNotes('');
+                                    setWorkflowActionType('close_project');
                                   }}
                                   className="w-full max-w-[160px] px-2.5 py-1.5 bg-violet-750 border border-violet-700 text-violet-100 hover:bg-violet-700 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
                                 >
@@ -2083,8 +2092,13 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               {status === 'Payment Pending' && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateProduction(prod.production_id, { editing_status: 'Project Closed' });
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveWorkflowProd(prod);
+                                    setSelectedStage('Completed' as any);
+                                    setDeliveryDate(new Date().toISOString().split('T')[0]);
+                                    setClosingNotes('');
+                                    setWorkflowActionType('close_project');
                                   }}
                                   className="w-full max-w-[160px] px-2.5 py-1.5 bg-cyan-950 border border-cyan-900 text-cyan-400 hover:bg-cyan-900 hover:text-cyan-200 transition-all text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
                                 >
@@ -2092,8 +2106,8 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 </button>
                               )}
 
-                              {/* Step 11: Project Closed */}
-                              {(displayStatus === 'Project Closed') && (
+                              {/* Step 11: Completed */}
+                              {(displayStatus === 'Completed') && (
                                 <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-950/20 border border-emerald-850">
                                   ✓ Completed
                                 </span>
@@ -2169,6 +2183,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
           p.editing_status === 'Project Delivered' || 
           p.editing_status === 'Closed' || 
           p.editing_status === 'Project Closed' || 
+          p.editing_status === 'Completed' ||
           p.production_status === 'Closed'
         ).length;
 
@@ -3006,11 +3021,11 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           } else if (newStat === 'Sent to Client') {
                             up = { editing_status: 'Client Review Sent', production_status: 'Customer Review' };
                           } else if (newStat === 'Delivered') {
-                            up = { editing_status: 'Project Delivered', production_status: 'Delivered', actual_delivery_date: new Date().toISOString().split('T')[0] };
+                            up = { editing_status: 'Project Delivered', production_status: 'Delivered', delivery_date: new Date().toISOString().split('T')[0] };
                           } else if (newStat === 'Pending Approval') {
                             up = { editing_status: 'Client Review Sent', production_status: 'Customer Review' };
                           } else if (newStat === 'Completed') {
-                            up = { editing_status: 'Project Closed', production_status: 'Closed' };
+                            up = { editing_status: 'Completed', production_status: 'Closed' };
                           }
                           updateProduction(prod.production_id, up);
                         };
@@ -3864,14 +3879,14 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 else if (cur === 'Revision Required') nextStage = 'Revision In Progress';
                                 else if (cur === 'Revision In Progress') nextStage = 'Final Approval';
                                 else if (cur === 'Final Approval') nextStage = 'Project Delivered';
-                                else if (cur === 'Project Delivered') nextStage = 'Project Closed';
+                                else if (cur === 'Project Delivered') nextStage = 'Completed';
                                 else nextStage = cur;
                                 
-                                if (prod.editing_status !== 'Project Closed') {
+                                if (prod.editing_status !== 'Completed') {
                                   updateProduction(prod.production_id, { editing_status: nextStage });
                                 }
                               }}
-                              disabled={prod.editing_status === 'Project Closed'}
+                              disabled={prod.editing_status === 'Completed'}
                               className="text-[9px] font-mono text-violet-400 hover:text-violet-300 font-bold flex items-center gap-1 uppercase"
                             >
                               <span>Next</span>
@@ -4303,10 +4318,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               <option value="Revision In Progress">Revision In Progress</option>
                               <option value="Final Approval">Final Approval</option>
                               <option value="Project Delivered">Project Delivered</option>
-                              <option value="Project Closed">Project Closed</option>
-                              <option value="Customer Review">Customer Review</option>
-                              <option value="Approved">Approved</option>
-                              <option value="Delivered">Delivered</option>
+                              <option value="Completed">Completed</option>
                             </select>
                           </div>
 
@@ -4521,7 +4533,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
           else if (leadProdStatus === 'Revision In Progress') mainStatus = 'Revision In Progress';
           else if (leadProdStatus === 'Approved' || leadProdStatus === 'Final Approval') mainStatus = 'Final Approval';
           else if (leadProdStatus === 'Delivered' || leadProdStatus === 'Project Delivered') mainStatus = 'Project Delivered';
-          else if (leadProdStatus === 'Closed' || leadProdStatus === 'Project Closed') mainStatus = 'Project Closed';
+          else if (leadProdStatus === 'Closed' || leadProdStatus === 'Completed' || leadProdStatus === 'Project Closed') mainStatus = 'Completed';
 
           updateProduction(selectedLeadProd.production_id, {
             editor_assigned: leadEditor,
@@ -4535,7 +4547,6 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
             target_delivery_date: leadTargetDeliveryDate || undefined,
             expected_delivery_date: leadExpectedDeliveryDate || undefined,
             delivery_date: leadActualDeliveryDate || undefined,
-            actual_delivery_date: leadActualDeliveryDate || undefined,
           });
 
           alert(`ERP Master Dossier for Order ${order.order_id} has been fully synchronized and written to Supabase!`);
@@ -4543,11 +4554,11 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
         };
 
         return (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in text-zinc-105 select-none md:select-text">
-            <div className="bg-zinc-950 border border-zinc-900 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-6 relative text-left">
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 z-50 animate-fade-in text-zinc-105 select-none md:select-text">
+            <div className="bg-zinc-950 border border-zinc-900 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl p-4.5 space-y-4 relative text-left">
               
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
+              <div className="flex items-center justify-between border-b border-zinc-900 pb-2.5">
                 <div>
                   <h3 className="text-lg font-black text-white flex items-center gap-2">
                     <span className="px-2 py-0.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[9px] font-mono tracking-widest uppercase rounded font-black">Project Dossier</span>
@@ -4566,16 +4577,16 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                 </button>
               </div>
 
-              <form onSubmit={handleSaveLeadDossier} className="space-y-6">
+              <form onSubmit={handleSaveLeadDossier} className="space-y-4">
                 
                 {/* 2x2 grid layout inside popup */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   
                   {/* LEFT: CUSTOMER DETAILS & PAYMENT */}
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     
                     {/* CUSTOMER BOARD */}
-                    <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
+                    <div className="bg-zinc-900/40 border border-zinc-900 p-3 rounded-2xl space-y-2.5">
                       <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-violet-400 font-mono flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-violet-400" />
                         <span>CUSTOMER & PACKAGE DOSSIER</span>
@@ -4602,7 +4613,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
                     {/* FINANCIAL LEDGER */}
                     {currentRole !== 'Production Team' && (
-                      <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
+                      <div className="bg-zinc-900/40 border border-zinc-900 p-3 rounded-2xl space-y-2.5">
                         <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-indigo-400 font-mono flex items-center gap-1.5">
                           <TrendingUp className="w-4 h-4 text-indigo-400" />
                           <span>FINANCIAL LEDGER STATEMENT</span>
@@ -4625,7 +4636,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                     )}
 
                     {/* TIMELINE STATEMENT LOGS */}
-                    <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3.5">
+                    <div className="bg-zinc-900/40 border border-zinc-900 p-3 rounded-2xl space-y-2.5">
                       <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-400 font-mono flex items-center gap-1.5">
                         <Clock className="w-4 h-4 text-cyan-400" />
                         <span>INTER-DEPARTMENT TIMELINE LEDGER</span>
@@ -4688,13 +4699,13 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                   </div>
 
                   {/* RIGHT: EDITABLE PRODUCTION FIELDS */}
-                  <div className="space-y-4 text-left">
+                  <div className="space-y-3.5 text-left">
                     
-                    <fieldset className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3.5">
+                    <fieldset className="bg-zinc-900/40 border border-zinc-900 p-3 rounded-2xl space-y-2.5">
                       <legend className="px-2 text-[10px] font-black uppercase tracking-[0.15em] text-violet-400 font-mono flex items-center gap-1.5">
                         <span>EDIT DOSSIER SPECIFICATIONS</span>
                       </legend>
-
+ 
                       {/* Step 1: Select Production Role */}
                       <div className="space-y-1">
                         <label className="block text-[9px] font-black uppercase tracking-widest text-[#d97706] mb-1 font-mono">
@@ -4703,7 +4714,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                         <select
                           value={assignRoleFilter}
                           onChange={(e) => setAssignRoleFilter(e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-2.5 px-3 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                          className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-1.5 px-2.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
                         >
                           <option value="">Select Specialty / Production Role...</option>
                           {allRoles.map(role => (
@@ -4851,15 +4862,11 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             <option value="Editing In Progress">Editing In Progress</option>
                             <option value="Internal QC Review">Internal QC Review</option>
                             <option value="Client Review Sent">Client Review Sent</option>
-                            <option value="Customer Review">Customer Review</option>
                             <option value="Revision Required">Revision Required</option>
                             <option value="Revision In Progress">Revision In Progress</option>
                             <option value="Final Approval">Final Approval</option>
-                            <option value="Approved">Approved</option>
                             <option value="Project Delivered">Project Delivered</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Project Closed">Project Closed</option>
-                            <option value="Closed">Closed</option>
+                            <option value="Completed">Completed</option>
                           </select>
                         </div>
 
@@ -5004,7 +5011,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
         const balanceDue = payment?.balance_due !== undefined ? payment.balance_due : (totalAmount - advanceReceived);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
             <div className={`bg-zinc-950 border border-zinc-900 rounded-2xl ${
               workflowActionType === 'assign_editor'
                 ? 'w-full md:w-[90%] lg:w-[85%] max-w-5xl'
@@ -5040,7 +5047,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
               </div>
 
               {/* Form Body wrapper */}
-              <div className={`${workflowActionType === 'assign_editor' ? 'p-3.5 sm:p-4 pb-2' : 'p-5'} overflow-y-auto max-h-[75vh]`}>
+              <div className={`${workflowActionType === 'assign_editor' ? 'p-3.5 sm:p-4 pb-2' : 'p-4'} overflow-y-auto max-h-[85vh]`}>
                 <p className="text-[11px] text-zinc-400 mb-2.5">
                   Step workflow update for <strong className="text-white">{customerName}</strong>.
                 </p>
@@ -5553,11 +5560,10 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           <button
                             type="button"
                             onClick={() => {
-                              updateProduction(activeWorkflowProd.production_id, {
-                                editing_status: 'Closed'
-                              });
-                              setActiveWorkflowProd(null);
-                              setWorkflowActionType(null);
+                              setSelectedStage('Completed' as any);
+                              setDeliveryDate(new Date().toISOString().split('T')[0]);
+                              setClosingNotes('');
+                              setWorkflowActionType('close_project');
                             }}
                             className="px-2 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-805 text-[9px] font-semibold uppercase tracking-wider rounded-lg transition-all"
                           >
@@ -5576,11 +5582,10 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           <button
                             type="button"
                             onClick={() => {
-                              updateProduction(activeWorkflowProd.production_id, {
-                                editing_status: 'Closed'
-                              });
-                              setActiveWorkflowProd(null);
-                              setWorkflowActionType(null);
+                              setSelectedStage('Completed' as any);
+                              setDeliveryDate(new Date().toISOString().split('T')[0]);
+                              setClosingNotes('');
+                              setWorkflowActionType('close_project');
                             }}
                             className="w-full py-2 bg-gradient-to-r from-violet-600 to-indigo-650 text-white text-[10px] font-black uppercase tracking-wider rounded-lg hover:from-violet-500 hover:to-indigo-500 transition-all shadow-md"
                           >
@@ -5636,7 +5641,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                     'Revision In Progress',
                     'Final Approval',
                     'Project Delivered',
-                    'Project Closed'
+                    'Completed'
                   ];
 
                   return (
@@ -5664,9 +5669,8 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                         } else if (selectedStage === 'Project Delivered') {
                           updates.remarks = `Delivered via ${deliveryLink}`;
                           updates.delivery_date = deliveryDate || new Date().toISOString().split('T')[0];
-                          updates.actual_delivery_date = deliveryDate || new Date().toISOString().split('T')[0];
                           updates.raw_footage_location = deliveryLink || activeWorkflowProd.raw_footage_location;
-                        } else if (selectedStage === 'Project Closed') {
+                        } else if (selectedStage === 'Completed') {
                           updates.remarks = closingNotes;
                         }
 
@@ -5750,7 +5754,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               <option value="Revision In Progress">Revision In Progress</option>
                               <option value="Final Approval">Final Approval</option>
                               <option value="Project Delivered">Project Delivered</option>
-                              <option value="Project Closed">Project Closed</option>
+                              <option value="Completed">Completed</option>
                             </select>
                           </div>
 
@@ -5891,7 +5895,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             </div>
                           )}
 
-                          {selectedStage === 'Project Closed' && (
+                          {selectedStage === 'Completed' && (
                             <div className="space-y-3">
                               <div>
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5 font-mono">
@@ -5997,6 +6001,116 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           className="px-5 py-2 bg-gradient-to-r from-blue-650 to-indigo-650 hover:from-blue-600 hover:to-indigo-600 text-white font-mono uppercase text-[10px] tracking-wider rounded-lg transition-all font-black shadow-lg"
                         >
                           Save Status Update
+                        </button>
+                      </div>
+                    </form>
+                  );
+                })()}
+
+                {/* FORM: Close Project popup */}
+                {workflowActionType === 'close_project' && activeWorkflowProd && (() => {
+                  return (
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!selectedStage) {
+                        alert("Please select project status");
+                        return;
+                      }
+
+                      updateProduction(activeWorkflowProd.production_id, {
+                        editing_status: selectedStage,
+                        remarks: closingNotes || activeWorkflowProd.remarks,
+                        delivery_date: deliveryDate || new Date().toISOString().split('T')[0]
+                      });
+
+                      setActiveWorkflowProd(null);
+                      setWorkflowActionType(null);
+                    }} className="space-y-2.5">
+                      <div className="flex gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5 font-mono">
+                            Project ID
+                          </label>
+                          <div className="text-zinc-200 text-xs font-mono">{activeWorkflowProd.tracking_id}</div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5 font-mono">
+                            Client
+                          </label>
+                          <div className="text-zinc-200 text-xs font-mono">{customerName}</div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5 font-mono">
+                          Current Status
+                        </label>
+                        <div className="text-amber-400 font-mono text-xs">{activeWorkflowProd.editing_status}</div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1 font-mono">
+                            Select New Status *
+                          </label>
+                          <select
+                            value={selectedStage}
+                            onChange={(e) => setSelectedStage(e.target.value as EditingStatus)}
+                            className="w-full bg-zinc-900 border border-zinc-850 rounded-lg py-1.5 px-2.5 text-[11px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                            required
+                          >
+                            <option value="">Select status...</option>
+                            <option value="Editing In Progress">Editing In Progress</option>
+                            <option value="Internal QC Review">Internal QC Review</option>
+                            <option value="Client Review Sent">Client Review Sent</option>
+                            <option value="Final Approval">Final Approval</option>
+                            <option value="Project Delivered">Project Delivered</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1 font-mono">
+                            Completion Date
+                          </label>
+                          <input
+                            type="date"
+                            value={deliveryDate}
+                            onChange={(e) => setDeliveryDate(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-850 rounded-lg py-1.5 px-2.5 text-[11px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1 font-mono">
+                          Completion Notes
+                        </label>
+                        <textarea
+                          autoFocus
+                          value={closingNotes}
+                          onChange={(e) => setClosingNotes(e.target.value)}
+                          rows={2}
+                          className="w-full bg-zinc-900 border border-zinc-850 rounded-lg p-2 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                          placeholder="Add any final notes or archive links..."
+                        />
+                      </div>
+
+                      <div className="flex gap-2 justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveWorkflowProd(null);
+                            setWorkflowActionType(null);
+                          }}
+                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-white font-mono uppercase text-[9px] tracking-wider rounded-lg transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-500 text-white font-mono uppercase text-[9px] tracking-wider rounded-lg transition-all font-black shadow-lg"
+                        >
+                          Save 
                         </button>
                       </div>
                     </form>
