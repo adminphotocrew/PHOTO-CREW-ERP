@@ -4,6 +4,23 @@
 
 export type UserRole = 'Business Owner' | 'Sales Team' | 'Operations Team' | 'Production Team';
 
+export type Department = 'Sales' | 'Operations' | 'Production' | 'Editor' | 'Dispatch';
+
+export const DEPARTMENT_STAGES: Record<Department, CurrentStage[]> = {
+  Sales: ['New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Order Confirmed'],
+  Operations: ['Operations Assigned', 'Event Scheduled', 'Event Completed'],
+  Production: ['Raw Footage Received'],
+  Editor: ['Editing Started', 'Customer Review', 'Revision Required', 'Approved'],
+  Dispatch: ['Delivered', 'Payment Pending', 'Closed']
+};
+
+export const ROLE_DEPARTMENT_MAP: Record<UserRole, Department[]> = {
+  'Business Owner': ['Sales', 'Operations', 'Production', 'Editor', 'Dispatch'],
+  'Sales Team': ['Sales'],
+  'Operations Team': ['Operations'],
+  'Production Team': ['Production', 'Editor', 'Dispatch']
+};
+
 export type CurrentStage =
   | 'New Lead'
   | 'Follow Up'

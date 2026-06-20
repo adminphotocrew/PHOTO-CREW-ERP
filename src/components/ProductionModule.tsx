@@ -250,11 +250,13 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     addStaff,
     updateStaff,
     deleteStaff,
-    addSpeciality
+    addSpeciality,
+    isDepartmentAllowedToEdit
   } = useRole();
 
   // Role permissions gate
-  const canEdit = currentRole === 'Production Team' || currentRole === 'Business Owner';
+  const canEdit = (currentRole === 'Production Team' || currentRole === 'Business Owner') && 
+                  isDepartmentAllowedToEdit(currentRole, 'Raw Footage Received'); // Need to map correctly per project later
 
   // Dynamically compile active production projects/leads from leadsData / Supabase leads table
   const leads = useMemo(() => {

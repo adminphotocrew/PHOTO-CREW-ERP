@@ -6,6 +6,7 @@ import {
 import { Order, CurrentStage, Staff, Equipment } from '../../types';
 import { ProjectDetailModal } from '../ProjectDetailModal';
 import { CameraLensStatsCard, CameraLensTheme } from '../CameraLensStatsCard';
+import { convertTimeToDbFormat } from '../../utils';
 
 export const OperationsLeads: React.FC = () => {
   const { 
@@ -24,10 +25,11 @@ export const OperationsLeads: React.FC = () => {
     saveStaffAssignments,
     payments,
     equipmentHandovers,
-    addEquipmentHandovers
+    addEquipmentHandovers,
+    isDepartmentAllowedToEdit
   } = useRole();
 
-  const canEdit = currentRole === 'Operations Team' || currentRole === 'Business Owner';
+
 
   // Anchor date June 15, 2026
   const systemToday = new Date();
@@ -73,6 +75,9 @@ export const OperationsLeads: React.FC = () => {
   // Modals / Selection states
   const [activeModalOrderId, setActiveModalOrderId] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  const isAllowedToEdit = isDepartmentAllowedToEdit(currentRole, selectedOrder?.current_stage || 'New Lead');
+  const canEdit = (currentRole === 'Operations Team' || currentRole === 'Business Owner') && isAllowedToEdit;
   const [projectDossierId, setProjectDossierId] = useState<string | null>(null);
   
   // Inline edit state for assignment
@@ -354,46 +359,78 @@ export const OperationsLeads: React.FC = () => {
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assigningOrderId) return;
-
-    // First save the multi-staff role assignments to Supabase & Context state!
-    await saveStaffAssignments(assigningOrderId, activeAssignments);
-
-    // Map some main ones to assignForm variables for legacy column compatibility
-    const photographer = activeAssignments.find(a => a.staff_role.toLowerCase().includes('photographer'))?.staff_name || '';
-    const videographer = activeAssignments.find(a => a.staff_role.toLowerCase().includes('videographer'))?.staff_name || '';
-    const droneOp = activeAssignments.find(a => a.staff_role.toLowerCase().includes('drone') || a.staff_role.toLowerCase().includes('aerial'))?.staff_name || '';
-    const assistant = activeAssignments.find(a => a.staff_role.toLowerCase().includes('assistant'))?.staff_name || '';
     
-    const matchedOrder = orders.find(o => o.order_id === assigningOrderId);
-    const targetStage: CurrentStage = (matchedOrder?.current_stage === 'Order Confirmed' || matchedOrder?.current_stage === 'New Order Received' || matchedOrder?.current_stage === 'Operations Assigned' || !matchedOrder?.current_stage) 
-      ? 'Staff Assigned' 
-      : matchedOrder.current_stage;
-
-    // Assign operations includes event_status and raw footage link if updated
-    assignOperations(assigningOrderId, {
-      photographer_assigned: photographer || assignForm.photographer_assigned || 'Ramesh Kumar',
-      videographer_assigned: videographer || assignForm.videographer_assigned || 'Rahul Verma',
-      drone_operator_assigned: droneOp || assignForm.drone_operator_assigned,
-      assistant_assigned: assistant || assignForm.assistant_assigned,
-      equipment_kit: assignForm.equipment_kit,
-      reporting_time: assignForm.reporting_time,
-      remarks: assignForm.remarks,
-      event_status: targetStage,
-      current_stage: targetStage,
-      event_date: assignForm.event_date,
-      event_time: assignForm.event_time
-    });
-
-    if (matchedOrder) {
-      setSuccessModalData({
-        orderId: assigningOrderId,
-        customerName: matchedOrder.customer_name,
-        order: { ...matchedOrder, current_stage: targetStage },
-        assignments: [...activeAssignments]
-      });
+    // Validate required fields
+    if (activeAssignments.length === 0) {
+      alert("Please assign at least one staff member.");
+      return;
+    }
+    if (!assignForm.event_date) {
+      alert("Please select an event date.");
+      return;
+    }
+    if (!assignForm.reporting_time) {
+      alert("Please select a reporting time.");
+      return;
     }
 
-    setAssigningOrderId(null);
+    try {
+      // First save the multi-staff role assignments to Supabase & Context state!
+      await saveStaffAssignments(assigningOrderId, activeAssignments);
+
+      // Map some main ones to assignForm variables for legacy column compatibility
+      const photographer = activeAssignments.find(a => a.staff_role.toLowerCase().includes('photographer'))?.staff_name || '';
+      const videographer = activeAssignments.find(a => a.staff_role.toLowerCase().includes('videographer'))?.staff_name || '';
+      const droneOp = activeAssignments.find(a => a.staff_role.toLowerCase().includes('drone') || a.staff_role.toLowerCase().includes('aerial'))?.staff_name || '';
+      const assistant = activeAssignments.find(a => a.staff_role.toLowerCase().includes('assistant'))?.staff_name || '';
+      
+      const matchedOrder = orders.find(o => o.order_id === assigningOrderId);
+      
+      // Force status to Event Scheduled as requested
+      const targetStage: CurrentStage = 'Event Scheduled';
+
+      console.log("Saving assignment for order:", assigningOrderId, {
+        photographer,
+        videographer,
+        droneOp,
+        assistant,
+        equipment: assignForm.equipment_kit,
+        reporting_time: convertTimeToDbFormat(assignForm.reporting_time),
+        targetStage
+      });
+
+      // Assign operations includes event_status and raw footage link if updated
+      await assignOperations(assigningOrderId, {
+        photographer_assigned: photographer || assignForm.photographer_assigned || 'Ramesh Kumar',
+        videographer_assigned: videographer || assignForm.videographer_assigned || 'Rahul Verma',
+        drone_operator_assigned: droneOp || assignForm.drone_operator_assigned,
+        assistant_assigned: assistant || assignForm.assistant_assigned,
+        equipment_kit: assignForm.equipment_kit,
+        reporting_time: convertTimeToDbFormat(assignForm.reporting_time),
+        remarks: assignForm.remarks,
+        event_status: targetStage,
+        current_stage: targetStage,
+        event_date: assignForm.event_date,
+        event_time: convertTimeToDbFormat(assignForm.event_time),
+        assigned_staff: activeAssignments.map(a => a.staff_name).join(', '),
+        assigned_roles: activeAssignments.map(a => a.staff_role).join(', ')
+      } as any);
+
+      if (matchedOrder) {
+        setSuccessModalData({
+          orderId: assigningOrderId,
+          customerName: matchedOrder.customer_name,
+          order: { ...matchedOrder, current_stage: targetStage },
+          assignments: [...activeAssignments]
+        });
+      }
+
+      setAssigningOrderId(null);
+      alert("Assignment saved successfully!");
+    } catch (e: any) {
+      console.error("Failed to save assignment:", e);
+      alert("Unable to save assignment. Error: " + (e.message || "Please try again."));
+    }
   };
 
   const getStaffForRole = (role: string) => {
@@ -775,14 +812,13 @@ export const OperationsLeads: React.FC = () => {
               <th className="p-4 font-bold">Event Time</th>
               <th className="p-4 font-bold">Reporting Time</th>
               <th className="p-4 font-bold">Assigned Team</th>
-              <th className="p-4 font-bold">Event Status</th>
               <th className="p-4 font-bold">Current Stage</th>
               <th className="p-4 font-bold text-right text-zinc-400">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-850/60 text-xs">
-            {sortedOrders.length > 0 ? (
-              sortedOrders.map((ord) => {
+            {sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received').length > 0 ? (
+              sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received').map((ord) => {
                 const op = getOpDetails(ord.order_id);
                 const orderAssignments = staffAssignments ? staffAssignments.filter(sa => sa.order_id === ord.order_id) : [];
 
@@ -796,7 +832,6 @@ export const OperationsLeads: React.FC = () => {
                 ].filter(Boolean);
 
                 const currentStage = ord.current_stage || 'Order Confirmed';
-                const eventStatus = op?.event_status || (currentStage === 'Order Confirmed' ? 'Unscheduled' : currentStage);
 
                 return (
                   <tr key={ord.order_id} className="hover:bg-zinc-900/20 transition-all">
@@ -841,17 +876,6 @@ export const OperationsLeads: React.FC = () => {
                     </td>
                     <td className="p-4">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase border ${
-                        eventStatus === 'Order Confirmed' || eventStatus === 'Unscheduled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                        eventStatus === 'Event Scheduled' || eventStatus === 'Assigned' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        eventStatus === 'Event Completed' || eventStatus === 'Completed' ? 'bg-indigo-500/10 text-indigo-455 border-indigo-500/20' :
-                        eventStatus === 'Raw Footage Received' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                        'bg-zinc-800 text-zinc-400 border-zinc-700'
-                      }`}>
-                        {eventStatus}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase border ${
                         currentStage === 'Order Confirmed' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
                         currentStage === 'Operations Assigned' ? 'bg-sky-500/10 text-sky-450 border-sky-500/20' :
                         currentStage === 'Event Scheduled' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
@@ -873,6 +897,56 @@ export const OperationsLeads: React.FC = () => {
                           <Eye className="w-3 h-3" /> Details
                         </button>
 
+                        {/* Update Status */}
+                        {canEdit && (currentStage === 'Event Scheduled' || currentStage === 'Event Completed') && (
+                          <select
+                            value=""
+                            onChange={async (e) => {
+                              const newStatus = e.target.value;
+                              if (newStatus === 'Event Completed') {
+                                try {
+                                  await markEventCompleted(ord.order_id, '');
+                                } catch (error) {
+                                  alert(`Failed to update status: ${error}`);
+                                }
+                              } else if (newStatus === 'Event Cancelled') {
+                                // Add logic for cancellation if needed
+                              } else if (newStatus === 'Raw Footage Received') {
+                                setReceivingFootageOrderId(ord.order_id);
+                                const existingRf = rawFootage?.find(f => f.order_id === ord.order_id);
+                                setFootageForm({
+                                  footage_link: existingRf?.server_path || `https://drive.google.com/drive/folders/PC-${ord.order_id}-footage`,
+                                  storage_type: 'Google Drive',
+                                  upload_notes: ''
+                                });
+                                // Initialize footageHandoverStates for each assigned equipment item
+                                const op = getOpDetails(ord.order_id);
+                                const kits = op?.equipment_kit ? op.equipment_kit.split(',').map((sName: string) => sName.trim()).filter(Boolean) : [];
+                                const initialHandovers: any = {};
+                                kits.forEach((k: string) => {
+                                  initialHandovers[k] = {
+                                    return_status: 'Returned',
+                                    returned_by: currentUserName,
+                                    return_date: new Date().toISOString().split('T')[0],
+                                    notes: ''
+                                  };
+                                });
+                                setFootageHandoverStates(initialHandovers);
+                              }
+                            }}
+                            className="px-2 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-mono font-bold cursor-pointer transition-all uppercase"
+                          >
+                            <option value="">▼ UPDATE</option>
+                            {currentStage === 'Event Scheduled' && <>
+                              <option value="Event Completed">Event Completed</option>
+                              <option value="Event Cancelled">Event Cancelled</option>
+                            </>}
+                            {currentStage === 'Event Completed' && (
+                              <option value="Raw Footage Received">Raw Footage Received</option>
+                            )}
+                          </select>
+                        )}
+
                         {/* WhatsApp Staff: visible when assignment exists */}
                         {crewNames.length > 0 && (
                           <button
@@ -887,7 +961,7 @@ export const OperationsLeads: React.FC = () => {
                             className="px-2 py-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 rounded text-[10px] font-mono font-bold cursor-pointer transition-all uppercase"
                             title="Share roster with team on WhatsApp"
                           >
-                            WhatsApp Staff
+                            WhatsApp
                           </button>
                         )}
                         {/* Before Event Actions: Assign Staff */}
@@ -907,35 +981,6 @@ export const OperationsLeads: React.FC = () => {
                             className="px-2 py-1 bg-sky-505/10 hover:bg-sky-505/20 text-zinc-400 hover:text-zinc-300 font-mono text-[9px] border border-zinc-750 rounded cursor-pointer transition-all uppercase"
                           >
                              Roster
-                          </button>
-                        )}
-
-                        {/* Step 2 - Staff Assigned: Schedule Event */}
-                        {canEdit && (currentStage === 'Staff Assigned') && (
-                          <button
-                            onClick={() => {
-                              setSchedulingOrderId(ord.order_id);
-                              const op = getOpDetails(ord.order_id);
-                              setScheduleEventForm({
-                                event_date: ord.event_date || '',
-                                event_time: ord.event_time || '',
-                                reporting_time: op?.reporting_time || '08:00',
-                                remarks: op?.remarks || ''
-                              });
-                            }}
-                            className="px-2 py-1 bg-lime-500/10 hover:bg-lime-500/20 text-lime-400 border border-lime-500/20 rounded text-[10px] font-mono font-bold cursor-pointer transition-all uppercase"
-                          >
-                            Schedule Event
-                          </button>
-                        )}
-
-                        {/* Step 3 - Event Scheduled: Mark Event Complete */}
-                        {canEdit && (currentStage === 'Event Scheduled') && (
-                          <button
-                            onClick={() => triggerCompletionModal(ord.order_id)}
-                            className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-mono font-bold text-[10px] rounded cursor-pointer transition-all uppercase"
-                          >
-                            Mark Event Complete
                           </button>
                         )}
 

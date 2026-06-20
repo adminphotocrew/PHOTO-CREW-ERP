@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover, UnlockOverride } from '../types';
+import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover, UnlockOverride, DEPARTMENT_STAGES, ROLE_DEPARTMENT_MAP, Department } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
@@ -82,8 +82,8 @@ interface RoleContextType {
       event_time?: string;
       event_status?: string;
     }
-  ) => void;
-  markEventCompleted: (orderId: string, serverPath: string) => void;
+  ) => Promise<void>;
+  markEventCompleted: (orderId: string, serverPath: string) => Promise<void>;
   confirmRawFootageReceived: (
     orderId: string,
     footageLink?: string,
@@ -91,21 +91,21 @@ interface RoleContextType {
     uploadNotes?: string,
     paymentCollectionStatus?: string,
     additionalReceived?: number
-  ) => void;
-  updateOrderStage: (orderId: string, stage: CurrentStage) => void;
-  acceptRawFootage: (trackingId: string) => void;
+  ) => Promise<void>;
+  updateOrderStage: (orderId: string, stage: CurrentStage) => Promise<void>;
+  acceptRawFootage: (trackingId: string) => Promise<void>;
   updateProduction: (
     productionId: string, 
     updates: Partial<Omit<Production, 'production_id' | 'tracking_id'>>
-  ) => void;
-  markDelivered: (trackingId: string, remarks?: string) => void;
+  ) => Promise<void>;
+  markDelivered: (trackingId: string, remarks?: string) => Promise<void>;
   recordPayment: (
     orderId: string, 
     amountReceived: number, 
     paymentDate: string, 
     proofUrl?: string
-  ) => void;
-  resetAllData: () => void;
+  ) => Promise<void>;
+  resetAllData: () => Promise<void>;
   refreshData: () => void;
   
   // User Management Admin features
@@ -122,12 +122,6 @@ interface RoleContextType {
       staff_id: string;
       staff_name: string;
     }[]
-  ) => Promise<void>;
-  updateStaffAssignmentWhatsAppStatus: (
-    orderId: string,
-    staffId: string,
-    role: string,
-    status: string
   ) => Promise<void>;
 
   specialities: ProductionSpeciality[];
@@ -148,6 +142,8 @@ interface RoleContextType {
   addEquipmentHandovers: (handovers: Omit<EquipmentHandover, 'handover_id'>[]) => Promise<void>;
   
   unlockedRecords: UnlockOverride[];
+  getDepartmentForStage: (stage: CurrentStage) => Department | undefined;
+  isDepartmentAllowedToEdit: (role: UserRole, stage: CurrentStage) => boolean;
   unlockRecord: (recordId: string, module: 'Sales' | 'Operations' | 'Production', reason: string) => void;
   lockRecord: (recordId: string, module: 'Sales' | 'Operations' | 'Production') => void;
   isRecordLocked: (recordId: string, module: 'Sales' | 'Operations' | 'Production') => boolean;
@@ -2482,6 +2478,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: targetStageNum,
         event_date: event_date || targetOrder.event_date,
         event_time: event_time || targetOrder.event_time,
+        assigned_staff: (opData as any).assigned_staff,
+        assigned_roles: (opData as any).assigned_roles,
+        assigned_equipment: opData.equipment_kit,
+        reporting_time: opData.reporting_time,
         updated_by: currentUserName,
         updated_at: timestamp
       });
@@ -2514,7 +2514,6 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       const uniqueId = existing?.assignment_id || `ASST-${Math.floor(1000 + Math.random() * 9000)}`;
       const assignDate = existing?.assignment_date || new Date().toISOString().split('T')[0];
-      const sendStatus = existing?.whatsapp_sent_status || 'Not Sent';
 
       return {
         assignment_id: uniqueId,
@@ -2524,7 +2523,6 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         staff_name: a.staff_name,
         assignment_date: assignDate,
         assignment_status: 'Assigned',
-        whatsapp_sent_status: sendStatus,
       };
     });
 
@@ -2536,7 +2534,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('order_id', orderId);
         
         if (delErr) {
-          console.warn('Error deleting existing assignments in Supabase:', delErr.message);
+          throw new Error('Error deleting existing assignments: ' + delErr.message);
         }
 
         if (newAssignments.length > 0) {
@@ -2545,11 +2543,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .insert(newAssignments);
           
           if (insErr) {
-            console.warn('Error inserting assignments in Supabase:', insErr.message);
+            throw new Error('Error inserting new assignments: ' + insErr.message);
           }
         }
-      } catch (err) {
-        console.warn('Supabase sync error in saveStaffAssignments:', err);
+      } catch (err: any) {
+        throw new Error('Supabase sync error in saveStaffAssignments: ' + err.message);
       }
     }
 
@@ -2599,38 +2597,6 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const updateStaffAssignmentWhatsAppStatus = async (
-    orderId: string,
-    staffId: string,
-    role: string,
-    status: string
-  ) => {
-    if (supabaseClient) {
-      try {
-        const { error } = await supabaseClient
-          .from('staff_assignments')
-          .update({ whatsapp_sent_status: status })
-          .eq('order_id', orderId)
-          .eq('staff_id', staffId)
-          .eq('staff_role', role);
-        if (error) {
-          console.warn('Error updating whatsapp_sent_status in Supabase:', error.message);
-        }
-      } catch (err) {
-        console.warn('Supabase sync error in updateStaffAssignmentWhatsAppStatus:', err);
-      }
-    }
-
-    setStaffAssignments((prev) => {
-      const updated = prev.map((x) =>
-        x.order_id === orderId && x.staff_id === staffId && x.staff_role === role
-          ? { ...x, whatsapp_sent_status: status }
-          : x
-      );
-      localStorage.setItem('erp_staff_assignments', JSON.stringify(updated));
-      return updated;
-    });
-  };
 
   // 5. Mark Event Completed (Action button in Operations)
   const markEventCompleted = async (orderId: string, serverPath: string) => {
@@ -3894,6 +3860,22 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : [];
   });
 
+  // RBAC Helper: Define allowed statuses per department
+  const getDepartmentForStage = (stage: CurrentStage): Department | undefined => {
+    for (const [dept, stages] of Object.entries(DEPARTMENT_STAGES)) {
+      if (stages.includes(stage)) return dept as Department;
+    }
+    return undefined;
+  };
+
+  const isDepartmentAllowedToEdit = (role: UserRole, stage: CurrentStage): boolean => {
+    const stageDept = getDepartmentForStage(stage);
+    if (!stageDept) return false;
+    
+    const allowedDepts = ROLE_DEPARTMENT_MAP[role];
+    return allowedDepts.includes(stageDept);
+  };
+
   const unlockRecord = (recordId: string, module: 'Sales' | 'Operations' | 'Production', reason: string) => {
     const newUnlock: UnlockOverride = {
       recordId,
@@ -4029,7 +4011,6 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetUserPassword,
         staffAssignments,
         saveStaffAssignments,
-        updateStaffAssignmentWhatsAppStatus,
         specialities,
         addSpeciality,
         updateSpeciality,
@@ -4046,6 +4027,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addEquipmentHandover,
         addEquipmentHandovers,
         unlockedRecords,
+        getDepartmentForStage,
+        isDepartmentAllowedToEdit,
         unlockRecord,
         lockRecord,
         isRecordLocked,

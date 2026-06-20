@@ -550,7 +550,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     unlockedRecords,
     unlockRecord,
     lockRecord,
-    isRecordLocked
+    isRecordLocked,
+    isDepartmentAllowedToEdit
   } = useRole();
 
   const [logoBase64, setLogoBase64] = useState<string>('');
@@ -595,7 +596,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   }, []);
 
   // Role permissions gate
-  const canEdit = currentRole === 'Sales Team' || currentRole === 'Business Owner';
+  const canEdit = (currentRole === 'Sales Team' || currentRole === 'Business Owner') && 
+                  isDepartmentAllowedToEdit(currentRole, 'New Lead');
 
   // Toggle modes
   const [internalTab, setInternalTab] = useState<'list' | 'create' | 'profiles' | 'packages' | 'calendar'>('list');

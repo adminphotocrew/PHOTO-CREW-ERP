@@ -1,6 +1,29 @@
 import { Lead, Order, Payment, Customer } from './types';
 
 /**
+ * Converts any AM/PM or HH:mm time string to a 24-hour HH:mm:ss format for SQL.
+ */
+export function convertTimeToDbFormat(timeStr: string): string {
+  if (!timeStr) return '';
+  
+  // Try to match 10pm, 10:00pm, 10 am, 10:00 AM, or just 10, 10:00
+  const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = match[2] || '00';
+    const period = match[3]?.toLowerCase();
+    
+    if (period === 'pm' && hours < 12) hours += 12;
+    if (period === 'am' && hours === 12) hours = 0;
+    
+    return `${String(hours).padStart(2, '0')}:${minutes}:00`;
+  }
+  
+  console.warn("Invalid time format passed to convertTimeToDbFormat:", timeStr);
+  return '00:00:00'; // Return a default valid time instead of the original string
+}
+
+/**
  * Utility functions for formatting Indian currency, phone numbers, and AM/PM times.
  */
 
