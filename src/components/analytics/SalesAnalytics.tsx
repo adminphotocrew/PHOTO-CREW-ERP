@@ -7,7 +7,7 @@ import { formatINR } from '../../utils';
 import { CameraLensStatsCard, CameraLensTheme } from '../CameraLensStatsCard';
 import { 
   Users, MessageSquare, PhoneCall, FileText, Send, DollarSign,
-  TrendingUp, Percent, BarChart3, ChevronRight, Camera
+  TrendingUp, Percent, BarChart3, ChevronRight, Camera, Trophy
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -59,6 +59,43 @@ export const SalesAnalytics: React.FC = () => {
   const upcomingEventsCount = filteredLeads
     .filter(l => (l.status === 'Order Confirmed' || l.status === 'Approved') && l.event_date >= TODAY_REF)
     .length;
+
+  const salesTeam = staff.filter(s => s.role === 'Sales Team');
+  
+  const staffPerformance = useMemo(() => {
+    const stats: Record<string, any> = {};
+    salesTeam.forEach(s => {
+      stats[s.staff_id] = {
+        name: s.name,
+        assigned: 0,
+        contacted: 0,
+        followUps: 0,
+        converted: 0,
+        lost: 0,
+        revenue: 0,
+        conversionRate: 0
+      };
+    });
+
+    filteredLeads.forEach(l => {
+      if (l.assigned_to && stats[l.assigned_to]) {
+        const s = stats[l.assigned_to];
+        s.assigned += 1;
+        if (l.status !== 'New Lead') s.contacted += 1;
+        if (['Follow Up', 'Follow-Up', 'Follow-up Pending'].includes(l.status)) s.followUps += 1;
+        if (['Order Confirmed', 'Approved'].includes(l.status)) {
+          s.converted += 1;
+          s.revenue += (l.budget || 0);
+        }
+        if (['Lost Lead', 'Cancelled', 'Lost'].includes(l.status)) s.lost += 1;
+      }
+    });
+
+    return Object.values(stats).map(s => {
+      s.conversionRate = s.assigned > 0 ? parseFloat(((s.converted / s.assigned) * 100).toFixed(1)) : 0;
+      return s;
+    }).sort((a, b) => b.revenue - a.revenue);
+  }, [filteredLeads, salesTeam]);
 
   // Construct chart dataset (grouped by date)
   const chartData = useMemo(() => {
@@ -112,12 +149,6 @@ export const SalesAnalytics: React.FC = () => {
             <FileText className="w-4 h-4" />
             <span>Download Report</span>
           </button>
-          <div className="p-2 py-1.5 rounded-xl bg-zinc-900 border border-zinc-850/80 flex items-center gap-2.5 h-9">
-            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-            <span className="text-[10px] font-mono text-zinc-450 uppercase font-bold">
-              Live Stream Connected
-            </span>
-          </div>
         </div>
       </div>
 
@@ -273,6 +304,55 @@ export const SalesAnalytics: React.FC = () => {
               <Area type="monotone" name="Signed Orders" dataKey="orders" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorOrders)" />
             </AreaChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Staff Performance & Ranking */}
+      <div className="bg-zinc-950 border border-zinc-850 rounded-2xl overflow-hidden p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-5 h-5 text-amber-500" />
+          <h3 className="text-sm font-bold text-zinc-100 font-mono uppercase tracking-wider">Sales Staff Performance Ranking</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-zinc-800 text-[10px] uppercase font-black text-zinc-500 font-mono tracking-wider">
+                <th className="p-3">Rank</th>
+                <th className="p-3">Staff Name</th>
+                <th className="p-3 text-center">Assigned Leads</th>
+                <th className="p-3 text-center">Contacted Leads</th>
+                <th className="p-3 text-center">Follow-ups</th>
+                <th className="p-3 text-center">Converted Leads</th>
+                <th className="p-3 text-center">Lost Leads</th>
+                <th className="p-3 text-right">Revenue Generated</th>
+                <th className="p-3 text-right">Conversion Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffPerformance.map((st, idx) => (
+                <tr key={idx} className="border-b border-zinc-800/50 text-xs text-zinc-300 font-mono hover:bg-zinc-900/50 transition-colors">
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded text-black font-bold ${idx === 0 ? 'bg-amber-400' : idx === 1 ? 'bg-zinc-300' : idx === 2 ? 'bg-amber-700' : 'bg-transparent text-zinc-400 border border-zinc-700'}`}>
+                      #{idx + 1}
+                    </span>
+                  </td>
+                  <td className="p-3 text-white font-bold">{st.name}</td>
+                  <td className="p-3 text-center">{st.assigned}</td>
+                  <td className="p-3 text-center">{st.contacted}</td>
+                  <td className="p-3 text-center">{st.followUps}</td>
+                  <td className="p-3 text-center text-emerald-400">{st.converted}</td>
+                  <td className="p-3 text-center text-rose-400">{st.lost}</td>
+                  <td className="p-3 font-bold text-amber-400 text-right">{formatINR(st.revenue)}</td>
+                  <td className="p-3 font-bold text-right">{st.conversionRate}%</td>
+                </tr>
+              ))}
+              {staffPerformance.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="p-4 text-center text-zinc-500 text-xs">No sales staff data available</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

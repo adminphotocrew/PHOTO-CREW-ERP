@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover } from '../types';
+import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover, UnlockOverride } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
@@ -146,6 +146,11 @@ interface RoleContextType {
   equipmentHandovers: EquipmentHandover[];
   addEquipmentHandover: (handover: Omit<EquipmentHandover, 'handover_id'>) => Promise<void>;
   addEquipmentHandovers: (handovers: Omit<EquipmentHandover, 'handover_id'>[]) => Promise<void>;
+  
+  unlockedRecords: UnlockOverride[];
+  unlockRecord: (recordId: string, module: 'Sales' | 'Operations' | 'Production', reason: string) => void;
+  lockRecord: (recordId: string, module: 'Sales' | 'Operations' | 'Production') => void;
+  isRecordLocked: (recordId: string, module: 'Sales' | 'Operations' | 'Production') => boolean;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -2356,6 +2361,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       customer_name: targetLead.customer_name,
       mobile: targetLead.mobile,
       event_type: targetLead.event_type,
+      custom_event_name: targetLead.custom_event_name || '',
+      shoot_type: targetLead.shoot_type || '',
       event_date: eventDate || targetLead.event_date,
       event_time: eventTime || targetLead.event_time,
       reporting_time: reportingTime || '',
@@ -3882,6 +3889,88 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const [unlockedRecords, setUnlockedRecords] = useState<UnlockOverride[]>(() => {
+    const saved = localStorage.getItem('erp_unlocked_records');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const unlockRecord = (recordId: string, module: 'Sales' | 'Operations' | 'Production', reason: string) => {
+    const newUnlock: UnlockOverride = {
+      recordId,
+      unlockedBy: currentUserName || 'Business Owner',
+      unlockDate: new Date().toISOString(),
+      reason,
+      module
+    };
+    const updated = [...unlockedRecords, newUnlock];
+    setUnlockedRecords(updated);
+    localStorage.setItem('erp_unlocked_records', JSON.stringify(updated));
+
+    logActivity(`Unlocked ${module} Record for ${recordId}. Reason: ${reason}`, 'UserManagement', recordId);
+    
+    // Add a specific log log entry to activity logs if needed, also can trigger refresh
+    fetchFromDb().catch(console.error);
+  };
+
+  const lockRecord = (recordId: string, module: 'Sales' | 'Operations' | 'Production') => {
+    const updated = unlockedRecords.filter(r => !(r.recordId === recordId && r.module === module));
+    setUnlockedRecords(updated);
+    localStorage.setItem('erp_unlocked_records', JSON.stringify(updated));
+
+    logActivity(`Locked ${module} Record for ${recordId}`, 'UserManagement', recordId);
+  };
+
+  const isRecordLocked = (recordId: string, module: 'Sales' | 'Operations' | 'Production'): boolean => {
+    const override = unlockedRecords.find(r => r.recordId === recordId && r.module === module);
+    if (override) {
+      return false;
+    }
+
+    if (module === 'Sales') {
+      const lead = leads.find(l => l.lead_id === recordId);
+      if (!lead) return false;
+      const activeSalesStages = ['New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation'];
+      return !activeSalesStages.includes(lead.status);
+    }
+
+    if (module === 'Operations') {
+      let orderId = recordId;
+      const op = operations.find(o => o.operation_id === recordId || o.order_id === recordId);
+      if (op) {
+        orderId = op.order_id;
+      }
+      const order = augmentedOrders.find(o => o.order_id === orderId);
+      if (!order) {
+        const lead = leads.find(l => l.lead_id === recordId);
+        if (lead && lead.status === 'Raw Footage Received') return true;
+        return false;
+      }
+      const preRawFootageStages = [
+        'New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Order Confirmed',
+        'New Order Received', 'Operations Assigned', 'Event Scheduled', 'Staff Assigned', 'Event Completed'
+      ];
+      return !preRawFootageStages.includes(order.current_stage);
+    }
+
+    if (module === 'Production') {
+      const prodItem = augmentedProduction.find(p => p.production_id === recordId || p.tracking_id === recordId);
+      if (!prodItem) {
+        const order = augmentedOrders.find(o => o.order_id === recordId);
+        if (order) {
+          return order.current_stage === 'Project Closed' || order.current_stage === 'Completed' || order.current_stage === 'Closed';
+        }
+        const lead = leads.find(l => l.lead_id === recordId);
+        if (lead) {
+          return lead.status === 'Project Closed' || lead.status === 'Completed' || lead.status === 'Closed';
+        }
+        return false;
+      }
+      return prodItem.production_status === 'Closed';
+    }
+
+    return false;
+  };
+
   return (
     <RoleContext.Provider
       value={{
@@ -3956,6 +4045,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         equipmentHandovers,
         addEquipmentHandover,
         addEquipmentHandovers,
+        unlockedRecords,
+        unlockRecord,
+        lockRecord,
+        isRecordLocked,
       }}
     >
       {children}

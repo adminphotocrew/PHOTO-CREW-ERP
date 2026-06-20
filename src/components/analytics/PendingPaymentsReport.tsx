@@ -109,22 +109,42 @@ export const PendingPaymentsReport: React.FC = () => {
     });
   }, [leads, orders, payments]);
 
-  // Compute metrics for the 6 Pending Payment Analytics Cards
+  // Compute metrics for the Pending Payment Analytics Cards
   const stats = useMemo(() => {
     const totalPendingOrders = allPendingRecords.length;
     const totalPendingAmount = allPendingRecords.reduce((acc, r) => acc + r.remainingAmount, 0);
     const partialPaymentOrders = allPendingRecords.filter(r => r.paymentStatus === 'Partial').length;
     const overduePendingPayments = allPendingRecords.filter(r => r.isOverdue).length;
+    const overdueAmount = allPendingRecords.filter(r => r.isOverdue).reduce((acc, r) => acc + r.remainingAmount, 0);
     const upcomingPaymentDue = allPendingRecords.filter(r => !r.isOverdue).length;
     const averageOutstandingAmount = totalPendingOrders > 0 ? totalPendingAmount / totalPendingOrders : 0;
+    
+    // Calculate Due Today and Due This Week
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    const endOfWeek = new Date();
+    endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+    const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+
+    const dueTodayAmount = allPendingRecords
+      .filter(r => r.eventDate === todayStr)
+      .reduce((acc, r) => acc + r.remainingAmount, 0);
+
+    const dueThisWeekAmount = allPendingRecords
+      .filter(r => r.eventDate >= todayStr && r.eventDate <= endOfWeekStr)
+      .reduce((acc, r) => acc + r.remainingAmount, 0);
 
     return {
       totalPendingOrders,
       totalPendingAmount,
       partialPaymentOrders,
       overduePendingPayments,
+      overdueAmount,
       upcomingPaymentDue,
-      averageOutstandingAmount
+      averageOutstandingAmount,
+      dueTodayAmount,
+      dueThisWeekAmount
     };
   }, [allPendingRecords]);
 
@@ -394,66 +414,21 @@ export const PendingPaymentsReport: React.FC = () => {
           }`}
         >
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Total Pending Orders</span>
+            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Total Pending Amount</span>
             <DollarSign className={`w-4 h-4 ${activeCardFilter === 'All' ? 'text-amber-500' : 'text-zinc-500'}`} />
           </div>
           <p className="text-2xl font-extrabold text-white tracking-tight leading-none mb-1">
-            {stats.totalPendingOrders}
+            {formatPercentageOrINR(stats.totalPendingAmount)}
           </p>
           <p className="text-[8px] text-zinc-500 font-mono">
-            AF UNLOCKED • PRIME 16mm
+            {stats.totalPendingOrders} PENDING INVOICES
           </p>
           {activeCardFilter === 'All' && (
             <div className="absolute bottom-0 right-0 w-2 h-2 bg-amber-500 rounded-tl-md" />
           )}
         </div>
 
-        {/* Card 2: Total Pending Amount */}
-        <div 
-          onClick={() => handleCardClick('All')}
-          className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden ${
-            activeCardFilter === 'All'
-              ? 'bg-gradient-to-br from-zinc-850 to-zinc-900 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
-              : 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-750'
-          }`}
-        >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Total Pending Amount</span>
-            <TrendingUp className="w-4 h-4 text-rose-500" />
-          </div>
-          <p className="text-xl font-extrabold text-rose-405 tracking-tight leading-none mb-1">
-            {formatPercentageOrINR(stats.totalPendingAmount)}
-          </p>
-          <p className="text-[8px] text-zinc-500 font-mono">
-            AF CONTINUOUS • CINE 35mm
-          </p>
-        </div>
-
-        {/* Card 3: Partial Payment Orders */}
-        <div 
-          onClick={() => handleCardClick('Partial')}
-          className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden ${
-            activeCardFilter === 'Partial'
-              ? 'bg-gradient-to-br from-zinc-850 to-zinc-900 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
-              : 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-750'
-          }`}
-        >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Partial Payments</span>
-            <Percent className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-2xl font-extrabold text-amber-500 tracking-tight leading-none mb-1">
-            {stats.partialPaymentOrders}
-          </p>
-          <p className="text-[8px] text-zinc-500 font-mono">
-            AF TRANSMIT • TELE 85mm
-          </p>
-          {activeCardFilter === 'Partial' && (
-            <div className="absolute bottom-0 right-0 w-2 h-2 bg-amber-500 rounded-tl-md" />
-          )}
-        </div>
-
-        {/* Card 4: Overdue Pending Payments */}
+        {/* Card 2: Overdue Amount */}
         <div 
           onClick={() => handleCardClick('Overdue')}
           className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden ${
@@ -463,21 +438,55 @@ export const PendingPaymentsReport: React.FC = () => {
           }`}
         >
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Overdue Payments</span>
+            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Overdue Amount</span>
             <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
-          <p className="text-2xl font-extrabold text-rose-500 tracking-tight leading-none mb-1">
-            {stats.overduePendingPayments}
+          <p className="text-xl font-extrabold text-rose-500 tracking-tight leading-none mb-1">
+            {formatPercentageOrINR(stats.overdueAmount)}
           </p>
           <p className="text-[8px] text-zinc-500 font-mono">
-            AF CLOSED • TELE 135mm
+            AF CONTINUOUS • CINE 35mm
           </p>
           {activeCardFilter === 'Overdue' && (
             <div className="absolute bottom-0 right-0 w-2 h-2 bg-amber-500 rounded-tl-md" />
           )}
         </div>
 
-        {/* Card 5: Upcoming Payment Due */}
+        {/* Card 3: Payments Due Today */}
+        <div 
+          onClick={() => handleCardClick('Upcoming')}
+          className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden bg-zinc-900/40 border-zinc-800 hover:border-zinc-750`}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Due Today</span>
+            <Clock className="w-4 h-4 text-amber-500" />
+          </div>
+          <p className="text-2xl font-extrabold text-amber-500 tracking-tight leading-none mb-1">
+            {formatPercentageOrINR(stats.dueTodayAmount)}
+          </p>
+          <p className="text-[8px] text-zinc-500 font-mono">
+            SAME DAY COLLECTION TARGET
+          </p>
+        </div>
+
+        {/* Card 4: Payments Due This Week */}
+        <div 
+          onClick={() => handleCardClick('Upcoming')}
+          className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden bg-zinc-900/40 border-zinc-800 hover:border-zinc-750`}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Due This Week</span>
+            <Calendar className="w-4 h-4 text-blue-400" />
+          </div>
+          <p className="text-2xl font-extrabold text-blue-400 tracking-tight leading-none mb-1">
+            {formatPercentageOrINR(stats.dueThisWeekAmount)}
+          </p>
+          <p className="text-[8px] text-zinc-500 font-mono">
+            WEEKLY COLLECTION PIPELINE
+          </p>
+        </div>
+
+        {/* Card 5: Upcoming Events */}
         <div 
           onClick={() => handleCardClick('Upcoming')}
           className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden ${
@@ -487,8 +496,8 @@ export const PendingPaymentsReport: React.FC = () => {
           }`}
         >
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Upcoming Due</span>
-            <Clock className="w-4 h-4 text-cyan-400" />
+            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Upcoming Invoices</span>
+            <TrendingUp className="w-4 h-4 text-cyan-400" />
           </div>
           <p className="text-2xl font-extrabold text-cyan-400 tracking-tight leading-none mb-1">
             {stats.upcomingPaymentDue}
@@ -684,16 +693,16 @@ export const PendingPaymentsReport: React.FC = () => {
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="border-b border-zinc-850 bg-zinc-900/30">
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono">Order ID</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono">Customer Name</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono">Mobile</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono">Event Details</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-right">Package Cost</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-right">Advance Paid</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-rose-450 font-mono text-right">Remaining Due</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-left">Order ID</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-left">Client Name</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-left">Event Details</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-right">Total Amount</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-right">Paid Amount</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-rose-450 font-mono text-right">Pending Amount</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-center">Due Date</th>
+                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-center">Days Overdue</th>
                 <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-center">Payment Status</th>
                 <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-center">Project Status</th>
-                <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-center">Last Updated</th>
                 <th className="px-4 py-3.5 text-[10px] uppercase font-black tracking-wider text-zinc-400 font-mono text-right">Actions</th>
               </tr>
             </thead>
@@ -706,7 +715,16 @@ export const PendingPaymentsReport: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((rec, i) => (
+                filteredRecords.map((rec, i) => {
+                  const dueDate = rec.eventDate ? new Date(rec.eventDate) : null;
+                  const today = new Date();
+                  let daysOverdue = 0;
+                  if (dueDate && dueDate < today && rec.remainingAmount > 0) {
+                    const diffTime = Math.abs(today.getTime() - dueDate.getTime());
+                    daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  }
+
+                  return (
                   <tr 
                     key={rec.lead.lead_id}
                     className="border-b border-zinc-850 hover:bg-zinc-900/10 transition-colors"
@@ -716,40 +734,44 @@ export const PendingPaymentsReport: React.FC = () => {
                       {rec.orderId}
                     </td>
 
-                    {/* Customer Name */}
+                    {/* Client Name */}
                     <td className="px-4 py-4 text-xs font-bold text-white">
                       {rec.customerName}
+                      <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{rec.mobileNumber}</div>
                     </td>
 
-                    {/* Mobile */}
-                    <td className="px-4 py-4 text-xs text-zinc-400 font-mono">
-                      {rec.mobileNumber}
-                    </td>
-
-                    {/* Event Type & Date */}
+                    {/* Event Details */}
                     <td className="px-4 py-4 text-xs">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-zinc-200">{rec.eventType}</span>
-                        <span className="text-[10px] text-zinc-550 flex items-center gap-1 font-mono mt-0.5">
-                          <Calendar className="w-3 h-3 text-zinc-600" />
-                          <span>{rec.eventDate ? new Date(rec.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</span>
-                        </span>
-                      </div>
+                      <span className="font-semibold text-zinc-300">{rec.eventType}</span>
                     </td>
 
-                    {/* Package Cost */}
+                    {/* Total Amount */}
                     <td className="px-4 py-4 text-xs font-semibold text-zinc-300 text-right font-mono">
                       {formatPercentageOrINR(rec.finalPackageAmount)}
                     </td>
 
-                    {/* Advance Paid */}
+                    {/* Paid Amount */}
                     <td className="px-4 py-4 text-xs text-zinc-400 text-right font-mono text-emerald-400">
                       {formatPercentageOrINR(rec.advanceReceived)}
                     </td>
 
-                    {/* Remaining Due */}
+                    {/* Pending Amount */}
                     <td className="px-4 py-4 text-xs font-black text-rose-400 text-right font-mono bg-rose-500/5">
                       {formatPercentageOrINR(rec.remainingAmount)}
+                    </td>
+
+                    {/* Due Date */}
+                    <td className="px-4 py-4 text-xs text-center font-mono text-zinc-300">
+                      {dueDate ? dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                    </td>
+
+                    {/* Days Overdue */}
+                    <td className="px-4 py-4 text-xs text-center font-mono font-bold">
+                      {daysOverdue > 0 ? (
+                        <span className="text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded">{daysOverdue} Days</span>
+                      ) : (
+                        <span className="text-emerald-500">-</span>
+                      )}
                     </td>
 
                     {/* Payment Status Label */}
@@ -771,11 +793,6 @@ export const PendingPaymentsReport: React.FC = () => {
                         {rec.currentProjectStatus}
                       </span>
                     </td>
-
-                    {/* Last Updated */}
-                    <td className="px-4 py-4 text-xs text-zinc-500 text-center font-mono">
-                      {new Date(rec.lastUpdatedDate).toLocaleDateString('en-IN')}
-                    </td>
                     
                     {/* Actions */}
                     <td className="px-4 py-4 text-xs text-right">
@@ -793,7 +810,8 @@ export const PendingPaymentsReport: React.FC = () => {
                     </td>
 
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

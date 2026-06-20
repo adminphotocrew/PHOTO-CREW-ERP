@@ -18,11 +18,12 @@ import { StudioLoader } from './components/StudioLoader';
 import { UserManagementModule } from './components/UserManagementModule';
 import { DatabaseHealthModule } from './components/DatabaseHealthModule';
 import { NotificationsModule } from './components/NotificationsModule';
+import { OwnerTeamPerformance, OwnerRevenueAnalytics, OwnerEventCalendar, OwnerBusinessReports } from './components/OwnerModule';
 import { AppLogo } from './components/AppLogo';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Briefcase, Camera, Video, Landmark, Shield, Users, Search, Info, Target, Sparkles, Menu, RefreshCw, Activity, Bell,
-  UserPlus, Truck, Layers, CheckSquare, Clock, Play, BarChart3, LogOut, Calendar, TrendingUp, DollarSign
+  UserPlus, Truck, Layers, CheckSquare, Clock, Play, BarChart3, LogOut, Calendar, TrendingUp, DollarSign, FileText
 } from 'lucide-react';
 
 const AccessDeniedView: React.FC<{ section: string }> = ({ section }) => {
@@ -63,9 +64,25 @@ const MainAppContent: React.FC = () => {
 
   const isTabAllowed = (tab: string): boolean => {
     if (currentRole === 'Business Owner') {
-      // Remove deprecated analytics sections
-      if (tab === 'revenue_analytics' || tab === 'payments') return false;
-      return true;
+      return [
+        'dashboard',
+        'sales',
+        'operations',
+        'production',
+        'owner_team_performance',
+        'owner_revenue',
+        'owner_calendar',
+        'owner_reports',
+        'notifications',
+        'search',
+        'users',
+        'diagnostics',
+        'sales_analytics',
+        'operations_analytics',
+        'production_analytics',
+        'business_overview_analytics',
+        'pending_payments'
+      ].includes(tab);
     }
 
     if (currentRole === 'Sales Team') {
@@ -155,9 +172,11 @@ const MainAppContent: React.FC = () => {
     | 'operations_analytics'
     | 'production_analytics'
     | 'business_overview_analytics'
-    | 'revenue_analytics'
-    | 'staff_performance_analytics'
     | 'pending_payments'
+    | 'owner_team_performance'
+    | 'owner_revenue'
+    | 'owner_calendar'
+    | 'owner_reports'
   >(() => {
     const savedUser = localStorage.getItem('erp_current_user');
     if (savedUser) {
@@ -166,7 +185,7 @@ const MainAppContent: React.FC = () => {
       if (user.role === 'Operations Team') return 'operations';
       if (user.role === 'Production Team') return 'production';
     }
-    return 'business_overview_analytics';
+    return 'owner_team_performance';
   });
 
   // Responsive tab toggles that collapse sidebar automatically on Tablet / Mobile sizes
@@ -500,18 +519,21 @@ const MainAppContent: React.FC = () => {
           <div className="flex items-center justify-between pb-1 border-b border-zinc-850">
             <h3 className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-400 font-mono flex items-center gap-1.5">
               <Target className="w-3.5 h-3.5 text-amber-500" />
-              <span>STUDIO WORKSPACES</span>
+              <span>COMMAND CENTER</span>
             </h3>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
           </div>
           <nav className="space-y-1.5">
             {[
-              { id: 'sales_analytics', label: '1. Sales Analytics', icon: Briefcase, color: 'text-indigo-400' },
-              { id: 'operations_analytics', label: '2. Operations Analytics', icon: Camera, color: 'text-emerald-400' },
-              { id: 'production_analytics', label: '3. Production Analytics', icon: Video, color: 'text-purple-400' },
-              { id: 'business_overview_analytics', label: '4. Business Overview Analytics', icon: Landmark, color: 'text-amber-500' },
-              { id: 'staff_performance_analytics', label: '5. Staff Performance Analytics', icon: Users, color: 'text-sky-450' },
-              { id: 'notifications', label: '6. Notification Center', icon: Bell, color: 'text-rose-400' }
+              { id: 'owner_team_performance', label: '1. Team Performance', icon: Users, color: 'text-indigo-400' },
+              { id: 'owner_revenue', label: '2. Revenue Analytics', icon: Landmark, color: 'text-emerald-400' },
+              { id: 'owner_calendar', label: '3. Event Calendar', icon: Calendar, color: 'text-purple-400' },
+              { id: 'notifications', label: '4. Notification Center', icon: Bell, color: 'text-rose-400' },
+              { id: 'owner_reports', label: '5. Business Reports', icon: FileText, color: 'text-amber-500' },
+              { id: 'dashboard', label: 'Main Dashboard', icon: Target, color: 'text-blue-500' },
+              { id: 'sales', label: 'Sales Desk', icon: Briefcase, color: 'text-zinc-500' },
+              { id: 'operations', label: 'Operations Desk', icon: Target, color: 'text-zinc-500' },
+              { id: 'production', label: 'Production Desk', icon: Video, color: 'text-zinc-500' }
             ].map((tab) => {
               const IconComponent = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -614,7 +636,7 @@ const MainAppContent: React.FC = () => {
         <main className="flex-1 min-w-0 flex flex-col gap-4">
 
           {/* Dashboard Header - Global Filter Section */}
-          {['sales_analytics', 'operations_analytics', 'production_analytics', 'business_overview_analytics'].includes(activeTab) && (
+          {['sales_analytics', 'operations_analytics', 'production_analytics', 'business_overview_analytics', 'owner_team_performance', 'owner_revenue', 'owner_calendar', 'owner_reports'].includes(activeTab) && (
             <div id="global_date_filter_header" className="bg-zinc-950/70 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-xl">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500">
@@ -688,6 +710,10 @@ const MainAppContent: React.FC = () => {
                   <AccessDeniedView section={activeTab.split('_').join(' ').toUpperCase()} />
                 ) : (
                   <>
+                    {activeTab === 'owner_team_performance' && <OwnerTeamPerformance globalDateRange={globalDateRange} />}
+                    {activeTab === 'owner_revenue' && <OwnerRevenueAnalytics />}
+                    {activeTab === 'owner_calendar' && <OwnerEventCalendar />}
+                    {activeTab === 'owner_reports' && <OwnerBusinessReports />}
                     {activeTab === 'sales_analytics' && <SalesAnalytics />}
                     {activeTab === 'pending_payments' && (currentRole === 'Business Owner' || currentRole === 'Sales Team') && <PendingPaymentsReport />}
                     {activeTab === 'operations_analytics' && <OperationsAnalytics />}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
 import { 
   Landmark, DollarSign, Calendar, FileText, CheckCircle2, AlertCircle, Sparkles, Ban
@@ -15,30 +15,44 @@ export const PaymentsModule: React.FC = () => {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   // Form State
-  const [payAmount, setPayAmount] = useState(1000);
-  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
-  const [proofUrl, setProofUrl] = useState('https://photocrew-receipts.s3.amazonaws.com/rec-31942.pdf');
+  const [payAmount, setPayAmount] = useState<number | ''>('');
+  const [payDate, setPayDate] = useState('');
+  const [proofUrl, setProofUrl] = useState('');
 
   const handleSelectPayment = (orderId: string) => {
     setSelectedOrderId(orderId);
-    const item = payments.find((p) => p.order_id === orderId);
-    if (item) {
-      setPayAmount(item.balance_due);
-    }
+    setPayAmount('');
+    setPayDate('');
+    setProofUrl('');
   };
 
   const handlePaySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrderId) return;
-    if (payAmount <= 0) {
+    if (!payAmount || Number(payAmount) <= 0) {
       alert('Amount must be positive.');
       return;
     }
 
-    recordPayment(selectedOrderId, payAmount, payDate, proofUrl);
+    recordPayment(selectedOrderId, Number(payAmount), payDate, proofUrl);
     setSelectedOrderId(null);
     alert('Payment balance recorded successfully. Stage updated in master ledger!');
   };
+
+  useEffect(() => {
+    if (selectedOrderId) {
+      setTimeout(() => {
+        const formEl = document.querySelector('#payments_details_mobile_modal form');
+        if (formEl) {
+          formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        const firstInput = document.querySelector('#payments_details_mobile_modal input') as HTMLInputElement;
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 150);
+    }
+  }, [selectedOrderId]);
 
   return (
     <div id="payments_module" className="space-y-6">

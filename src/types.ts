@@ -72,6 +72,8 @@ export interface Lead {
   alternate_mobile?: string;
   email: string;
   event_type: string;
+  custom_event_name?: string;
+  shoot_type?: string;
   event_date: string;
   event_time: string;
   reporting_time?: string;
@@ -110,6 +112,8 @@ export interface Order {
   customer_name: string;
   mobile: string;
   event_type: string;
+  custom_event_name?: string;
+  shoot_type?: string;
   event_date: string;
   event_time: string;
   reporting_time?: string;
@@ -329,5 +333,14 @@ export interface EquipmentHandover {
   notes: string;
   created_at?: string;
 }
+
+export interface UnlockOverride {
+  recordId: string;
+  unlockedBy: string;
+  unlockDate: string;
+  reason: string;
+  module: 'Sales' | 'Operations' | 'Production';
+}
+
 
 

@@ -954,12 +954,12 @@ export const ProductionAnalytics: React.FC = () => {
                     <tr className="border-b border-zinc-850 bg-zinc-950/70 text-zinc-400 font-mono text-[9px] uppercase tracking-wider">
                       <th className="py-3 px-4 font-black">Editor Name</th>
                       <th className="py-3 px-4 font-black">Production Specialty</th>
-                      <th className="py-3 px-4 text-center font-black">Assigned Tasks</th>
+                      <th className="py-3 px-4 text-center font-black">Projects Assigned</th>
                       <th className="py-3 px-4 text-center font-semibold text-emerald-400">Completed</th>
-                      <th className="py-3 px-4 text-center font-semibold text-rose-400">Pending</th>
+                      <th className="py-3 px-4 text-center font-semibold text-rose-400">Delays</th>
+                      <th className="py-3 px-4 text-center text-amber-500">Rating</th>
                       <th className="py-3 px-4 text-center text-blue-400">Client Approved</th>
                       <th className="py-3 px-4 text-center text-orange-400">Revisions</th>
-                      <th className="py-3 px-4 text-right">Approval Rate %</th>
                       <th className="py-3 px-4 text-right">Avg Turnaround Time</th>
                     </tr>
                   </thead>
@@ -986,23 +986,11 @@ export const ProductionAnalytics: React.FC = () => {
                             <td className="py-3 px-4 text-zinc-400 font-mono text-[10px]">{e.roleSpeciality}</td>
                             <td className="py-3 px-4 text-center text-white font-bold">{e.assignedCount}</td>
                             <td className="py-3 px-4 text-center font-semibold text-emerald-500">{e.completedCount}</td>
-                            <td className="py-3 px-4 text-center font-semibold text-rose-400">{e.pendingCount}</td>
+                            <td className="py-3 px-4 text-center font-semibold text-rose-400">{e.overdueCount}</td>
+                            <td className="py-3 px-4 text-center font-semibold text-amber-500">{e.member.rating || 4.5} ★</td>
                             <td className="py-3 px-4 text-center font-semibold text-blue-350">{e.clientApprovedCount}</td>
                             <td className="py-3 px-4 text-center font-semibold text-orange-400">{e.revisionCount}</td>
                             
-                            {/* Capped Client Approval Rate */}
-                            <td className="py-3 px-4 text-right font-mono font-bold text-white">
-                              <div className="flex items-center justify-end gap-2">
-                                <span className={`${e.approvalRate > 85 ? 'text-emerald-400' : e.approvalRate > 60 ? 'text-purple-400' : 'text-rose-400'}`}>{e.approvalRate}%</span>
-                                <div className="w-12 bg-zinc-900 rounded-full h-1 overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full ${e.approvalRate > 85 ? 'bg-emerald-500' : 'bg-purple-500'}`} 
-                                    style={{ width: `${e.approvalRate}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-
                             <td className="py-3 px-4 text-right text-zinc-450 font-mono text-[10px]">{e.avgDaysStr}</td>
                           </tr>
                         );

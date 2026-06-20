@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from '../RoleContext';
 import { 
   Calendar, Clock, User, Compass, Server, MapPin, AlertCircle, RefreshCw, CheckCircle2
@@ -11,7 +11,7 @@ export const EventScheduling: React.FC = () => {
 
   // Toggle state
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
-  const [reportingTime, setReportingTime] = useState('08:00');
+  const [reportingTime, setReportingTime] = useState('');
   const [remarks, setRemarks] = useState('');
 
   const getOpDetails = (orderId: string) => {
@@ -44,11 +44,30 @@ export const EventScheduling: React.FC = () => {
     alert(`Shoot schedule successfully locked. Stage updated to [Event Scheduled]`);
   };
 
-  const handlePrepForm = (orderId: string, time: string, rem: string) => {
+  const handlePrepForm = (orderId: string, time: string, rem: string, currentStage: string) => {
     setSchedulingId(orderId);
-    setReportingTime(time || '08:00');
-    setRemarks(rem || '');
+    if (currentStage === 'Operations Assigned') {
+      // Create/Schedule: starts completely empty!
+      setReportingTime('');
+      setRemarks('');
+    } else {
+      // Edit Schedule: loads existing!
+      setReportingTime(time || '');
+      setRemarks(rem || '');
+    }
   };
+
+  useEffect(() => {
+    if (schedulingId) {
+      setTimeout(() => {
+        const formEl = document.querySelector('input[type="time"]');
+        if (formEl) {
+          formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          (formEl as HTMLInputElement).focus();
+        }
+      }, 150);
+    }
+  }, [schedulingId]);
 
   return (
     <div className="space-y-6">
@@ -177,7 +196,7 @@ export const EventScheduling: React.FC = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => handlePrepForm(ord.order_id, op?.reporting_time || '08:00', op?.remarks || '')}
+                        onClick={() => handlePrepForm(ord.order_id, op?.reporting_time || '', op?.remarks || '', ord.current_stage)}
                         className="px-2.5 py-1 border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-[10px] font-mono font-bold rounded cursor-pointer transition-all uppercase"
                       >
                         Adjust & Lock Chronos

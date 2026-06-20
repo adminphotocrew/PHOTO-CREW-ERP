@@ -546,7 +546,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     quotations,
     addQuotation,
     updateQuotation,
-    updateLead
+    updateLead,
+    unlockedRecords,
+    unlockRecord,
+    lockRecord,
+    isRecordLocked
   } = useRole();
 
   const [logoBase64, setLogoBase64] = useState<string>('');
@@ -801,6 +805,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       }))
   }));
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [unlockingRecordId, setUnlockingRecordId] = useState<string | null>(null);
+  const [unlockReason, setUnlockReason] = useState('Data Correction');
+  const [unlockCustomReason, setUnlockCustomReason] = useState('');
+
+  const isLeadLocked = selectedLead ? isRecordLocked(selectedLead.lead_id, 'Sales') : false;
 
   // Repeat Customer / Reorder System states
   const [detectedCustomer, setDetectedCustomer] = useState<any>(null);
@@ -839,17 +848,64 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   // Screen 2 Form State
   const [createForm, setCreateForm] = useState({
     customer_name: '',
-    mobile: '+91 ',
-    alternate_mobile: '+91 ',
+    mobile: '',
+    alternate_mobile: '',
     email: '',
-    lead_source: 'Website Form',
-    event_type: 'Wedding Shoot',
+    lead_source: '',
+    event_type: '',
+    custom_event_name: '',
+    shoot_type: '',
     event_date: '',
-    event_time: '12:00',
+    event_time: '',
     event_location: '',
-    budget: 35000,
+    budget: 0,
     remarks: '',
   });
+
+  const resetForm = () => {
+    setCreateForm({
+      customer_name: '',
+      mobile: '',
+      alternate_mobile: '',
+      email: '',
+      lead_source: '',
+      event_type: '',
+      custom_event_name: '',
+      shoot_type: '',
+      event_date: '',
+      event_time: '',
+      event_location: '',
+      budget: 0,
+      remarks: '',
+    });
+    setOtherSource('');
+    setSelectedPkgIds([]);
+    setLeadDiscount(0);
+    setIsPkgDropdownOpen(false);
+  };
+
+  // Action hook to reset state, auto-scroll and auto-focus when transitioning to 'create' tab
+  React.useEffect(() => {
+    if (activeTab === 'create') {
+      resetForm();
+
+      setTimeout(() => {
+        const titleEl = document.getElementById('create_lead_form_heading');
+        if (titleEl) {
+          titleEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          const formEl = document.querySelector('form');
+          if (formEl) {
+            formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+        const firstInput = document.querySelector('input[placeholder*="Enter customer name"]') as HTMLInputElement;
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 150);
+    }
+  }, [activeTab]);
 
   // Packages creation hooks
   const [selectedPkgIds, setSelectedPkgIds] = useState<string[]>([]);
@@ -1184,7 +1240,27 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       return;
     }
 
+    // Validate manual dropdown selections
+    if (!createForm.event_type || createForm.event_type === '') {
+      alert('Please select an Event Type.');
+      return;
+    }
+    if (createForm.event_type === 'Other' && (!createForm.custom_event_name || createForm.custom_event_name.trim() === '')) {
+      alert('Please enter a Custom Event Name.');
+      return;
+    }
+    if (!createForm.shoot_type || createForm.shoot_type === '') {
+      alert('Please select a Desired Event Shoot Type.');
+      return;
+    }
+    if (!createForm.lead_source || createForm.lead_source === '') {
+      alert('Please select an Inbound Lead Channel Source.');
+      return;
+    }
+
     const finalSource = createForm.lead_source === 'Other' ? (otherSource ? `Other: ${otherSource}` : 'Other') : createForm.lead_source;
+    const finalEventType = createForm.event_type === 'Other' ? 'Other' : createForm.event_type;
+    const finalCustomEventName = createForm.event_type === 'Other' ? createForm.custom_event_name : undefined;
 
     const selectedPkgs = PACKAGES_LIST.flatMap(cat => cat.items).filter(item => selectedPkgIds.includes(item.id));
     const subtotal = selectedPkgs.reduce((sum, item) => sum + item.cost, 0);
@@ -1206,7 +1282,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       alternate_mobile: (createForm.alternate_mobile && createForm.alternate_mobile.trim() !== '' && createForm.alternate_mobile.trim() !== '+91') ? createForm.alternate_mobile : undefined,
       email: createForm.email,
       lead_source: finalSource,
-      event_type: createForm.event_type,
+      event_type: finalEventType,
+      custom_event_name: finalCustomEventName,
+      shoot_type: createForm.shoot_type,
       event_date: createForm.event_date || new Date().toISOString().split('T')[0],
       event_time: createForm.event_time,
       event_location: createForm.event_location,
@@ -1216,15 +1294,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
     setCreateForm({
       customer_name: '',
-      mobile: '+91 ',
-      alternate_mobile: '+91 ',
+      mobile: '',
+      alternate_mobile: '',
       email: '',
-      lead_source: 'Website Form',
-      event_type: 'Wedding Shoot',
+      lead_source: '',
+      event_type: '',
+      custom_event_name: '',
+      shoot_type: '',
       event_date: '',
-      event_time: '12:00',
+      event_time: '',
       event_location: '',
-      budget: 35000,
+      budget: 0,
       remarks: '',
     });
     setOtherSource('');
@@ -1551,173 +1631,200 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               <span>📝</span> Log Lead Follow-up activity & CRM notes
             </h3>
 
+            {selectedLead && isLeadLocked && (
+              <div className="p-4 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-left animate-fade-in relative z-10">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider font-mono">
+                    <span className="animate-pulse">🔒</span> Stage-Locked: Order Confirmed
+                  </div>
+                  <p className="text-[11px] text-slate-350 leading-relaxed font-sans">
+                    This lead is lock-protected due to having officially transitioned to operations. Only payment schedules are editable.
+                  </p>
+                </div>
+                {currentRole === 'Business Owner' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUnlockReason('Data Correction');
+                      setUnlockingRecordId(selectedLead.lead_id);
+                    }}
+                    className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-lg transition-all cursor-pointer font-mono font-extrabold uppercase tracking-wide border border-amber-500/20 shadow-lg"
+                  >
+                    🔓 Owner Override
+                  </button>
+                )}
+              </div>
+            )}
+
             {canEdit ? (
               <form onSubmit={handleFollowUpSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
-                  {/* Status Options */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">
-                      Transition ERP Stage *
-                    </label>
-                    <select
-                      value={followUpForm.status}
-                      onChange={(e) => setFollowUpForm({ ...followUpForm, status: e.target.value as CurrentStage })}
-                      className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="Follow Up">Follow Up</option>
-                      <option value="Quotation Sent">Quotation Sent</option>
-                      <option value="Negotiation">Negotiation</option>
-                      <option value="Order Confirmed">Order Confirmed</option>
-                    </select>
-                  </div>
-                </div>
-
-                {followUpForm.status === 'Order Confirmed' ? (
-                  <div className="space-y-4 pt-2 border-t border-slate-800">
-                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Configure Confirmed Order Settings</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Event Date * (Required)
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          value={followUpForm.event_date}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, event_date: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Event Time * (Required)
-                        </label>
-                        <input
-                          type="time"
-                          required
-                          value={followUpForm.event_time}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, event_time: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Reporting Time * (Required)
-                        </label>
-                        <input
-                          type="time"
-                          required
-                          value={followUpForm.reporting_time}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, reporting_time: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Final Amount (₹) *
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          value={followUpForm.quotation_amount}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, quotation_amount: Number(e.target.value) })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Advance Amount Received (₹)
-                        </label>
-                        <input
-                          type="number"
-                          value={followUpForm.advance_received}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, advance_received: Number(e.target.value) })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Payment Mode
-                        </label>
-                        <select
-                          value={followUpForm.payment_mode}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, payment_mode: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="UPI">UPI (GPay/PhonePe)</option>
-                          <option value="Cash">Cash Handover</option>
-                          <option value="Bank Transfer">Bank NFT/RTGS/IMPS</option>
-                          <option value="Card">Credit/Debit Card</option>
-                          <option value="Cheque">Cheque Deposit</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Next Date */}
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Next Follow-up Action Date *
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          value={followUpForm.next_follow_up_date}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, next_follow_up_date: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-
-                      {/* Proposed budget */}
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">
-                          Negotiated Quotation Amount (₹) *
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          value={followUpForm.quotation_amount}
-                          onChange={(e) => setFollowUpForm({ ...followUpForm, quotation_amount: Number(e.target.value) })}
-                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Call reports */}
+                <fieldset disabled={isLeadLocked} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
+                    {/* Status Options */}
                     <div>
                       <label className="block text-xs font-medium text-slate-400 mb-1">
-                        Call / Conversation Notes *
+                        Transition ERP Stage *
                       </label>
-                      <textarea
-                        rows={4}
-                        required
-                        placeholder="Log exact customer concerns, desired outputs, specific package selections, or callbacks."
-                        value={followUpForm.call_notes}
-                        onChange={(e) => setFollowUpForm({ ...followUpForm, call_notes: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-750 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      ></textarea>
+                      <select
+                        value={followUpForm.status}
+                        onChange={(e) => setFollowUpForm({ ...followUpForm, status: e.target.value as CurrentStage })}
+                        className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        <option value="Follow Up">Follow Up</option>
+                        <option value="Quotation Sent">Quotation Sent</option>
+                        <option value="Negotiation">Negotiation</option>
+                        <option value="Order Confirmed">Order Confirmed</option>
+                      </select>
                     </div>
+                  </div>
 
-                    {/* Negotiation notes */}
-                    <div>
-                      <label className="block text-xs font-medium text-slate-400 mb-1">
-                        Negotiation Notes (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Specific price offsets, discount justifications, extra features offered..."
-                        value={followUpForm.negotiation_notes}
-                        onChange={(e) => setFollowUpForm({ ...followUpForm, negotiation_notes: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-750 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
+                  {followUpForm.status === 'Order Confirmed' ? (
+                    <div className="space-y-4 pt-2 border-t border-slate-800">
+                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Configure Confirmed Order Settings</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Event Date * (Required)
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={followUpForm.event_date}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, event_date: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Event Time * (Required)
+                          </label>
+                          <input
+                            type="time"
+                            required
+                            value={followUpForm.event_time}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, event_time: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Reporting Time * (Required)
+                          </label>
+                          <input
+                            type="time"
+                            required
+                            value={followUpForm.reporting_time}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, reporting_time: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Final Amount (₹) *
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            value={followUpForm.quotation_amount}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, quotation_amount: Number(e.target.value) })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Advance Amount Received (₹)
+                          </label>
+                          <input
+                            type="number"
+                            value={followUpForm.advance_received}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, advance_received: Number(e.target.value) })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Payment Mode
+                          </label>
+                          <select
+                            value={followUpForm.payment_mode}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, payment_mode: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="UPI">UPI (GPay/PhonePe)</option>
+                            <option value="Cash">Cash Handover</option>
+                            <option value="Bank Transfer">Bank NFT/RTGS/IMPS</option>
+                            <option value="Card">Credit/Debit Card</option>
+                            <option value="Cheque">Cheque Deposit</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                  </>
-                )}
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Next Date */}
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Next Follow-up Action Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={followUpForm.next_follow_up_date}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, next_follow_up_date: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+
+                        {/* Proposed budget */}
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Negotiated Quotation Amount (₹) *
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            value={followUpForm.quotation_amount}
+                            onChange={(e) => setFollowUpForm({ ...followUpForm, quotation_amount: Number(e.target.value) })}
+                            className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Call reports */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                          Call / Conversation Notes *
+                        </label>
+                        <textarea
+                          rows={4}
+                          required
+                          placeholder="Log exact customer concerns, desired outputs, specific package selections, or callbacks."
+                          value={followUpForm.call_notes}
+                          onChange={(e) => setFollowUpForm({ ...followUpForm, call_notes: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        ></textarea>
+                      </div>
+
+                      {/* Negotiation notes */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                          Negotiation Notes (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Specific price offsets, discount justifications, extra features offered..."
+                          value={followUpForm.negotiation_notes}
+                          onChange={(e) => setFollowUpForm({ ...followUpForm, negotiation_notes: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-750 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                </fieldset>
 
                 {/* Buttons */}
                 <div className="flex justify-end gap-2.5 pt-2">
@@ -1730,9 +1837,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 text-xs font-semibold bg-indigo-650 hover:bg-indigo-550 text-white rounded-lg shadow-sm transition-all cursor-pointer"
+                    disabled={isLeadLocked}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-lg shadow-sm transition-all border ${
+                      isLeadLocked
+                      ? 'bg-slate-800/80 text-slate-500 border-slate-800/50 cursor-not-allowed opacity-50'
+                      : 'bg-indigo-650 hover:bg-indigo-550 text-white border-indigo-500/10 cursor-pointer text-shadow'
+                    }`}
                   >
-                    {followUpForm.status === 'Order Confirmed' ? '💍 Confirm Order booking' : 'Save Follow-up Notes'}
+                    {isLeadLocked ? '🔒 Locked' : followUpForm.status === 'Order Confirmed' ? '💍 Confirm Order booking' : 'Save Follow-up Notes'}
                   </button>
                 </div>
               </form>
@@ -2692,7 +2804,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               </div>
               <button 
                 type="button"
-                onClick={() => setActiveTab('list')}
+                onClick={() => { resetForm(); setActiveTab('list'); }}
                 className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all cursor-pointer inline-flex items-center justify-center border border-transparent hover:border-slate-700/50"
                 title="Close Modal"
               >
@@ -2803,23 +2915,64 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Event Type */}
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                        Event Type
+                      </label>
+                      <select
+                        value={createForm.event_type}
+                        onChange={(e) => setCreateForm({ ...createForm, event_type: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all cursor-pointer"
+                      >
+                        <option value="">Select Event Type</option>
+                        <option value="Wedding Shoot">Wedding Shoot</option>
+                        <option value="Destination Wedding">Destination Wedding</option>
+                        <option value="Pre-Wedding Shoot">Pre-Wedding Shoot</option>
+                        <option value="Corporate Event">Corporate Event</option>
+                        <option value="Real Estate Reel">Real Estate Reel</option>
+                        <option value="Fashion Portfolio">Fashion Portfolio</option>
+                        <option value="Music Video Launch">Music Video Launch</option>
+                        <option value="Birthday Banquet">Birthday Banquet</option>
+                        <option value="Other">Other / Custom Event</option>
+                      </select>
+                    </div>
+                    {createForm.event_type === 'Other' && (
+                      <div className="animate-fade-in-down">
+                        <label className="block text-xs font-mono font-bold text-amber-500 mb-1.5">
+                          Custom Event Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Birthday Party, School Function, Anniversary"
+                          value={createForm.custom_event_name}
+                          onChange={(e) => setCreateForm({ ...createForm, custom_event_name: e.target.value })}
+                          className="w-full bg-slate-950 border border-amber-500/50 rounded-lg py-2 px-3 text-xs text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desired Event Shoot Type */}
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">
                       Desired Event Shoot Type
                     </label>
                     <select
-                      value={createForm.event_type}
-                      onChange={(e) => setCreateForm({ ...createForm, event_type: e.target.value })}
+                      value={createForm.shoot_type}
+                      onChange={(e) => setCreateForm({ ...createForm, shoot_type: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all cursor-pointer"
                     >
-                      <option value="Wedding Shoot">Wedding Shoot</option>
-                      <option value="Destination Wedding">Destination Wedding</option>
-                      <option value="Pre-Wedding Shoot">Pre-Wedding Shoot</option>
-                      <option value="Corporate Event">Corporate Event</option>
-                      <option value="Real Estate Reel">Real Estate Reel</option>
-                      <option value="Fashion Portfolio">Fashion Portfolio</option>
-                      <option value="Music Video Launch">Music Video Launch</option>
-                      <option value="Birthday Banquet">Birthday Banquet</option>
+                      <option value="">Select Shoot Type</option>
+                      <option value="Photography">Photography</option>
+                      <option value="Videography">Videography</option>
+                      <option value="Photography + Videography">Photography + Videography</option>
+                      <option value="Drone Shoot">Drone Shoot</option>
+                      <option value="Cinematic Shoot">Cinematic Shoot</option>
+                      <option value="Live Streaming">Live Streaming</option>
+                      <option value="Album Design">Album Design</option>
+                      <option value="Custom Package">Custom Package</option>
                     </select>
                   </div>
 
@@ -2834,11 +2987,15 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         onChange={(e) => setCreateForm({ ...createForm, lead_source: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all cursor-pointer"
                       >
-                        <option value="Website Form">Website Form</option>
-                        <option value="Instagram">Instagram</option>
-                        <option value="Facebook Ad">Facebook Ad</option>
-                        <option value="Google Search">Google Search</option>
+                        <option value="">Select Lead Source</option>
+                        <option value="Google Ads">Google Ads</option>
+                        <option value="Meta Ads">Meta Ads</option>
+                        <option value="Website">Website</option>
+                        <option value="WhatsApp">WhatsApp</option>
                         <option value="Referral">Referral</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="YouTube">YouTube</option>
+                        <option value="Walk-in">Walk-in</option>
                         <option value="Other">Other</option>
                       </select>
                     </div>
@@ -2850,7 +3007,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         <input
                           type="text"
                           required
-                          placeholder="e.g. YouTube, Billboard, Event Flyer"
+                          placeholder="e.g. Billboard, Event Flyer"
                           value={otherSource}
                           onChange={(e) => setOtherSource(e.target.value)}
                           className="w-full bg-slate-950 border border-amber-500/50 rounded-lg py-2 px-3 text-xs text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all"
@@ -3254,7 +3411,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             <div className="flex justify-end gap-3 border-t border-slate-800/80 p-4 sm:p-5 bg-slate-950/40 backdrop-blur-md shrink-0">
               <button
                 type="button"
-                onClick={() => setActiveTab('list')}
+                onClick={() => { resetForm(); setActiveTab('list'); }}
                 className="px-4.5 py-2 text-xs font-semibold bg-slate-805 hover:bg-slate-800 text-slate-300 rounded-xl cursor-pointer border border-slate-800 hover:border-slate-700/50 transition-colors"
               >
                 Cancel
@@ -4318,16 +4475,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
                                 <div className="flex justify-between items-center pt-3 border-t border-slate-800/80 text-[10px]">
                                   <span className="text-slate-500 font-mono">Timestamp: {new Date().toLocaleDateString('en-IN')}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveQuoteNum('');
-                                      setGeneratedPDFBlobUrl('');
-                                    }}
-                                    className="text-amber-400 hover:text-amber-300 font-extrabold transition-all text-right uppercase tracking-wider cursor-pointer flex items-center gap-1"
-                                  >
-                                    ✏️ EDIT PACKAGE DETAILS & PRICING
-                                  </button>
+                                  {!isLeadLocked && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveQuoteNum('');
+                                        setGeneratedPDFBlobUrl('');
+                                      }}
+                                      className="text-amber-400 hover:text-amber-300 font-extrabold transition-all text-right uppercase tracking-wider cursor-pointer flex items-center gap-1"
+                                    >
+                                      ✏️ EDIT PACKAGE DETAILS & PRICING
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -4345,8 +4504,32 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                       <span>📝</span> CRM Notes & Follow-up
                     </h3>
 
+                    {selectedLead && isLeadLocked && (
+                      <div className="p-4 mb-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col gap-2.5 text-left animate-fade-in relative z-10 text-[11px]">
+                        <div className="flex items-center gap-1.5 text-amber-400 font-bold uppercase tracking-wider font-mono">
+                          <span className="animate-pulse">🔒</span> Locked: Order Confirmed
+                        </div>
+                        <p className="text-[10px] text-slate-355 leading-relaxed font-sans">
+                          This lead is protected. Only payment schedules are editable.
+                        </p>
+                        {currentRole === 'Business Owner' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUnlockReason('Data Correction');
+                              setUnlockingRecordId(selectedLead.lead_id);
+                            }}
+                            className="w-full text-center py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-lg transition-all cursor-pointer font-mono uppercase tracking-wide border border-amber-500/20 shadow-md"
+                          >
+                            🔓 Owner Override
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {canEdit ? (
                       <form onSubmit={handleFollowUpSubmit} className="space-y-4">
+                        <fieldset disabled={isLeadLocked} className="space-y-4">
                         <div className="space-y-4 text-left">
                           {/* Status select */}
                           <div>
@@ -4533,20 +4716,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             </div>
                           </>
                         )}
+                        </fieldset>
 
                         <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800 font-bold">
                           <button
                             type="button"
                             onClick={() => setSelectedLead(null)}
-                            className="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-305 rounded-lg cursor-pointer border border-slate-700 font-semibold"
+                            className="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg cursor-pointer border border-slate-700 font-semibold"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
-                            className="px-4 py-2 text-xs bg-indigo-650 hover:bg-indigo-500 text-white rounded-lg shadow-sm cursor-pointer font-bold"
+                            disabled={isLeadLocked}
+                            className={`px-4 py-2 text-xs rounded-lg shadow-sm font-bold border transition-all ${
+                              isLeadLocked
+                              ? 'bg-slate-800/80 text-slate-500 border-slate-800/50 cursor-not-allowed opacity-50'
+                              : 'bg-indigo-650 hover:bg-indigo-500 text-white border-indigo-505/10 cursor-pointer'
+                            }`}
                           >
-                            {followUpForm.status === 'Order Confirmed' ? '💍 Confirm Order booking' : 'Save Follow-up Notes'}
+                            {isLeadLocked ? '🔒 Locked' : followUpForm.status === 'Order Confirmed' ? '💍 Confirm Order booking' : 'Save Follow-up Notes'}
                           </button>
                         </div>
                       </form>
@@ -4873,6 +5062,95 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               )}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Business Owner Unlock Reason Prompt */}
+      {unlockingRecordId && (
+        <div id="modal_sales_record_unlock" className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-fade-in text-left">
+          <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-500/30 rounded-2xl w-full max-w-md shadow-2xl relative p-6 space-y-4">
+            <div className="absolute top-0 left-12 w-48 h-48 bg-amber-500/[0.03] rounded-full blur-[60px] pointer-events-none" />
+            
+            <div className="flex items-start justify-between border-b border-slate-800 pb-3 relative z-10 font-sans">
+              <div>
+                <h3 className="text-sm font-bold text-white tracking-widest font-mono flex items-center gap-1.5">
+                  <span className="p-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] rounded font-black font-mono">OWNER OVERRIDE</span>
+                  <span>UNLOCK REASON REQUIRED</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
+                  Provide a justification to unlock this protected sales record.
+                </p>
+              </div>
+              <button 
+                onClick={() => { setUnlockingRecordId(''); setUnlockReason('Data Correction'); setUnlockCustomReason(''); }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const finalReason = unlockReason === 'Other' ? unlockCustomReason : unlockReason;
+              if (!finalReason.trim()) {
+                alert('A valid unlock reason is required.');
+                return;
+              }
+              unlockRecord(unlockingRecordId, 'Sales', finalReason);
+              setUnlockingRecordId('');
+              setUnlockCustomReason('');
+              setUnlockReason('Data Correction');
+              alert('Record unlocked successfully for editing!');
+            }} className="space-y-4 relative z-10 font-sans">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                  Select Override Reason *
+                </label>
+                <select
+                  value={unlockReason}
+                  onChange={(e) => setUnlockReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-slate-205 focus:outline-none focus:border-slate-700"
+                >
+                  <option value="Data Correction">Data Correction</option>
+                  <option value="Customer Request">Customer Request</option>
+                  <option value="Admin Override">Admin Override</option>
+                  <option value="Other">Other (Type custom reason)</option>
+                </select>
+              </div>
+
+              {unlockReason === 'Other' && (
+                <div className="animate-fade-in">
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                    Custom justification *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter unlock justification..."
+                    value={unlockCustomReason}
+                    onChange={(e) => setUnlockCustomReason(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-slate-700"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800 font-bold">
+                <button
+                  type="button"
+                  onClick={() => { setUnlockingRecordId(''); setUnlockReason('Data Correction'); setUnlockCustomReason(''); }}
+                  className="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg cursor-pointer border border-slate-700 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow-sm cursor-pointer font-extrabold uppercase tracking-wide font-mono border border-amber-500/20"
+                >
+                  🔓 Confirm Unlock
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

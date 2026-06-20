@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from '../RoleContext';
 import { 
   Camera, Package, PlusCircle, Wrench, Edit3, Trash2, Calendar, ClipboardList
@@ -20,7 +20,7 @@ export const EquipmentManagement: React.FC = () => {
     serial_number: '',
     quantity: 1,
     status: 'Available' as Equipment['status'],
-    purchase_date: new Date().toISOString().split('T')[0],
+    purchase_date: '',
     notes: ''
   });
 
@@ -34,7 +34,7 @@ export const EquipmentManagement: React.FC = () => {
       serial_number: eq.serial_number,
       quantity: eq.quantity,
       status: eq.status,
-      purchase_date: eq.purchase_date,
+      purchase_date: eq.purchase_date || '',
       notes: eq.notes || ''
     });
   };
@@ -49,10 +49,22 @@ export const EquipmentManagement: React.FC = () => {
       serial_number: '',
       quantity: 1,
       status: 'Available',
-      purchase_date: new Date().toISOString().split('T')[0],
+      purchase_date: '',
       notes: ''
     });
   };
+
+  useEffect(() => {
+    if (editingId) {
+      setTimeout(() => {
+        const firstInput = document.querySelector('form input') as HTMLInputElement;
+        if (firstInput) {
+          firstInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          firstInput.focus();
+        }
+      }, 150);
+    }
+  }, [editingId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

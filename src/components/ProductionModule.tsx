@@ -1060,6 +1060,93 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     return prod.project_priority || 'Medium';
   };
 
+  useEffect(() => {
+    if (workflowActionType) {
+      if (workflowActionType === 'manage_status') {
+        setQcNotes('');
+        setReviewLink('');
+        setReviewNotes('');
+        setRevisionNotes('');
+        setRevisionDeadline('');
+        setRevisionComments('');
+        setApprovalNotes('');
+        setDeliveryLink('');
+        setDeliveryDate('');
+        setClosingNotes('');
+      } else if (workflowActionType === 'deliver_project') {
+        setWfDeliveryLink('');
+        setWfGoogleDriveLink('');
+        setWfDownloadLink('');
+        setWfDeliveryNotes('');
+      } else if (workflowActionType === 'send_review') {
+        setWfReviewLink('');
+        setWfPreviewLink('');
+        setWfReviewNotes('');
+      } else if (workflowActionType === 'request_revision') {
+        setWfRevisionNotes('');
+        setWfRevisionDeadline('');
+      } else if (workflowActionType === 'close_project') {
+        setDeliveryDate('');
+        setClosingNotes('');
+      } else if (workflowActionType === 'assign_editor') {
+        const assignedForThis = activeWorkflowProd ? editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id) : [];
+        if (assignedForThis.length === 0) {
+          setWfEditor('');
+          setWfTargetDeliveryDate('');
+          setWfPriority('Medium');
+          setWfSpeciality('');
+          setWfProjectNotes('');
+          setWfInternalComments('');
+          setAssignmentRows([{ speciality: '', staffId: '', staffName: '' }]);
+        }
+      }
+
+      setTimeout(() => {
+        const firstInput = document.querySelector('form select, form textarea, form input[type="text"]') as HTMLElement;
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 150);
+    }
+  }, [workflowActionType, activeWorkflowProd, editorAssignments]);
+
+  useEffect(() => {
+    if (isStaffModalOpen && !editingStaffMember) {
+      setStaffFormName('');
+      setStaffFormEmployeeId('');
+      setStaffFormMobile('');
+      setStaffFormWhatsapp('');
+      setStaffFormEmail('');
+      setStaffFormAddress('');
+      setStaffFormJoiningDate('');
+      setStaffFormStatus('Active');
+      setStaffFormRole('');
+    }
+  }, [isStaffModalOpen, editingStaffMember]);
+
+  useEffect(() => {
+    if (isStaffModalOpen) {
+      setTimeout(() => {
+        const input = document.querySelector('input[placeholder="e.g. John Doe"]') as HTMLInputElement;
+        if (input) {
+          input.focus();
+        }
+      }, 150);
+    }
+  }, [isStaffModalOpen]);
+
+  useEffect(() => {
+    if (isCustomRoleModalOpen) {
+      setCustomRoleName('');
+      setTimeout(() => {
+        const input = document.querySelector('input[placeholder="e.g. Drone Video Specialist"]') as HTMLInputElement;
+        if (input) {
+          input.focus();
+        }
+      }, 150);
+    }
+  }, [isCustomRoleModalOpen]);
+
   const getRawFootageStatus = (prod: Production) => {
     if (prod.raw_footage_status) return prod.raw_footage_status;
     const rf = rawFootage.find(r => r.tracking_id === prod.tracking_id);

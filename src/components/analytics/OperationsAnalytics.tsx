@@ -345,6 +345,14 @@ export const OperationsAnalytics: React.FC = () => {
               ? Math.round((completedCount / uniqueAssignments.length) * 100) 
               : 100;
 
+            let revenueGenerated = 0;
+            uniqueAssignments.forEach(a => {
+              const order = orders.find(o => o.order_id === a.order_id);
+              if (order && order.quotation_amount) {
+                revenueGenerated += order.quotation_amount;
+              }
+            });
+
             const lastDate = uniqueAssignments.reduce((acc, a) => {
               const order = orders.find(o => o.order_id === a.order_id);
               const dt = a.assignment_date || order?.event_date || '';
@@ -367,6 +375,8 @@ export const OperationsAnalytics: React.FC = () => {
               upcomingCount,
               overdueCount,
               completionRate,
+              rating: member.rating || 4.5,
+              revenueGenerated,
               lastAssignedDate: lastDate || 'N/A',
               assignments: uniqueAssignments
             };
@@ -728,11 +738,10 @@ export const OperationsAnalytics: React.FC = () => {
                     <tr className="border-b border-zinc-850 bg-zinc-950/70 text-zinc-400 font-mono text-[9px] uppercase tracking-wider">
                       <th className="py-3 px-4 font-black">Staff Member</th>
                       <th className="py-3 px-4 font-black">Roster Role</th>
-                      <th className="py-3 px-4 font-black text-center">Assigned Events</th>
-                      <th className="py-3 px-4 text-center text-blue-400">Scheduled</th>
-                      <th className="py-3 px-4 text-center text-emerald-400">Completed</th>
-                      <th className="py-3 px-4 text-center text-rose-455">Pending</th>
-                      <th className="py-3 px-4 text-center text-amber-450">Ongoing</th>
+                      <th className="py-3 px-4 font-black text-center">Total Ordered Events</th>
+                      <th className="py-3 px-4 text-center text-emerald-400">Events Handled</th>
+                      <th className="py-3 px-4 text-center text-amber-450">Rating</th>
+                      <th className="py-3 px-4 text-right text-indigo-400">Revenue Generated</th>
                       <th className="py-3 px-4 text-right">Completion Rate %</th>
                       <th className="py-3 px-4 text-right">Last Booked Date</th>
                     </tr>
@@ -758,10 +767,11 @@ export const OperationsAnalytics: React.FC = () => {
                           
                           <td className="py-3 px-4 text-zinc-400 font-mono text-[10px]">{s.role}</td>
                           <td className="py-3 px-4 text-center font-bold text-white table-cell">{s.assignedCount}</td>
-                          <td className="py-3 px-4 text-center font-semibold text-blue-350">{s.scheduledCount}</td>
                           <td className="py-3 px-4 text-center font-semibold text-emerald-500">{s.completedCount}</td>
-                          <td className="py-3 px-4 text-center font-semibold text-rose-400">{s.pendingCount}</td>
-                          <td className="py-3 px-4 text-center font-semibold text-amber-500">{s.ongoingCount}</td>
+                          <td className="py-3 px-4 text-center font-semibold text-amber-500">{s.rating} ★</td>
+                          <td className="py-3 px-4 text-right font-semibold text-indigo-400 font-mono">
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(s.revenueGenerated)}
+                          </td>
                           
                           {/* Completion rate with small meter */}
                           <td className="py-3 px-4 text-right">

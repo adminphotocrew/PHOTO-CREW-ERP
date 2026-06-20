@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRole } from '../RoleContext';
 import { 
   Users, Briefcase, Camera, Video, Compass, Clock, Clipboard, FileCheck, CheckCircle, Eye, Search, Calendar, MapPin
@@ -280,8 +280,11 @@ export const OperationsLeads: React.FC = () => {
     const op = getOpDetails(order.order_id);
     const rf = rawFootage ? rawFootage.find(f => f.order_id === order.order_id) : null;
     
-    // Load existing staff assignments for this order
-    const existing = staffAssignments ? staffAssignments.filter(sa => sa.order_id === order.order_id) : [];
+    // Check if this is a brand new assignment (Order Confirmed stage means it has not been assigned yet)
+    const isNewAssignment = order.current_stage === 'Order Confirmed';
+
+    // Load existing staff assignments for this order EXCEPT if starting a fresh allocation
+    const existing = isNewAssignment ? [] : (staffAssignments ? staffAssignments.filter(sa => sa.order_id === order.order_id) : []);
     setActiveAssignments(existing.map(e => ({
       staff_role: e.staff_role,
       staff_id: e.staff_id,
@@ -289,23 +292,23 @@ export const OperationsLeads: React.FC = () => {
     })));
 
     setAssignForm({
-      photographer_assigned: op?.photographer_assigned || '',
-      videographer_assigned: op?.videographer_assigned || '',
-      drone_operator_assigned: op?.drone_operator_assigned || '',
-      assistant_assigned: op?.assistant_assigned || '',
-      equipment_kit: op?.equipment_kit || '',
-      reporting_time: op?.reporting_time || '08:00',
-      remarks: op?.remarks || '',
-      event_status: op?.event_status || 'Event Scheduled',
+      photographer_assigned: isNewAssignment ? '' : (op?.photographer_assigned || ''),
+      videographer_assigned: isNewAssignment ? '' : (op?.videographer_assigned || ''),
+      drone_operator_assigned: isNewAssignment ? '' : (op?.drone_operator_assigned || ''),
+      assistant_assigned: isNewAssignment ? '' : (op?.assistant_assigned || ''),
+      equipment_kit: isNewAssignment ? '' : (op?.equipment_kit || ''),
+      reporting_time: isNewAssignment ? '' : (op?.reporting_time || ''),
+      remarks: isNewAssignment ? '' : (op?.remarks || ''),
+      event_status: 'Event Scheduled',
       current_stage: order.current_stage || 'Event Scheduled',
-      raw_footage_link: rf?.server_path || `s3://photocrew-vault-production/2026/${order.order_id}-shoot/raw/`,
-      event_date: order.event_date || '',
-      event_time: order.event_time || '10:00'
+      raw_footage_link: isNewAssignment ? '' : (rf?.server_path || ''),
+      event_date: isNewAssignment ? '' : (order.event_date || ''),
+      event_time: isNewAssignment ? '' : (order.event_time || '')
     });
     setAssigningOrderId(order.order_id);
     
     // Initialize selectedKits
-    const kits = op?.equipment_kit ? op.equipment_kit.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    const kits = isNewAssignment ? [] : (op?.equipment_kit ? op.equipment_kit.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
     setSelectedKits(kits);
     setEquipmentSearchQuery('');
     setIsEquipmentDropdownOpen(false);
@@ -314,6 +317,21 @@ export const OperationsLeads: React.FC = () => {
     setSelectedRole('Lead Photographer');
     setSelectedStaff('');
   };
+
+  useEffect(() => {
+    if (assigningOrderId) {
+      setTimeout(() => {
+        const formEl = document.querySelector('form');
+        if (formEl) {
+          formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        const firstSelect = document.querySelector('select') as HTMLSelectElement;
+        if (firstSelect) {
+          firstSelect.focus();
+        }
+      }, 150);
+    }
+  }, [assigningOrderId]);
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
