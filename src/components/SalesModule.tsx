@@ -19,7 +19,8 @@ const generateQuotationPDF = (
   editableInclusions?: Record<string, string[]>,
   editableDeliverables?: Record<string, string[]>,
   discountValue = 0,
-  additionalCharges = 0
+  additionalCharges = 0,
+  quoteServices: { id: string; name: string; qty: number; price: number; isAdditional?: boolean }[] = []
 ) => {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -34,8 +35,46 @@ const generateQuotationPDF = (
   const headerBgColor = [18, 18, 22];  // Luxury Carbon Black
   const goldColor = [212, 175, 55];   // #D4AF37 Classic Gold
 
+  // Resolve dynamic services from input parameter. Fall back to standard defaults if empty
+  let services = [...quoteServices];
+  if (!services || services.length === 0) {
+    const baseSum = activePkgs.reduce((sum, p) => sum + Number(p.package_cost || p.price || 0), 0);
+    const defaultItems = [
+      '2 Photographers',
+      '1 Cinematographer',
+      'Drone Coverage',
+      'LED Wall',
+      'Album (40 Sheets)',
+      'Teaser Video',
+      'Highlight Video',
+      'Full Event Coverage'
+    ];
+    const defaultPrices = [20000, 15000, 10000, 10050, 8000, 7000, 5000, 5000];
+    const sumDefault = defaultPrices.reduce((a, b) => a + b, 0);
+    const ratio = baseSum ? (baseSum / sumDefault) : 1;
+
+    defaultItems.forEach((name, idx) => {
+      services.push({
+        id: `fallback_base_${idx}`,
+        name,
+        qty: 1,
+        price: Math.round((defaultPrices[idx] || 5000) * ratio),
+        isAdditional: false
+      });
+    });
+
+    if (additionalCharges > 0) {
+      services.push({
+        id: 'fallback_addl',
+        name: 'Additional Custom Services',
+        qty: 1,
+        price: additionalCharges,
+        isAdditional: true
+      });
+    }
+  }
+
   // 1. BRAND HEADER (Black + Gold Premium Theme)
-  // Fill full-width elegant dark header block
   doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
   doc.rect(0, 0, 210, 42, 'F'); // 42mm tall header
 
@@ -43,7 +82,7 @@ const generateQuotationPDF = (
   doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
   doc.rect(0, 41, 210, 1.2, 'F');
 
-  // LEFT: Draw White Logo (stands out beautifully on Luxury Carbon Black background)
+  // Draw Logo
   let logoY = 10;
   let hasLogo = false;
   if (logoBase64 && logoBase64.startsWith('data:image')) {
@@ -56,7 +95,6 @@ const generateQuotationPDF = (
   }
 
   if (!hasLogo) {
-    // Fallback: A luxury golden camera style emblem & title branding
     doc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
     doc.setLineWidth(0.6);
     doc.setFillColor(18, 18, 22);
@@ -67,7 +105,7 @@ const generateQuotationPDF = (
     doc.text('P', 24.5, logoY + 14.5);
   }
 
-  // CENTER: Photocrew Pictures Branding
+  // Photocrew Pictures Branding
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
   doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
@@ -75,14 +113,14 @@ const generateQuotationPDF = (
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
-  doc.setTextColor(185, 185, 185); // elegant light text
+  doc.setTextColor(185, 185, 185);
   doc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 105, 24, { align: 'center' });
 
   doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
   doc.setFontSize(6.5);
   doc.text('★ ★ ★ ★ ★', 105, 29, { align: 'center' });
 
-  // RIGHT: Contact Info (Right-aligned, absolutely safe against any overlap)
+  // Right-aligned Contact Info
   doc.setTextColor(245, 245, 245);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
@@ -92,13 +130,12 @@ const generateQuotationPDF = (
 
   // 2. CUSTOMER DETAILS & LOGISTICS
   let clientY = 49;
-  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]); // slate-50
+  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]);
   doc.roundedRect(15, clientY, 180, 32, 1.5, 1.5, 'F');
-  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.25);
   doc.roundedRect(15, clientY, 180, 32, 1.5, 1.5, 'D');
 
-  // Left Column (Customer Specifics)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
@@ -115,7 +152,6 @@ const generateQuotationPDF = (
   doc.text(`Email Address  :  ${wrapEmail[0]}`, 20, clientY + 21.5);
   doc.text(`Quotation No   :  ${quoteNum}`, 20, clientY + 26.5);
 
-  // Right Column (Event & Proposal Logistics)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
@@ -146,323 +182,291 @@ const generateQuotationPDF = (
   doc.text(`Event Location  :  ${wrapLocation[0]}`, 110, clientY + 21.5);
   doc.text(`Quotation Date  :  ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`, 110, clientY + 26.5);
 
-  // 3. PACKAGE DETAILS SECTION
   let currentY = 88;
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
-  doc.text('CHOSEN PACKAGE SPECIFICATIONS', 15, currentY);
-  currentY += 4.5; // 92.5
 
-  const hasActivePkgs = activePkgs.length > 0;
-  
-  const defaultDeliverables = [
-    '350 Edited Photos',
-    '4K Cinematic Video',
-    '3 Reels',
-    'Traditional Edited Video',
-    'Album Details',
-    'Additional Deliverables'
-  ];
-
-  const defaultInclusions = [
-    '1 Candid Photographer',
-    '1 Cinematographer',
-    '2 Traditional Photographers',
-    '2 Traditional Videographers',
-    '1 Drone',
-    '1 LED Wall',
-    '1 Spot Mixing'
-  ];
-
-  const packagesToRender = hasActivePkgs ? activePkgs : [{
-    package_name: `Default ${lead.event_type} Standard Package`,
-    package_id: `default_${lead.lead_id}`,
-    package_cost: lead.budget
-  }];
-
-  packagesToRender.forEach((pkg: any) => {
-    const pkgKey = pkg.package_id || pkg.lead_package_id || 'default';
-    
-    // Resolve dynamic edited items or fallbacks
-    const inclusionsList = (editableInclusions && editableInclusions[pkgKey]) || defaultInclusions;
-    const deliverablesList = (editableDeliverables && editableDeliverables[pkgKey]) || defaultDeliverables;
-
-    // Set font and style explicitly for title wrapping to avoid inheritance mismatch
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    const titleLines = doc.splitTextToSize((pkg.package_name || '').toUpperCase(), 110);
-    const titleHeight = Math.max(8, 4 + titleLines.length * 4.2);
-
-    // Set font and style explicitly for inclusions & deliverables wrapping to avoid inheritance mismatch
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-
-    // Compute fully wrapped inclusions and deliverables to prevent any overflow or boundary breaking
-    const wrappedInclusions: string[] = [];
-    inclusionsList.forEach(inc => {
-      const lines = doc.splitTextToSize(inc, 74); // column width ~80 minus space indent padding
-      lines.forEach((line, i) => {
-        wrappedInclusions.push(i === 0 ? `✓  ${line}` : `    ${line}`);
-      });
-    });
-
-    const wrappedDeliverables: string[] = [];
-    deliverablesList.forEach(del => {
-      const lines = doc.splitTextToSize(del, 74);
-      lines.forEach((line, i) => {
-        wrappedDeliverables.push(i === 0 ? `✓  ${line}` : `    ${line}`);
-      });
-    });
-
-    const maxRows = Math.max(wrappedInclusions.length, wrappedDeliverables.length);
-    const contentHeight = 12 + (maxRows * 4.2);
-    const totalBoxHeight = titleHeight + contentHeight;
-
-    // Rigid check to prevent any content or border overflowing onto footer (max height before footer is 250)
-    if (currentY + totalBoxHeight > 250) {
+  // Helper routine to render tables
+  const drawTable = (title: string, items: { id: string; name: string; qty: number; price: number; isAdditional?: boolean }[]) => {
+    if (currentY + 22 > 250) {
       doc.addPage();
-      currentY = 20; // reset to top gap on empty page
-      doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
-      doc.rect(0, 0, 210, 4, 'F'); // elegant top band
+      currentY = 20;
     }
 
-    // Outer package layout container box
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(15, currentY, 180, totalBoxHeight, 1.5, 1.5, 'FD');
-
-    // Inside package header bar (Carbon Black)
-    doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
-    doc.rect(15, currentY, 180, titleHeight, 'F');
-
-    // Left sidebar ribbon gold accent
-    doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
-    doc.rect(15, currentY, 1.5, titleHeight, 'F');
-
-    // Render wrapped Package Title lines
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(255, 255, 255);
-    titleLines.forEach((line: string, lineIdx: number) => {
-      doc.text(line, 19, currentY + 5.5 + (lineIdx * 4.2));
-    });
-
-    // Package Price (Align Right, vertically centered)
-    doc.setFont('helvetica', 'bold');
-    const priceStr = `Price: ₹ ${Number(pkg.package_cost).toLocaleString('en-IN')}`;
-    doc.text(priceStr, 192, currentY + (titleHeight / 2) + 1.2, { align: 'right' });
-
-    let detailsY = currentY + titleHeight + 4; // content rendering offset
-
-    // INCLUSIONS (Left Column - fully aligned, wrapped inside bounds)
+    doc.setFontSize(9.5);
     doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.text(title, 15, currentY);
+    currentY += 4;
+
+    // Header bar background color
+    doc.setFillColor(30, 41, 59); // Slate-800
+    doc.rect(15, currentY, 180, 7.5, 'F');
+
+    // Header labels
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('PACKAGE INCLUDES:', 20, detailsY);
-
-    wrappedInclusions.forEach((incLine: string, lineIdx: number) => {
-      const isHeader = incLine.startsWith('✓');
-      const yItem = detailsY + 5 + (lineIdx * 4.2);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(71, 85, 105);
-      
-      if (isHeader) {
-        // Draw elegant circular bullet using shapes instead of questionable unicode characters
-        doc.setFillColor(16, 185, 129); // emerald-500
-        doc.circle(21.5, yItem - 1.1, 0.7, 'F');
-        doc.text(incLine.slice(2).trim(), 24, yItem);
-      } else {
-        doc.text(incLine.trim(), 24, yItem);
-      }
-    });
-
-    // DELIVERABLES (Right Column - perfectly aligned, wrapped inside bounds)
-    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('DELIVERABLES:', 110, detailsY);
-
-    wrappedDeliverables.forEach((delLine: string, lineIdx: number) => {
-      const isHeader = delLine.startsWith('✓');
-      const yItem = detailsY + 5 + (lineIdx * 4.2);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(71, 85, 105);
-      
-      if (isHeader) {
-        // Draw elegant amber/gold circular bullet using shapes
-        doc.setFillColor(212, 175, 55); // goldColor/amber
-        doc.circle(111.5, yItem - 1.1, 0.7, 'F');
-        doc.text(delLine.slice(2).trim(), 114, yItem);
-      } else {
-        doc.text(delLine.trim(), 114, yItem);
-      }
-    });
-
-    currentY += totalBoxHeight + 6; // gap below of cards
-  });
-
-  // 4. TERMS AND PRICING CONTAINER
-  // Make sure we have enough space (at least 48mm) before drawing the bottom elements
-  if (currentY + 48 > 250) {
-    doc.addPage();
-    currentY = 20;
-    doc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
-    doc.rect(0, 0, 210, 4, 'F');
-  }
-
-  let blockY = currentY + 4;
-
-  // Draw Left Container roundedRect for Terms & Conditions (Aligns beautifully in a clean enclosed box)
-  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]); // slate-50
-  doc.roundedRect(15, blockY - 2, 92, 41, 1.5, 1.5, 'F');
-  doc.setDrawColor(226, 232, 240); // slate-200
-  doc.setLineWidth(0.25);
-  doc.roundedRect(15, blockY - 2, 92, 41, 1.5, 1.5, 'D');
-
-  // Gold brand ribbon on the left of terms box
-  doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
-  doc.rect(15, blockY - 2, 1.5, 41, 'F');
-
-  // Terms title (fully aligned and nested)
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('TERMS & CONDITIONS', 19, blockY + 3.5);
-
-  const customTermsList = termsText.split('\n').map(t => t.trim()).filter(Boolean);
-  const pdfTerms = customTermsList.length > 0 ? customTermsList : [
-    'Booking subject to wedding / event date availability.',
-    'Advance payment required for booking confirmation.',
-    'Remaining balance to be cleared as per standard company timeline.',
-    'Additional travel/accommodation charges may apply on actuals.',
-    'Additional post-production editing requests might incur extra fee.'
-  ];
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.8); // elegant, high-profile tight legal text
-  doc.setTextColor(100, 116, 139); // slate-500
-  let termsOffset = blockY + 8.5;
-  
-  pdfTerms.forEach((term: string) => {
-    const termLines = doc.splitTextToSize(term, 82);
-    termLines.forEach((line: string, lineIdx: number) => {
-      if (termsOffset < blockY + 37) { // keep it inside the 41mm height container safely
-        if (lineIdx === 0) {
-          // Draw a tiny amber list bullet
-          doc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
-          doc.circle(20.5, termsOffset - 0.9, 0.5, 'F');
-          doc.text(line, 22.5, termsOffset);
-        } else {
-          doc.text(line, 22.5, termsOffset);
-        }
-        termsOffset += 3.3;
-      }
-    });
-  });
-
-  // Draw Pricing Section (Right Column) with Dotted Rows
-  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]); // slate-50
-  doc.rect(112, blockY - 2, 83, 41, 'F');
-  doc.setDrawColor(226, 232, 240); // slate-200
-  doc.setLineWidth(0.25);
-  doc.rect(112, blockY - 2, 83, 41, 'D');
-
-  const subtotal = packagesToRender.reduce((acc, p) => acc + Number(p.package_cost), 0);
-  const discount = discountValue;
-  const additionalServices = additionalCharges;
-  const tempSubVal = subtotal + additionalServices - discount;
-  const gstValue = 0; // GST is custom or zero
-
-  const drawPricingRow = (label: string, valueStr: string, yPos: number, isBold = false) => {
-    const style = isBold ? 'bold' : 'normal';
-    const size = isBold ? 8.5 : 7.5;
-    
-    // Set active font to measure correctly
-    doc.setFont('helvetica', style);
-    doc.setFontSize(size);
-    
-    // Replace Rupee sign with standard safe metric chars for exact printable measurement width calculations
-    const cleanValueStr = valueStr.replace('₹', 'Rs.');
-    
-    const labelWidth = doc.getTextWidth(label);
-    const valueWidth = doc.getTextWidth(cleanValueStr);
-    
-    // Left-aligned label
-    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    doc.text(label, 115, yPos);
-    
-    // Right-aligned value
-    if (isBold) {
-      doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]); // Gold accent for final amounts
-    } else {
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    }
-    doc.text(valueStr, 192, yPos, { align: 'right' });
-
-    // Dotted Leaders (measured and drawn in standard normal 7.5 font)
-    doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.setTextColor(148, 163, 184); // slate-400
-    
-    // Re-measure with normal 7.5 for dot offset calculation
-    const normalLabelW = doc.getTextWidth(label);
-    const normalValueW = doc.getTextWidth(cleanValueStr);
-    
-    const dotStart = 115 + normalLabelW + 2;
-    const dotEnd = 192 - normalValueW - 2;
-    if (dotStart < dotEnd) {
-      let dots = '';
-      const dotCharW = doc.getTextWidth('.');
-      let currW = dotStart;
-      while (currW < dotEnd) {
-        dots += '.';
-        currW += dotCharW;
-      }
-      doc.text(dots, dotStart, yPos);
+    doc.setTextColor(255, 255, 255);
+    doc.text('SERVICE / ITEM SPECIFICATIONS', 19, currentY + 4.8);
+    doc.text('QTY', 125, currentY + 4.8, { align: 'center' });
+    doc.text('AMOUNT (₹)', 191, currentY + 4.8, { align: 'right' });
+
+    currentY += 7.5;
+
+    // Outer borders
+    doc.setDrawColor(203, 213, 225); 
+    doc.setLineWidth(0.2);
+
+    if (items.length === 0) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('No specified deliverables or customized service items.', 19, currentY + 5);
+      doc.line(15, currentY, 15, currentY + 8);
+      doc.line(195, currentY, 195, currentY + 8);
+      doc.line(15, currentY + 8, 195, currentY + 8);
+      currentY += 8;
+      return;
     }
+
+    items.forEach((item, index) => {
+      const wrappedName = doc.splitTextToSize(item.name || '', 95);
+      const rowHeight = Math.max(7.5, wrappedName.length * 4.2 + 2.5);
+
+      if (currentY + rowHeight > 250) {
+        doc.line(15, currentY, 195, currentY);
+        doc.addPage();
+        currentY = 20;
+
+        doc.setFillColor(30, 41, 59);
+        doc.rect(15, currentY, 180, 7.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text('SERVICE / ITEM SPECIFICATIONS (CONTINUED)', 19, currentY + 4.8);
+        doc.text('QTY', 125, currentY + 4.8, { align: 'center' });
+        doc.text('AMOUNT (₹)', 191, currentY + 4.8, { align: 'right' });
+        currentY += 7.5;
+      }
+
+      // Alternating row background stripes
+      if (index % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(15, currentY, 180, rowHeight, 'F');
+      }
+
+      // Side bounding and cell dividers
+      doc.line(15, currentY, 15, currentY + rowHeight);
+      doc.line(195, currentY, 195, currentY + rowHeight);
+      doc.line(115, currentY, 115, currentY + rowHeight);
+      doc.line(135, currentY, 135, currentY + rowHeight);
+
+      // Render cells text
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85);
+
+      wrappedName.forEach((line: string, i: number) => {
+        doc.text(line, 19, currentY + 4.3 + (i * 4.2));
+      });
+
+      doc.text(String(item.qty || 1), 125, currentY + (rowHeight / 2) + 1.1, { align: 'center' });
+
+      const itemAmt = Number(item.qty || 1) * Number(item.price || 0);
+      const isBundledBase = !item.isAdditional && item.price === 0;
+      const amtStr = isBundledBase ? 'Bundled' : `₹ ${itemAmt.toLocaleString('en-IN')}`;
+      doc.text(amtStr, 191, currentY + (rowHeight / 2) + 1.1, { align: 'right' });
+
+      doc.line(15, currentY + rowHeight, 195, currentY + rowHeight);
+      currentY += rowHeight;
+    });
+
+    currentY += 5; // space under table
   };
 
-  let pricingOffset = blockY + 3;
-  
-  const formattedSubtotal = `₹ ${subtotal.toLocaleString('en-IN')}`;
-  const formattedAddl = `₹ ${additionalServices.toLocaleString('en-IN')}`;
-  const formattedDisc = `₹ ${discount.toLocaleString('en-IN')}`;
-  const formattedSub = `₹ ${tempSubVal.toLocaleString('en-IN')}`;
-  const formattedGST = `₹ 0`;
-  const formattedGrand = `₹ ${tempSubVal.toLocaleString('en-IN')}`;
+  // 3. BASE PACKAGE SPECIFICATIONS TABLE
+  const baseServices = services.filter(s => !s.isAdditional);
+  drawTable('CHOSEN PACKAGE SPECIFICATIONS (BASE INCLUSIONS)', baseServices);
 
-  drawPricingRow('Package Cost', formattedSubtotal, pricingOffset);
-  pricingOffset += 4.5;
-  drawPricingRow('Additional Services', formattedAddl, pricingOffset);
-  pricingOffset += 4.5;
-  drawPricingRow('Discount', formattedDisc, pricingOffset);
-  pricingOffset += 4.5;
-  
-  // Divider line
+  // 4. ADDITIONAL SERVICES TABLE (If any)
+  const additionalServices = services.filter(s => s.isAdditional);
+  if (additionalServices.length > 0) {
+    drawTable('ADDITIONAL SPECIFICATIONS & SERVICE ADD-ONS', additionalServices);
+  }
+
+  // 5. PRICING SUMMARY CARD
+  if (currentY + 36 > 250) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('PRICING SUMMARY & ESTIMATES', 15, currentY);
+  currentY += 4.5;
+
+  doc.setFillColor(248, 250, 252);
+  doc.rect(15, currentY, 180, 25.5, 'F');
   doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.25);
-  doc.line(115, pricingOffset + 1.2, 192, pricingOffset + 1.2);
-  pricingOffset += 5.5;
+  doc.setLineWidth(0.2);
+  doc.rect(15, currentY, 180, 25.5, 'D');
 
-  drawPricingRow('Sub Total', formattedSub, pricingOffset, true);
-  pricingOffset += 4.5;
-  drawPricingRow('GST (If Applicable)', formattedGST, pricingOffset);
-  pricingOffset += 4.5;
+  doc.line(15, currentY + 6.3, 195, currentY + 6.3);
+  doc.line(15, currentY + 12.6, 195, currentY + 12.6);
+  doc.line(15, currentY + 18.9, 195, currentY + 18.9);
+  doc.line(115, currentY, 115, currentY + 25.5);
 
-  // Final Total highlight line
-  doc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
-  doc.setLineWidth(0.25);
-  doc.line(115, pricingOffset + 1.2, 192, pricingOffset + 1.2);
-  pricingOffset += 5.5;
+  const baseSumVal = baseServices.reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+  const addlSumVal = additionalServices.reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+  const discountVal = discountValue;
+  const finalAmountSum = Math.max(0, baseSumVal + addlSumVal - discountVal);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
   
-  drawPricingRow('Final Amount', formattedGrand, pricingOffset, true);
+  doc.text('Package Base Cost', 19, currentY + 4.3);
+  doc.text('Additional Services & Add-ons', 19, currentY + 10.6);
+  doc.text('Quotation Discount (Applied)', 19, currentY + 16.9);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('FINAL ESTIMATED COMMERCIAL AMOUNT', 19, currentY + 23.2);
 
-  // 5. FOOTER SECTION
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(`₹ ${baseSumVal.toLocaleString('en-IN')}`, 191, currentY + 4.3, { align: 'right' });
+  doc.text(`₹ ${addlSumVal.toLocaleString('en-IN')}`, 191, currentY + 10.6, { align: 'right' });
+  doc.text(`- ₹ ${discountVal.toLocaleString('en-IN')}`, 191, currentY + 16.9, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.text(`₹ ${finalAmountSum.toLocaleString('en-IN')}`, 191, currentY + 23.2, { align: 'right' });
+
+  currentY += 31;
+
+  // 6. REMARKS (CUSTOMER & INTERNAL)
+  const custRemarks = lead.remarks_raw || lead.remarks || '';
+  const teamRemarks = lead.notes || ''; // private team notes
+  
+  if (custRemarks || teamRemarks) {
+    if (currentY + 25 > 250) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.text('NOTES & SPECIAL INSTRUCTIONS', 15, currentY);
+    currentY += 4.5;
+
+    let wrappedCust: string[] = [];
+    let wrappedTeam: string[] = [];
+    let boxHeight = 10;
+
+    if (custRemarks) {
+      wrappedCust = doc.splitTextToSize(`Customer Notes: ${custRemarks}`, 170);
+      boxHeight += wrappedCust.length * 4.2;
+    }
+    if (teamRemarks) {
+      wrappedTeam = doc.splitTextToSize(`Internal Team Notes: ${teamRemarks}`, 170);
+      boxHeight += wrappedTeam.length * 4.2 + (custRemarks ? 4 : 0);
+    }
+
+    if (currentY + boxHeight > 250) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'D');
+
+    // Left border indicator (indigo)
+    doc.setFillColor(79, 70, 229);
+    doc.rect(15, currentY, 1.5, boxHeight, 'F');
+
+    let textOffset = currentY + 5;
+    if (custRemarks) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.2);
+      doc.setTextColor(71, 85, 105);
+      doc.text('CUSTOMER CONVERSATION SCOPE:', 19, textOffset);
+      textOffset += 4.5;
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      wrappedCust.forEach(line => {
+        const cleanLine = line.replace(/^Customer Notes:\s*/, '');
+        doc.text(cleanLine, 19, textOffset);
+        textOffset += 4.2;
+      });
+    }
+
+    if (teamRemarks) {
+      if (custRemarks) textOffset += 2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.2);
+      doc.setTextColor(71, 85, 105);
+      doc.text('INTERNAL PRIVATE CRM NOTES:', 19, textOffset);
+      textOffset += 4.5;
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      wrappedTeam.forEach(line => {
+        const cleanLine = line.replace(/^Internal Team Notes:\s*/, '');
+        doc.text(cleanLine, 19, textOffset);
+        textOffset += 4.2;
+      });
+    }
+
+    currentY += boxHeight + 4.5;
+  }
+
+  // 7. TERMS AND CONDITIONS
+  if (currentY + 22 > 250) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('TERMS & CONDITIONS', 15, currentY);
+  currentY += 4.5;
+
+  const defaultTerms = [
+    'Booking is subject to availability of dates and crew.',
+    'A non-refundable advance payment of 40% is required to lock the booking.',
+    'Remaining payments are split (40% on shoot day, 20% upon delivery of first drafts).',
+    'Travel and accommodation outside headquarters to be cleared by the client.',
+    'Client revisions to delivered albums/videos are capped at 2 iterations within 30 days.'
+  ];
+
+  const termsToRender = termsText.split('\n').map(t => t.trim()).filter(Boolean).length > 0
+    ? termsText.split('\n').map(t => t.trim()).filter(Boolean)
+    : defaultTerms;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(100, 116, 139);
+
+  termsToRender.forEach((term, idx) => {
+    const wrapped = doc.splitTextToSize(`${idx + 1}. ${term}`, 175);
+    wrapped.forEach((line: string) => {
+      if (currentY + 4 > 252) {
+        doc.addPage();
+        currentY = 20;
+      }
+      doc.text(line, 15, currentY);
+      currentY += 3.8;
+    });
+  });
+
+  currentY += 4;
+
+  // 8. SIGNATURE AND FOOTER (Placed statically on bottom of the last page)
   let footerY = 260;
   
   doc.setDrawColor(226, 232, 240);
@@ -1114,6 +1118,154 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   const [quoteDiscount, setQuoteDiscount] = useState<number>(0);
   const [quoteAdditional, setQuoteAdditional] = useState<number>(0);
 
+  const [quoteServices, setQuoteServices] = useState<{ id: string; name: string; qty: number; price: number; isAdditional?: boolean }[]>([]);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  
+  // Adding service inline temp states
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceQty, setNewServiceQty] = useState(1);
+  const [newServicePrice, setNewServicePrice] = useState(0);
+  const [isAddingInline, setIsAddingInline] = useState(false);
+
+  const handleAddInlineService = () => {
+    if (!newServiceName.trim()) return;
+    const newService = {
+      id: `add_${Date.now()}`,
+      name: newServiceName.trim(),
+      qty: Math.max(1, newServiceQty),
+      price: Math.max(0, newServicePrice),
+      isAdditional: true
+    };
+    setQuoteServices(prev => [...prev, newService]);
+    // reset states
+    setNewServiceName('');
+    setNewServiceQty(1);
+    setNewServicePrice(0);
+    setIsAddingInline(false);
+  };
+
+  const handleEditServiceItem = (id: string, updatedFields: Partial<{ name: string; qty: number; price: number }>) => {
+    setQuoteServices(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
+  };
+
+  const handleRemoveServiceItem = (id: string) => {
+    setQuoteServices(prev => prev.filter(s => s.id !== id));
+  };
+
+  // Keep quoteAdditional synchronized in real-time
+  React.useEffect(() => {
+    const additionalSum = quoteServices
+      .filter(s => s.isAdditional)
+      .reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+    setQuoteAdditional(additionalSum);
+  }, [quoteServices]);
+
+  // Synchronize/initialize services on entering Step 4
+  React.useEffect(() => {
+    const isStep4Active = wizardStep === 4 || crmWizardStep === 4;
+    if (!isStep4Active) {
+      setEditingServiceId(null);
+      setIsAddingInline(false);
+      return;
+    }
+
+    const leadId = crmWizardStep === 4 ? (selectedLead?.lead_id || 'edit') : (createdLeadId || 'create');
+    const storageKey = `erp_quote_services_${leadId}`;
+    const cached = localStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+          setQuoteServices(parsed);
+          return;
+        }
+      } catch (e) {
+        console.warn("Failed to parse cached quote services", e);
+      }
+    }
+
+    // Fallback: auto-initialize if not locally cached
+    const activePkgs = getSelectedPkgsInfo(crmWizardStep === 4);
+    
+    // Auto-calculate base proportions
+    const initialServices: { id: string; name: string; qty: number; price: number; isAdditional: boolean }[] = [];
+    activePkgs.forEach((lp) => {
+      const pkgKey = lp.package_id || 'default';
+      const pObj = (packages || []).find(p => p.package_id === lp.package_id);
+      const incStr = pObj?.team_members || '';
+      const delStr = pObj?.deliverables || '';
+
+      const inclusionsList = incStr
+        ? incStr.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const deliverablesList = delStr
+        ? delStr.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+
+      const combined = [...inclusionsList, ...deliverablesList];
+
+      if (combined.length === 0) {
+        // Fallback standard photography inclusions
+        const defaultItems = [
+          '2 Photographers',
+          '1 Cinematographer',
+          'Drone Coverage',
+          'LED Wall',
+          'Album (40 Sheets)',
+          'Teaser Video',
+          'Highlight Video',
+          'Full Event Coverage'
+        ];
+        const defaultPrices = [20000, 15000, 10000, 10050, 8000, 7000, 5000, 5000];
+        const sumDefault = defaultPrices.reduce((a, b) => a + b, 0);
+        const ratio = lp.package_cost ? (lp.package_cost / sumDefault) : 1;
+
+        defaultItems.forEach((name, idx) => {
+          initialServices.push({
+            id: `base_${pkgKey}_${idx}`,
+            name,
+            qty: 1,
+            price: Math.round((defaultPrices[idx] || 5000) * ratio),
+            isAdditional: false
+          });
+        });
+      } else {
+        // Divide lp.package_cost equally among combined items
+        const count = combined.length;
+        const pricePerItem = Math.round(Number(lp.package_cost || 0) / count);
+        combined.forEach((name, idx) => {
+          initialServices.push({
+            id: `base_${pkgKey}_${idx}`,
+            name,
+            qty: 1,
+            price: pricePerItem,
+            isAdditional: false
+          });
+        });
+      }
+    });
+
+    setQuoteServices(initialServices);
+  }, [wizardStep, crmWizardStep, selectedLead, createdLeadId]);
+
+  // Save services to local storage whenever they change
+  React.useEffect(() => {
+    const isStep4Active = wizardStep === 4 || crmWizardStep === 4;
+    if (!isStep4Active) return;
+    const leadId = crmWizardStep === 4 ? (selectedLead?.lead_id || 'edit') : (createdLeadId || 'create');
+    localStorage.setItem(`erp_quote_services_${leadId}`, JSON.stringify(quoteServices));
+  }, [quoteServices, selectedLead, createdLeadId, crmWizardStep, wizardStep]);
+
+  const dynamicBaseSum = quoteServices
+    .filter(s => !s.isAdditional)
+    .reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+
+  const dynamicAdditionalSum = quoteServices
+    .filter(s => s.isAdditional)
+    .reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+
+  const dynamicFinalAmt = Math.max(0, dynamicBaseSum - quoteDiscount + dynamicAdditionalSum);
+
   const handleEditInclusion = (pkgKey: string, index: number, value: string) => {
     setEditableInclusions(prev => {
       const list = prev[pkgKey] ? [...prev[pkgKey]] : [];
@@ -1245,13 +1397,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     if (activeTab === 'create') {
       triggerAutoScrollAndFocus('#create_lead_form', 150);
     }
-  }, [activeTab]);
+  }, [wizardStep, activeTab]);
 
   React.useEffect(() => {
     if (selectedLead) {
       triggerAutoScrollAndFocus('#lead_details_mobile_modal', 150);
     }
-  }, [selectedLead]);
+  }, [crmWizardStep, selectedLead]);
 
   React.useEffect(() => {
     if (isAddFormOpen || editingPackage) {
@@ -1264,6 +1416,785 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       triggerAutoScrollAndFocus('#confirm_booking_modal', 150);
     }
   }, [showConfirmModal]);
+
+  React.useEffect(() => {
+    if ((wizardStep === 4 || crmWizardStep === 4) && !activeQuoteNum) {
+      const randomID = Math.floor(1000 + Math.random() * 9000);
+      setActiveQuoteNum(`QT-2026-${randomID}`);
+    }
+  }, [wizardStep, crmWizardStep, activeQuoteNum]);
+
+  const getSelectedPkgsInfo = (isEdit: boolean) => {
+    if (isEdit) {
+      const primaryPkg = packages.find(p => p.package_id === wizardLeadData.selected_package_id);
+      return [{
+        package_name: primaryPkg?.package_name || 'Selected Package',
+        package_id: wizardLeadData.selected_package_id || 'selected_pkg',
+        package_cost: Number(wizardLeadData.package_cost) || Number(primaryPkg?.price) || 0
+      }];
+    } else {
+      const selectedPkgs = PACKAGES_LIST.flatMap(cat => cat.items).filter(item => selectedPkgIds.includes(item.id));
+      return selectedPkgs.map(p => ({
+        package_name: p.name,
+        package_id: p.id,
+        package_cost: pkgPrices[p.id] !== undefined ? pkgPrices[p.id] : p.cost
+      }));
+    }
+  };
+
+  const getLeadInfoForQuote = (isEdit: boolean) => {
+    if (isEdit) {
+      return {
+        ...selectedLead,
+        customer_name: wizardLeadData.customer_name,
+        mobile: wizardLeadData.mobile,
+        email: wizardLeadData.email,
+        event_date: wizardLeadData.event_date,
+        event_location: wizardLeadData.event_location,
+        event_type: wizardLeadData.event_type,
+        shoot_type: wizardLeadData.shoot_type,
+        budget: wizardLeadData.budget,
+        whatsapp_number: wizardLeadData.whatsapp_number
+      };
+    } else {
+      return {
+        lead_id: createdLeadId || 'DRAFT-LEAD',
+        customer_name: createForm.customer_name,
+        mobile: createForm.mobile,
+        email: createForm.email,
+        event_date: createForm.event_date,
+        event_location: createForm.event_location,
+        event_type: createForm.event_type,
+        shoot_type: createForm.shoot_type,
+        budget: createForm.budget,
+        whatsapp_number: createForm.whatsapp_number
+      };
+    }
+  };
+
+  const handleGenerateQuote = async (isEdit: boolean) => {
+    setIsSaving(true);
+    try {
+      const leadObj = getLeadInfoForQuote(isEdit);
+      const activePkgs = getSelectedPkgsInfo(isEdit);
+      const basePkgSum = dynamicBaseSum;
+      const finalAmt = dynamicFinalAmt;
+      const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      if (!activeQuoteNum) {
+        setActiveQuoteNum(quotNum);
+      }
+
+      const qId = 'QT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+      
+      const standardQuotation = {
+        quotation_id: qId,
+        quotation_number: quotNum,
+        lead_id: leadObj.lead_id || 'DRAFT-LEAD',
+        customer_id: leadObj.customer_name || 'Customer',
+        customer_name: leadObj.customer_name || 'Customer',
+        order_id: '',
+        package_name: activePkgs.map(p => p.package_name).join(' + '),
+        package_cost: basePkgSum,
+        discount: quoteDiscount,
+        additional_services_cost: quoteAdditional,
+        final_quotation_amount: finalAmt,
+        quotation_status: 'Sent',
+        pdf_url: '',
+        generated_date: new Date().toISOString().split('T')[0],
+        whatsapp_sent_status: false,
+        viewed_status: false,
+        terms_conditions: quotationTerms
+      };
+
+      await addQuotation(standardQuotation);
+
+      if (isEdit) {
+        setWizardLeadData(prev => ({
+          ...prev,
+          budget: finalAmt,
+          final_quoted_amount: finalAmt,
+          status: 'Quotation Sent' as CurrentStage
+        }));
+        await updateLead(leadObj.lead_id, {
+          budget: finalAmt,
+          status: 'Quotation Sent' as CurrentStage,
+          remarks: getRemarksPayload(wizardLeadData.remarks, wizardLeadData.notes || '', wizardLeadData.next_follow_up_date, wizardLeadData.whatsapp_number, wizardLeadData.address, wizardLeadData.city)
+        });
+      } else {
+        setCreateForm(prev => ({
+          ...prev,
+          budget: finalAmt
+        }));
+        setSalesStatus('Quotation Sent');
+        await updateLead(createdLeadId!, {
+          budget: finalAmt,
+          status: 'Quotation Sent' as CurrentStage,
+          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city)
+        });
+      }
+
+      showToastMsg("Quotation successfully generated and saved to CRM!", "success");
+    } catch (err: any) {
+      console.error("Failed to generate quotation:", err);
+      alert("Failed to generate quotation. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePreviewQuotePDF = (isEdit: boolean) => {
+    try {
+      const leadObj = getLeadInfoForQuote(isEdit);
+      const activePkgs = getSelectedPkgsInfo(isEdit);
+      const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      const doc = generateQuotationPDF(
+        leadObj,
+        activePkgs,
+        quotNum,
+        quotationTerms,
+        logoBase64,
+        editableInclusions,
+        editableDeliverables,
+        quoteDiscount,
+        quoteAdditional,
+        quoteServices
+      );
+      
+      const blobUrl = doc.output('bloburl');
+      setGeneratedPDFBlobUrl(blobUrl);
+      window.open(blobUrl, '_blank');
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to preview PDF.");
+    }
+  };
+
+  const handleDownloadQuotePDF = (isEdit: boolean) => {
+    try {
+      const leadObj = getLeadInfoForQuote(isEdit);
+      const activePkgs = getSelectedPkgsInfo(isEdit);
+      const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      const doc = generateQuotationPDF(
+        leadObj,
+        activePkgs,
+        quotNum,
+        quotationTerms,
+        logoBase64,
+        editableInclusions,
+        editableDeliverables,
+        quoteDiscount,
+        quoteAdditional,
+        quoteServices
+      );
+      
+      doc.save(`Quotation_${quotNum}.pdf`);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+      alert("Failed to download PDF.");
+    }
+  };
+
+  const handleSendWhatsAppQuote = (isEdit: boolean) => {
+    const leadObj = getLeadInfoForQuote(isEdit);
+    const activePkgs = getSelectedPkgsInfo(isEdit);
+    const basePkgSum = dynamicBaseSum;
+    const finalAmt = dynamicFinalAmt;
+    const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    
+    const pkgNames = activePkgs.map(p => p.package_name).join(' + ') || 'Selected Package';
+    const phone = leadObj.whatsapp_number || leadObj.mobile || '';
+    
+    const message = `*PHOTOCREW PICTURES* 📸\n\n` +
+      `Hi *${leadObj.customer_name || 'Client'}*,\n` +
+      `Thank you for choosing Photocrew Pictures! We have generated your custom quote *${quotNum}* for your upcoming *${leadObj.event_type || 'Event'}* shoot.\n\n` +
+      `*Quote Details:*\n` +
+      `• Selected Package: ${pkgNames}\n` +
+      `• Package Amount: ₹${basePkgSum.toLocaleString('en-IN')}\n` +
+      `• Discount Applied: ₹${quoteDiscount.toLocaleString('en-IN')}\n` +
+      `• Additional Services: ₹${quoteAdditional.toLocaleString('en-IN')}\n` +
+      `• *Final Quotation Amount: ₹${finalAmt.toLocaleString('en-IN')}*\n\n` +
+      `Kindly review the quotation details. Feel free to contact us for any edits/adjustments!\n\n` +
+      `Warm Regards,\n` +
+      `*Photocrew Sales Team*`;
+    
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    
+    window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleSendEmailQuote = (isEdit: boolean) => {
+    const leadObj = getLeadInfoForQuote(isEdit);
+    const activePkgs = getSelectedPkgsInfo(isEdit);
+    const basePkgSum = dynamicBaseSum;
+    const finalAmt = dynamicFinalAmt;
+    const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    
+    const pkgNames = activePkgs.map(p => p.package_name).join(' + ') || 'Selected Package';
+    const email = leadObj.email || '';
+    
+    const subject = `Photocrew Pictures - Custom Quotation Details (${quotNum})`;
+    const body = `Dear ${leadObj.customer_name || 'Client'},\n\n` +
+      `Thank you for reach out to us! We are pleased to provide the custom quotation details for your upcoming ${leadObj.event_type || 'Event'} shoot.\n\n` +
+      `Quotation Number: ${quotNum}\n` +
+      `Selected Package: ${pkgNames}\n` +
+      `Package Amount: Rs. ${basePkgSum.toLocaleString('en-IN')}\n` +
+      `Discount Applied: Rs. ${quoteDiscount.toLocaleString('en-IN')}\n` +
+      `Additional Services: Rs. ${quoteAdditional.toLocaleString('en-IN')}\n` +
+      `Final Quotation Amount: Rs. ${finalAmt.toLocaleString('en-IN')}\n\n` +
+      `We will follow up shortly to discuss any specific adjustments you might need.\n\n` +
+      `Warm regards,\n` +
+      `The Photocrew Pictures Team\n` +
+      `https://www.photocrewpictures.com/`;
+
+    window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+  };
+
+  const renderQuotationAndStep4Section = (isEdit: boolean) => {
+    const activePkgs = getSelectedPkgsInfo(isEdit);
+    const basePkgSum = dynamicBaseSum;
+    const finalAmt = dynamicFinalAmt;
+    const pkgNames = activePkgs.map(p => p.package_name).join(' + ') || 'Selected Package';
+
+    const budgetValue = isEdit ? wizardLeadData.budget : createForm.budget;
+    const setBudget = (val: number) => {
+      if (isEdit) {
+        setWizardLeadData(prev => ({ ...prev, budget: val }));
+      } else {
+        setCreateForm(prev => ({ ...prev, budget: val }));
+      }
+    };
+
+    const remarksValue = isEdit ? wizardLeadData.remarks : createForm.remarks;
+    const setRemarks = (val: string) => {
+      if (isEdit) {
+        setWizardLeadData(prev => ({ ...prev, remarks: val }));
+      } else {
+        setCreateForm(prev => ({ ...prev, remarks: val }));
+      }
+    };
+
+    const notesValue = isEdit ? wizardLeadData.notes : internalNotes;
+    const setNotes = (val: string) => {
+      if (isEdit) {
+        setWizardLeadData(prev => ({ ...prev, notes: val }));
+      } else {
+        setInternalNotes(val);
+      }
+    };
+
+    const followUpValue = isEdit ? wizardLeadData.next_follow_up_date : followUpDate;
+    const setFollowUp = (val: string) => {
+      if (isEdit) {
+        setWizardLeadData(prev => ({ ...prev, next_follow_up_date: val }));
+      } else {
+        setFollowUpDate(val);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Section 1: Proposed Client Budget */}
+        <div className="bg-slate-900/50 border border-slate-805/40 rounded-xl p-4.5 space-y-3.5 shadow-sm">
+          <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wide font-mono flex items-center gap-1.5 border-b border-slate-800 pb-2">
+            <span>💰</span> Section 1: Proposed Client Budget
+          </h4>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+              Proposed Client Budget (₹) *
+            </label>
+            <input
+              type="number"
+              required
+              value={budgetValue || ''}
+              onChange={(e) => setBudget(Number(e.target.value))}
+              placeholder="E.g., 50000"
+              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
+            />
+            <p className="text-[10px] text-slate-500 mt-1 font-mono">
+              Auto-filled with package price (₹{basePkgSum.toLocaleString('en-IN')}) but remains fully editable.
+            </p>
+          </div>
+        </div>
+
+        {/* Deliverables Section with Add / Edit / Remove functionality */}
+        <div className="bg-slate-900/50 border border-slate-805/40 rounded-xl p-4.5 space-y-4 shadow-sm">
+          <div className="flex flex-col gap-1 border-b border-slate-800 pb-3">
+            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide font-mono flex items-center gap-1.5">
+              <span>📦</span> Section 1.5: Deliverables & Specifications Management
+            </h4>
+            <p className="text-[10px] text-slate-400">
+              Review and customize package inclusions and deliverables. Changes automatically update the final pricing amounts.
+            </p>
+          </div>
+
+          {/* List of Deliverables in tabular grid */}
+          <div className="space-y-4">
+            {/* List 1: Package Deliverables (Base) */}
+            <div className="space-y-2">
+              <h5 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Package Base Deliverables (Base Package Deliverables)
+              </h5>
+              {quoteServices.filter(s => !s.isAdditional).length === 0 ? (
+                <p className="text-[10px] text-slate-500 italic px-2 font-mono">No base package deliverables configured.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/40">
+                  <table className="w-full text-left text-xs min-w-[500px]">
+                    <thead>
+                      <tr className="bg-slate-900/80 text-slate-400 font-mono text-[10px] uppercase border-b border-slate-800">
+                        <th className="py-2.5 px-3">Deliverable Name</th>
+                        <th className="py-2.5 px-2 text-center w-20">Qty</th>
+                        <th className="py-2.5 px-2 text-right w-28">Amount (₹)</th>
+                        <th className="py-2.5 px-2 text-right w-28">Total (₹)</th>
+                        <th className="py-2.5 px-3 text-center w-20">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {quoteServices.filter(s => !s.isAdditional).map(item => (
+                        <tr key={item.id} className="hover:bg-slate-900/30 transition-colors">
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleEditServiceItem(item.id, { name: e.target.value })}
+                              className="w-full bg-slate-950/80 border border-slate-800 focus:border-cyan-500 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                              placeholder="Deliverable Name..."
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.qty}
+                              onChange={(e) => handleEditServiceItem(item.id, { qty: Math.max(1, Number(e.target.value)) })}
+                              className="w-14 bg-slate-950/80 border border-slate-800 text-center focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-right">
+                            <input
+                              type="number"
+                              min={0}
+                              value={item.price}
+                              onChange={(e) => handleEditServiceItem(item.id, { price: Math.max(0, Number(e.target.value)) })}
+                              className="w-24 bg-slate-950/80 border border-slate-800 text-right focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-right text-slate-400 font-mono font-medium">
+                            ₹{(item.qty * item.price).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveServiceItem(item.id)}
+                              className="text-red-400 hover:text-red-350 hover:bg-red-500/10 px-2 py-1 rounded text-[10px] font-mono transition-colors font-bold"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* List 2: Additional Services & Add-ons */}
+            <div className="space-y-2">
+              <h5 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                Additional Deliverables & Add-ons
+              </h5>
+              {quoteServices.filter(s => s.isAdditional).length === 0 ? (
+                <p className="text-[10px] text-slate-500 italic px-2 font-mono pb-1">No custom additional deliverables added yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/40">
+                  <table className="w-full text-left text-xs min-w-[500px]">
+                    <thead>
+                      <tr className="bg-slate-900/80 text-slate-400 font-mono text-[10px] uppercase border-b border-slate-800">
+                        <th className="py-2.5 px-3">Deliverable Name</th>
+                        <th className="py-2.5 px-2 text-center w-20">Qty</th>
+                        <th className="py-2.5 px-2 text-right w-28">Amount (₹)</th>
+                        <th className="py-2.5 px-2 text-right w-28">Total (₹)</th>
+                        <th className="py-2.5 px-3 text-center w-20">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {quoteServices.filter(s => s.isAdditional).map(item => (
+                        <tr key={item.id} className="hover:bg-slate-900/30 transition-colors">
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleEditServiceItem(item.id, { name: e.target.value })}
+                              className="w-full bg-slate-950/80 border border-slate-800 focus:border-cyan-500 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                              placeholder="Deliverable Name..."
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.qty}
+                              onChange={(e) => handleEditServiceItem(item.id, { qty: Math.max(1, Number(e.target.value)) })}
+                              className="w-14 bg-slate-950/80 border border-slate-800 text-center focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-right">
+                            <input
+                              type="number"
+                              min={0}
+                              value={item.price}
+                              onChange={(e) => handleEditServiceItem(item.id, { price: Math.max(0, Number(e.target.value)) })}
+                              className="w-24 bg-slate-950/80 border border-slate-800 text-right focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-right text-slate-400 font-mono font-medium">
+                            ₹{(item.qty * item.price).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveServiceItem(item.id)}
+                              className="text-red-400 hover:text-red-350 hover:bg-red-500/10 px-2 py-1 rounded text-[10px] font-mono transition-colors font-bold"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add Deliverable Form Control */}
+          <div className="bg-slate-950/80 border border-slate-800/60 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-300 font-mono uppercase tracking-wider">➕ Add Custom Deliverable Node</span>
+              {!isAddingInline ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingInline(true)}
+                  className="bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/25 rounded px-3 py-1 text-xs font-mono font-bold transition-all shadow-sm"
+                >
+                  + Add Deliverable
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingInline(false)}
+                  className="text-slate-400 hover:text-slate-300 text-xs font-mono"
+                >
+                  Cancel Add
+                </button>
+              )}
+            </div>
+
+            {isAddingInline && (
+              <div className="space-y-4 border-t border-slate-800/50 pt-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Deliverable Name</label>
+                    <input
+                      type="text"
+                      value={newServiceName}
+                      onChange={(e) => setNewServiceName(e.target.value)}
+                      placeholder="e.g. Extra Album, Same Day Edit..."
+                      className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Quantity</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={newServiceQty}
+                        onChange={(e) => setNewServiceQty(Math.max(1, Number(e.target.value)))}
+                        className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none font-mono text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Unit Price (₹)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={newServicePrice}
+                        onChange={(e) => setNewServicePrice(Math.max(0, Number(e.target.value)))}
+                        className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none font-mono text-right"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Scope Section</label>
+                    <div className="flex gap-2 h-8 items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newService = {
+                            id: `add_base_${Date.now()}`,
+                            name: newServiceName.trim() || 'New Package Deliverable',
+                            qty: Math.max(1, newServiceQty),
+                            price: Math.max(0, newServicePrice),
+                            isAdditional: false
+                          };
+                          setQuoteServices(prev => [...prev, newService]);
+                          setNewServiceName('');
+                          setNewServiceQty(1);
+                          setNewServicePrice(0);
+                        }}
+                        className="flex-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/25 rounded py-1 px-2 text-[10px] font-mono font-bold transition-all text-center"
+                      >
+                        Add to Base Pkg
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newService = {
+                            id: `add_addl_${Date.now()}`,
+                            name: newServiceName.trim() || 'New Additional Service',
+                            qty: Math.max(1, newServiceQty),
+                            price: Math.max(0, newServicePrice),
+                            isAdditional: true
+                          };
+                          setQuoteServices(prev => [...prev, newService]);
+                          setNewServiceName('');
+                          setNewServiceQty(1);
+                          setNewServicePrice(0);
+                        }}
+                        className="flex-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/25 rounded py-1 px-2 text-[10px] font-mono font-bold transition-all text-center"
+                      >
+                        Add to Add-on
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Add presets requested by user */}
+                <div className="pt-1.5 border-t border-slate-900 space-y-1">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-500 font-mono">⚡ Quick Suggest Presets</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { name: 'Extra Album', price: 8000, isAdd: true },
+                      { name: 'Additional Photographer', price: 15000, isAdd: true },
+                      { name: 'Same Day Edit', price: 12000, isAdd: true },
+                      { name: 'Live Streaming', price: 10000, isAdd: true },
+                      { name: 'Drone Coverage', price: 10000, isAdd: false },
+                      { name: 'LED Wall', price: 10050, isAdd: false }
+                    ].map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => {
+                          const id = `preset_${Date.now()}_${idx}`;
+                          const newService = {
+                            id,
+                            name: preset.name,
+                            qty: 1,
+                            price: preset.price,
+                            isAdditional: preset.isAdd
+                          };
+                          setQuoteServices(prev => [...prev, newService]);
+                        }}
+                        className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-slate-100 rounded px-2 py-1 text-[9px] font-mono transition-all"
+                      >
+                        + {preset.name} (₹{preset.price.toLocaleString('en-IN')})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Section 2: Quotation Details */}
+        <div className="bg-slate-900/50 border border-slate-805/40 rounded-xl p-4.5 space-y-3.5 shadow-sm">
+          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-wide font-mono flex items-center gap-1.5 border-b border-slate-800 pb-2">
+            <span>📋</span> Section 2: Quotation Details
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Quotation Number */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Quotation Number (Auto-Generated)
+              </label>
+              <input
+                type="text"
+                value={activeQuoteNum}
+                onChange={(e) => setActiveQuoteNum(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
+              />
+            </div>
+
+            {/* Package Amount (Read-only Display representing Base Price) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Package Base Price (₹)
+              </label>
+              <div className="w-full bg-slate-950/60 border border-slate-850/50 rounded-lg py-2 px-3 text-xs text-slate-400 font-mono flex items-center justify-between">
+                <span className="truncate max-w-[200px]">{pkgNames}</span>
+                <span className="font-bold text-slate-200">₹{basePkgSum.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            {/* Discount */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Quotation Discount (₹)
+              </label>
+              <input
+                type="number"
+                value={quoteDiscount || ''}
+                onChange={(e) => setQuoteDiscount(Number(e.target.value))}
+                placeholder="0"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
+              />
+            </div>
+
+            {/* Additional Services Cost */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Additional Services Cost (₹)
+              </label>
+              <input
+                type="number"
+                value={quoteAdditional || ''}
+                onChange={(e) => setQuoteAdditional(Number(e.target.value))}
+                placeholder="0"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Final Calculated Amount Badge */}
+          <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5 flex items-center justify-between shadow-inner mt-2">
+            <div className="space-y-0.5">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide font-mono">Final Quotation Amount</p>
+              <p className="text-[9px] text-slate-500 font-mono">Formula: Base Price (₹{basePkgSum}) - Disc (₹{quoteDiscount}) + Addl (₹{quoteAdditional})</p>
+            </div>
+            <div className="text-right">
+              <span className="text-lg font-extrabold text-amber-500 font-mono">
+                ₹{finalAmt.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Remarks */}
+        <div className="bg-slate-900/50 border border-slate-805/40 rounded-xl p-4.5 space-y-3.5 shadow-sm">
+          <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wide font-mono flex items-center gap-1.5 border-b border-slate-800 pb-2">
+            <span>✍️</span> Section 3: Remarks & Follow-up
+          </h4>
+
+          <div className="space-y-4">
+            {/* Customer Remarks */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Customer Inbound Scope & Demands (Remarks)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="List customized requests, physical albums requirement, or crew limits."
+                value={remarksValue || ''}
+                onChange={(e) => setRemarks(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans"
+              ></textarea>
+            </div>
+
+            {/* Internal notes */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Internal Sales Coordinator Notes (Private CRM Notes)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="E.g., Client seems premium, referred by relative, follow up quickly."
+                value={notesValue || ''}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans"
+              ></textarea>
+            </div>
+
+            {/* Follow-up Date */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Next Scheduled CRM Follow-up Date (Optional)
+              </label>
+              <input
+                type="date"
+                value={followUpValue || ''}
+                onChange={(e) => setFollowUp(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-400 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-550/20 transition-all font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Actions */}
+        <div className="bg-slate-900/50 border border-slate-805/40 rounded-xl p-4.5 space-y-3.5 shadow-sm">
+          <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide font-mono flex items-center gap-1.5 border-b border-slate-800 pb-2">
+            <span>⚙️</span> Section 4: Quotation Actions
+          </h4>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Generate Quotation & Lock in CRM */}
+            <button
+              type="button"
+              onClick={() => handleGenerateQuote(isEdit)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg transition-all shadow-md active:scale-[0.98] cursor-pointer"
+            >
+              <span>⚡</span> Generate Quotation (Sync CRM)
+            </button>
+
+            {/* Preview PDF */}
+            <button
+              type="button"
+              onClick={() => handlePreviewQuotePDF(isEdit)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg transition-all border border-zinc-700 active:scale-[0.98] cursor-pointer"
+            >
+              <span>👁️</span> Preview PDF
+            </button>
+
+            {/* Download PDF */}
+            <button
+              type="button"
+              onClick={() => handleDownloadQuotePDF(isEdit)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold bg-red-950/40 hover:bg-red-900/50 text-red-300 rounded-lg transition-all border border-red-900/40 active:scale-[0.98] cursor-pointer"
+            >
+              <span>📄</span> Download PDF Document
+            </button>
+
+            {/* Send WhatsApp */}
+            <button
+              type="button"
+              onClick={() => handleSendWhatsAppQuote(isEdit)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 rounded-lg transition-all border border-emerald-900/40 active:scale-[0.98] cursor-pointer"
+            >
+              <span>💬</span> Send Quotation via WhatsApp
+            </button>
+
+            {/* Send Email */}
+            <button
+              type="button"
+              onClick={() => handleSendEmailQuote(isEdit)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 rounded-lg transition-all border border-cyan-900/40 sm:col-span-2 active:scale-[0.98] cursor-pointer"
+            >
+              <span>✉️</span> Send Proposals via Email
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Handle lead select
   const handleSelectLead = (lead: Lead) => {
@@ -1298,12 +2229,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       shoot_type: lead.shoot_type || '',
       // Step 3
       selected_package_id: primaryLP?.package_id || '',
-      package_cost: primaryLP ? Number(primaryLP.package_cost) : lead.budget || 0,
+      package_cost: primaryLP ? Number(primaryLP.package_cost) : 0,
       deliverables: primaryLP?.package_name || '',
       notes: lead.remarks || '',
       // Step 4
       budget: lead.budget || 0,
-      final_quoted_amount: primaryLP ? Number(primaryLP.final_amount) : lead.budget || 0,
+      final_quoted_amount: primaryLP ? Number(primaryLP.final_amount) : 0,
       remarks: lead.remarks || '',
       next_follow_up_date: lead.updated_at ? lead.updated_at.split('T')[0] : new Date().toISOString().split('T')[0],
       // Step 5
@@ -1311,26 +2242,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       // Order Confirmed Rule fields
       confirmed_event_date: lead.event_date || '',
       confirmed_event_time: lead.event_time || '',
-      final_amount: lead.budget || 0,
-      advance_received: Math.round(lead.budget / 3),
+      final_amount: 0,
+      advance_received: 0,
     });
 
     setFollowUpForm({
       call_notes: '',
       next_follow_up_date: '',
       status: lead.status,
-      quotation_amount: lead.budget,
+      quotation_amount: 0,
       negotiation_notes: '',
       event_date: lead.event_date || '',
       event_time: lead.event_time || '',
       reporting_time: lead.reporting_time || '08:00',
-      advance_received: Math.round(lead.budget / 3),
+      advance_received: 0,
       payment_mode: 'UPI',
     });
     setConfirmForm({
       package_name: lead.event_type + ' Premium Package',
-      quotation_amount: lead.budget,
-      advance_received: Math.round(lead.budget / 3),
+      quotation_amount: 0,
+      advance_received: 0,
       event_date: lead.event_date || '',
       event_time: lead.event_time || '',
       payment_mode: 'UPI',
@@ -1346,7 +2277,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         selected_package_id: packageId,
         package_cost: Number(pkg.price),
         deliverables: pkg.deliverables || '',
-        notes: pkg.seasonal_offer ? `Seasonal Offer: ${pkg.seasonal_offer}` : prev.notes
+        notes: pkg.seasonal_offer ? `Seasonal Offer: ${pkg.seasonal_offer}` : prev.notes,
+        budget: Number(pkg.price),
+        final_quoted_amount: Number(pkg.price),
       }));
     } else {
       setWizardLeadData((prev) => ({
@@ -1361,16 +2294,42 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     setIsSaving(true);
     try {
       if (step === 1) {
+        if (!wizardLeadData.mobile) {
+          showToastMsg("Phone Number is required.", "error");
+          setIsSaving(false);
+          return;
+        }
+        if (!validateIndianMobile(wizardLeadData.mobile)) {
+          showToastMsg("Please enter a valid Indian mobile number (10 digits starting with 6-9).", "error");
+          setIsSaving(false);
+          return;
+        }
+        if (!wizardLeadData.lead_source) {
+          showToastMsg("Lead Source is required.", "error");
+          setIsSaving(false);
+          return;
+        }
         await updateLead(selectedLead.lead_id, {
-          customer_name: wizardLeadData.customer_name,
+          customer_name: wizardLeadData.customer_name || 'Inbound Prospect',
           mobile: wizardLeadData.mobile,
           whatsapp_number: wizardLeadData.whatsapp_number,
           email: wizardLeadData.email,
           address: wizardLeadData.address,
           city: wizardLeadData.city,
+          lead_source: wizardLeadData.lead_source,
         });
-        showToastMsg("Customer details saved successfully!", "success");
+        showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 2) {
+        if (!wizardLeadData.event_type) {
+          showToastMsg("Please select Event Type.", "error");
+          setIsSaving(false);
+          return;
+        }
+        if (wizardLeadData.event_type === 'Other' && (!wizardLeadData.custom_event_name || wizardLeadData.custom_event_name.trim() === '')) {
+          showToastMsg("Please enter a Custom Event Name.", "error");
+          setIsSaving(false);
+          return;
+        }
         await updateLead(selectedLead.lead_id, {
           event_type: wizardLeadData.event_type,
           custom_event_name: wizardLeadData.custom_event_name,
@@ -1381,8 +2340,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           lead_source: wizardLeadData.lead_source,
           shoot_type: wizardLeadData.shoot_type,
         });
-        showToastMsg("Event details saved successfully!", "success");
+        showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 3) {
+        if (!wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === '') {
+          showToastMsg("Please select a package before continuing.", "error");
+          setIsSaving(false);
+          return;
+        }
         if (wizardLeadData.selected_package_id) {
           const selectedPkg = packages.find((p) => p.package_id === wizardLeadData.selected_package_id);
           await saveLeadPackages(selectedLead.lead_id, [{
@@ -1399,17 +2363,32 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           budget: Number(wizardLeadData.package_cost),
           remarks: wizardLeadData.notes
         });
-        showToastMsg("Package selection and pricing saved successfully!", "success");
+        showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 4) {
         await updateLead(selectedLead.lead_id, {
           budget: Number(wizardLeadData.budget),
           remarks: wizardLeadData.remarks
         });
-        showToastMsg("Proposed budget and remarks saved successfully!", "success");
+        showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 5) {
         if (wizardLeadData.status === 'Order Confirmed') {
-          if (!wizardLeadData.confirmed_event_date || !wizardLeadData.confirmed_event_time || !wizardLeadData.reporting_time) {
-            showToastMsg("Confirmed Event Date, Event Time, and Reporting Time are required for Order Confirmed status.", "error");
+          if (!wizardLeadData.confirmed_event_date) {
+            showToastMsg("Please select Confirmed Event Date.", "error");
+            setIsSaving(false);
+            return;
+          }
+          if (!wizardLeadData.confirmed_event_time) {
+            showToastMsg("Please select Confirmed Event Time.", "error");
+            setIsSaving(false);
+            return;
+          }
+          if (wizardLeadData.final_amount === undefined || wizardLeadData.final_amount === 0 || isNaN(wizardLeadData.final_amount)) {
+            showToastMsg("Please enter Final Amount.", "error");
+            setIsSaving(false);
+            return;
+          }
+          if (wizardLeadData.advance_received === undefined || isNaN(wizardLeadData.advance_received)) {
+            showToastMsg("Please enter Advance Paid Amount.", "error");
             setIsSaving(false);
             return;
           }
@@ -1422,10 +2401,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             wizardLeadData.confirmed_event_time,
             'UPI',
             wizardLeadData.remarks || 'Confirmed from CRM activity logger',
-            wizardLeadData.reporting_time
+            wizardLeadData.reporting_time || '08:00'
           );
           setSelectedLead(null);
-          showToastMsg(`Order Confirmed and Lead Successfully Converted!`, "success");
+          showToastMsg("Order Confirmed Successfully.", "success");
         } else {
           await updateLead(selectedLead.lead_id, {
             status: wizardLeadData.status,
@@ -1440,7 +2419,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             Number(wizardLeadData.final_quoted_amount || wizardLeadData.budget),
             wizardLeadData.remarks
           );
-          showToastMsg("Lead status updated and progress saved successfully!", "success");
+          showToastMsg("CRM Updated Successfully.", "success");
         }
       }
 
@@ -1454,7 +2433,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       }
     } catch (err: any) {
       console.error(err);
-      showToastMsg(`Error saving. Details: ${err.message || err}`, "error");
+      const errMsg = err.message || String(err);
+      let displayedMsg = errMsg;
+      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+        displayedMsg = "Database connection failed.";
+      } else {
+        displayedMsg = "Status update failed.";
+      }
+      showToastMsg(displayedMsg, "error");
     } finally {
       setIsSaving(false);
     }
@@ -1572,8 +2558,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     if (isSaving) return;
 
     if (wizardStep === 1) {
-      if (!createForm.customer_name || !createForm.mobile) {
-        alert('Required fields (Customer Name and Mobile Number) must be completed.');
+      if (!createForm.mobile) {
+        alert('Phone Number is required.');
+        return;
+      }
+      if (!createForm.lead_source || createForm.lead_source === '') {
+        alert('Lead Source is required.');
         return;
       }
       if (!validateIndianMobile(createForm.mobile)) {
@@ -1590,13 +2580,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
       try {
         setIsSaving(true);
+        const finalSource = createForm.lead_source === 'Other' ? (otherSource ? `Other: ${otherSource}` : 'Other') : createForm.lead_source;
         if (!createdLeadId) {
           const newId = await addLead({
-            customer_name: createForm.customer_name,
+            customer_name: createForm.customer_name || 'Inbound Prospect',
             mobile: createForm.mobile,
             alternate_mobile: (createForm.alternate_mobile && createForm.alternate_mobile.trim() !== '' && createForm.alternate_mobile.trim() !== '+91') ? createForm.alternate_mobile : undefined,
             email: createForm.email,
-            lead_source: 'Walk-in',
+            lead_source: finalSource,
             event_type: 'Other',
             event_date: new Date().toISOString().split('T')[0],
             event_time: '12:00',
@@ -1608,10 +2599,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           console.log(`Created lead with ID: ${newId}`);
         } else {
           await updateLead(createdLeadId, {
-            customer_name: createForm.customer_name,
+            customer_name: createForm.customer_name || 'Inbound Prospect',
             mobile: createForm.mobile,
             alternate_mobile: (createForm.alternate_mobile && createForm.alternate_mobile.trim() !== '' && createForm.alternate_mobile.trim() !== '+91') ? createForm.alternate_mobile : undefined,
             email: createForm.email,
+            lead_source: finalSource,
             remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city)
           });
         }
@@ -1619,7 +2611,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setTimeout(autoScrollToFormHeader, 80);
       } catch (err: any) {
         console.error("Step 1 saving failed:", err);
-        alert("Failed to save customer details. " + (err.message || err));
+        const errMsg = err.message || String(err);
+        let displayedMsg = errMsg;
+        if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+          displayedMsg = "Database connection failed.";
+        } else {
+          displayedMsg = "Status update failed.";
+        }
+        alert(displayedMsg);
       } finally {
         setIsSaving(false);
       }
@@ -1627,7 +2626,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
     else if (wizardStep === 2) {
       if (!createForm.event_type || createForm.event_type === '') {
-        alert('Please select an Event Type.');
+        alert('Please select Event Type.');
         return;
       }
       if (createForm.event_type === 'Other' && (!createForm.custom_event_name || createForm.custom_event_name.trim() === '')) {
@@ -1636,10 +2635,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       }
       if (!createForm.shoot_type || createForm.shoot_type === '') {
         alert('Please select a Desired Event Shoot Type.');
-        return;
-      }
-      if (!createForm.lead_source || createForm.lead_source === '') {
-        alert('Please select a Lead Source.');
         return;
       }
 
@@ -1664,13 +2659,24 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setTimeout(autoScrollToFormHeader, 80);
       } catch (err: any) {
         console.error("Step 2 saving failed:", err);
-        alert("Failed to save event details. " + (err.message || err));
+        const errMsg = err.message || String(err);
+        let displayedMsg = errMsg;
+        if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+          displayedMsg = "Database connection failed.";
+        } else {
+          displayedMsg = "Status update failed.";
+        }
+        alert(displayedMsg);
       } finally {
         setIsSaving(false);
       }
     }
 
     else if (wizardStep === 3) {
+      if (!selectedPkgIds || selectedPkgIds.length === 0) {
+        alert('Please select a package before continuing.');
+        return;
+      }
       try {
         setIsSaving(true);
         const selectedPkgs = PACKAGES_LIST.flatMap(cat => cat.items).filter(item => selectedPkgIds.includes(item.id));
@@ -1698,7 +2704,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setTimeout(autoScrollToFormHeader, 80);
       } catch (err: any) {
         console.error("Step 3 saving failed:", err);
-        alert("Failed to save packages. " + (err.message || err));
+        const errMsg = err.message || String(err);
+        let displayedMsg = errMsg;
+        if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+          displayedMsg = "Database connection failed.";
+        } else {
+          displayedMsg = "Status update failed.";
+        }
+        alert(displayedMsg);
       } finally {
         setIsSaving(false);
       }
@@ -1715,7 +2728,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setTimeout(autoScrollToFormHeader, 80);
       } catch (err: any) {
         console.error("Step 4 saving failed:", err);
-        alert("Failed to save remarks. " + (err.message || err));
+        const errMsg = err.message || String(err);
+        let displayedMsg = errMsg;
+        if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+          displayedMsg = "Database connection failed.";
+        } else {
+          displayedMsg = "Status update failed.";
+        }
+        alert(displayedMsg);
       } finally {
         setIsSaving(false);
       }
@@ -1730,12 +2750,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         status: salesStatus as CurrentStage,
         remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city)
       });
-      alert(`Lead details Saved Successfully under status: ${salesStatus}`);
+      alert("Lead Saved Successfully.");
       resetForm();
       setActiveTab('list');
     } catch (err: any) {
       console.error("Step 5 status save failed:", err);
-      alert("Failed to update status. " + (err.message || err));
+      const errMsg = err.message || String(err);
+      let displayedMsg = errMsg;
+      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+        displayedMsg = "Database connection failed.";
+      } else {
+        displayedMsg = "Status update failed.";
+      }
+      alert(displayedMsg);
     } finally {
       setIsSaving(false);
     }
@@ -1745,26 +2772,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     if (e) e.preventDefault();
     if (isSaving) return;
     if (!confirmedEventDate) {
-      alert("Confirmed Event Date is mandatory.");
+      alert("Please select Confirmed Event Date.");
       return;
     }
     if (!confirmedEventTime) {
-      alert("Confirmed Event Time is mandatory.");
+      alert("Please select Confirmed Event Time.");
       return;
     }
-    if (finalPackageAmount === undefined || finalPackageAmount <= 0) {
-      alert("Final Package Amount is mandatory and must be greater than 0.");
+    if (finalPackageAmount === undefined || finalPackageAmount === 0 || isNaN(finalPackageAmount)) {
+      alert("Please enter Final Amount.");
       return;
     }
-    if (advanceReceived === undefined || advanceReceived < 0) {
-      alert("Advance Received is mandatory.");
+    if (advanceReceived === undefined || isNaN(advanceReceived)) {
+      alert("Please enter Advance Paid Amount.");
       return;
     }
 
     try {
       setIsSaving(true);
       const selectedPkgsNames = selectedPkgs.map(p => p.name).join(' + ') || 'Custom Configured Coverage';
-      const orderId = await confirmOrder(
+      await confirmOrder(
         createdLeadId!,
         selectedPkgsNames,
         finalPackageAmount,
@@ -1776,12 +2803,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         reportingTime
       );
       
-      alert(`🎉 Order Confirmed & Successfully Moved to Operations!\nOrder ID: ${orderId}\nStatus: Locked`);
+      alert("Order Confirmed Successfully.");
       resetForm();
       setActiveTab('list');
     } catch (err: any) {
       console.error("Failed to commit confirmed order details:", err);
-      alert("Failed to confirm order: " + (err.message || err));
+      const errMsg = err.message || String(err);
+      let displayedMsg = errMsg;
+      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+        displayedMsg = "Database connection failed.";
+      } else {
+        displayedMsg = "Status update failed.";
+      }
+      alert(displayedMsg);
     } finally {
       setIsSaving(false);
     }
@@ -1793,30 +2827,49 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     if (!selectedLead || isSaving) return;
 
     if (followUpForm.status === 'Order Confirmed') {
-      if (!followUpForm.event_date || !followUpForm.event_time || !followUpForm.reporting_time) {
-        alert('Do not allow Order Confirmed without Event Date, Event Time, and Reporting Time.');
+      if (!followUpForm.event_date) {
+        alert("Please select Confirmed Event Date.");
+        return;
+      }
+      if (!followUpForm.event_time) {
+        alert("Please select Confirmed Event Time.");
+        return;
+      }
+      if (followUpForm.quotation_amount === undefined || followUpForm.quotation_amount === 0 || isNaN(followUpForm.quotation_amount)) {
+        alert("Please enter Final Amount.");
+        return;
+      }
+      if (followUpForm.advance_received === undefined || isNaN(followUpForm.advance_received)) {
+        alert("Please enter Advance Paid Amount.");
         return;
       }
 
       try {
         setIsSaving(true);
-        const orderId = await confirmOrder(
+        await confirmOrder(
           selectedLead.lead_id,
           selectedLead.event_type + ' Premium Package',
           Number(followUpForm.quotation_amount),
           Number(followUpForm.advance_received),
           followUpForm.event_date,
           followUpForm.event_time,
-          followUpForm.payment_mode,
+          followUpForm.payment_mode || 'UPI',
           followUpForm.call_notes || 'Confirmed from CRM activity logger',
-          followUpForm.reporting_time
+          followUpForm.reporting_time || '08:00'
         );
 
         setSelectedLead(null);
-        alert(`Lead Successfully Converted! Order Contract Generated: ${orderId}`);
+        alert("Order Confirmed Successfully.");
       } catch (err: any) {
         console.error("Failed to convert lead:", err);
-        alert("Failed to convert lead. Error: " + (err.message || "Please try again."));
+        const errMsg = err.message || String(err);
+        let displayedMsg = errMsg;
+        if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+          displayedMsg = "Database connection failed.";
+        } else {
+          displayedMsg = "Status update failed.";
+        }
+        alert(displayedMsg);
       } finally {
         setIsSaving(false);
       }
@@ -1851,10 +2904,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
       // Clear follow up text
       setFollowUpForm(prev => ({ ...prev, call_notes: '', negotiation_notes: '' }));
-      alert('Follow-up activity recorded.');
+      alert('CRM Updated Successfully.');
     } catch (err: any) {
       console.error("Failed to update follow-up:", err);
-      alert("Failed to update follow-up. Error: " + (err.message || "Please try again."));
+      const errMsg = err.message || String(err);
+      let displayedMsg = errMsg;
+      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+        displayedMsg = "Database connection failed.";
+      } else {
+        displayedMsg = "Status update failed.";
+      }
+      alert(displayedMsg);
     } finally {
       setIsSaving(false);
     }
@@ -1865,49 +2925,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     e.preventDefault();
     if (!selectedLead || isSaving) return;
 
-    // Validation – enforce Event Date is confirmed
-    if (!confirmForm.event_date || confirmForm.event_date.trim() === '') {
-      alert("Event date is required before confirming booking.");
-      
-      try {
-        setIsSaving(true);
-        // Automatically keep status as 'Follow Up' (which represents Follow Up Required)
-        await updateLeadFollowUp(
-          selectedLead.lead_id,
-          'Follow Up',
-          'Attempted booking but event date was not confirmed.',
-          new Date().toISOString().split('T')[0],
-          Number(confirmForm.quotation_amount) || selectedLead.budget,
-          'Booking failed due to missing event date.'
-        );
-
-        setSelectedLead((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            status: 'Follow Up',
-          };
-        });
-
-        // Reset follow up form choice
-        setFollowUpForm(prev => ({
-          ...prev,
-          status: 'Follow Up'
-        }));
-
-        setShowConfirmModal(false);
-      } catch (err: any) {
-        console.error("Failed to record follow-up:", err);
-        alert("Failed to record follow-up. Error: " + (err.message || "Please try again."));
-      } finally {
-        setIsSaving(false);
-      }
+    if (!confirmForm.event_date) {
+      alert("Please select Confirmed Event Date.");
+      return;
+    }
+    if (!confirmForm.event_time) {
+      alert("Please select Confirmed Event Time.");
+      return;
+    }
+    if (confirmForm.quotation_amount === undefined || confirmForm.quotation_amount === 0 || isNaN(confirmForm.quotation_amount)) {
+      alert("Please enter Final Amount.");
+      return;
+    }
+    if (confirmForm.advance_received === undefined || isNaN(confirmForm.advance_received)) {
+      alert("Please enter Advance Paid Amount.");
       return;
     }
 
     try {
       setIsSaving(true);
-      const orderId = await confirmOrder(
+      await confirmOrder(
         selectedLead.lead_id,
         confirmForm.package_name,
         Number(confirmForm.quotation_amount),
@@ -1920,10 +2957,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
       setShowConfirmModal(false);
       setSelectedLead(null);
-      alert(`Lead Successfully Converted! Order Contract Generated: ${orderId}`);
+      alert("Order Confirmed Successfully.");
     } catch (err: any) {
       console.error("Failed to convert order:", err);
-      alert("Failed to convert order. Error: " + (err.message || "Please try again."));
+      const errMsg = err.message || String(err);
+      let displayedMsg = errMsg;
+      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
+        displayedMsg = "Database connection failed.";
+      } else {
+        displayedMsg = "Status update failed.";
+      }
+      alert(displayedMsg);
     } finally {
       setIsSaving(false);
     }
@@ -3369,11 +4413,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                     {/* Customer Name */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-404 mb-1.5">
-                        Customer Full Name *
+                        Customer Full Name (Optional)
                       </label>
                       <input
                         type="text"
-                        required
                         placeholder="e.g. Rahul Sharma"
                         value={createForm.customer_name}
                         onChange={(e) => setCreateForm({ ...createForm, customer_name: e.target.value })}
@@ -3450,6 +4493,47 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         onBlur={(e) => handleCheckExistingCustomer('email', e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 placeholder-slate-650 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans"
                       />
+                    </div>
+
+                    {/* Lead Source */}
+                    <div className="space-y-2 text-left">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-404 mb-1.5">
+                          Inbound Lead Channel Source *
+                        </label>
+                        <select
+                          value={createForm.lead_source}
+                          required
+                          onChange={(e) => setCreateForm({ ...createForm, lead_source: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all cursor-pointer"
+                        >
+                          <option value="">Select Lead Source</option>
+                          <option value="Google Ads">Google Ads</option>
+                          <option value="Meta Ads">Meta Ads</option>
+                          <option value="Website">Website</option>
+                          <option value="WhatsApp">WhatsApp</option>
+                          <option value="Referral">Referral</option>
+                          <option value="Instagram">Instagram</option>
+                          <option value="YouTube font-bold">YouTube</option>
+                          <option value="Walk-in">Walk-in</option>
+                          <option value="Other font-bold">Other</option>
+                        </select>
+                      </div>
+                      {createForm.lead_source === 'Other' && (
+                        <div className="animate-fade-in-down">
+                          <label className="block text-xs font-mono font-bold text-amber-500 mb-1.5">
+                            Specify Custom Lead Source Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Billboard, Event Flyer"
+                            value={otherSource}
+                            onChange={(e) => setOtherSource(e.target.value)}
+                            className="w-full bg-slate-955 border border-amber-500/50 rounded-lg py-2 px-3 text-xs text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Address */}
@@ -3552,46 +4636,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         <option value="Album Design">Album Design</option>
                         <option value="Custom Package">Custom Package</option>
                       </select>
-                    </div>
-
-                    {/* Lead Source */}
-                    <div className="space-y-2 text-left">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-404 mb-1.5">
-                          Inbound Lead Channel Source *
-                        </label>
-                        <select
-                          value={createForm.lead_source}
-                          onChange={(e) => setCreateForm({ ...createForm, lead_source: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all cursor-pointer"
-                        >
-                          <option value="">Select Lead Source</option>
-                          <option value="Google Ads">Google Ads</option>
-                          <option value="Meta Ads">Meta Ads</option>
-                          <option value="Website">Website</option>
-                          <option value="WhatsApp">WhatsApp</option>
-                          <option value="Referral">Referral</option>
-                          <option value="Instagram">Instagram</option>
-                          <option value="YouTube font-bold">YouTube</option>
-                          <option value="Walk-in">Walk-in</option>
-                          <option value="Other font-bold">Other</option>
-                        </select>
-                      </div>
-                      {createForm.lead_source === 'Other' && (
-                        <div className="animate-fade-in-down">
-                          <label className="block text-xs font-mono font-bold text-amber-500 mb-1.5">
-                            Specify Custom Lead Source Name *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Billboard, Event Flyer"
-                            value={otherSource}
-                            onChange={(e) => setOtherSource(e.target.value)}
-                            className="w-full bg-slate-955 border border-amber-500/50 rounded-lg py-2 px-3 text-xs text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all"
-                          />
-                        </div>
-                      )}
                     </div>
 
                     {/* Event Date */}
@@ -3701,15 +4745,24 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                     <button
                       type="button"
                       onClick={() => setIsPkgDropdownOpen(!isPkgDropdownOpen)}
-                      className="w-full bg-[#0F172A] border border-slate-800 hover:border-emerald-600 rounded-lg py-2.5 px-3.5 text-xs text-white flex items-center justify-between focus:outline-none transition-all cursor-pointer"
+                      className={`w-full bg-[#0F172A] border rounded-lg py-2.5 px-3.5 text-xs flex items-center justify-between focus:outline-none transition-all cursor-pointer ${
+                        selectedPkgIds.length === 0
+                          ? 'border-rose-500/40 hover:border-rose-500 text-rose-300'
+                          : 'border-slate-800 hover:border-emerald-600 text-white'
+                      }`}
                     >
-                      <span className="text-slate-300 font-medium">
+                      <span className="font-medium">
                         {selectedPkgIds.length === 0
                           ? 'Select Packages...'
                           : `${selectedPkgIds.length} Packages Selected (Total: ₹${finalTotal.toLocaleString('en-IN')})`}
                       </span>
                       <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isPkgDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
+                    {selectedPkgIds.length === 0 && (
+                      <p className="text-rose-450 font-bold text-xs mt-1.5 font-mono animate-pulse flex items-center gap-1.5">
+                        ⚠️ Please select a package before continuing.
+                      </p>
+                    )}
 
                     {isPkgDropdownOpen && (
                       <div id="pkg_multiselect_dropdown" className="absolute z-30 left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-[#0F172A] border border-slate-800 rounded-xl shadow-2xl p-3.5 space-y-4">
@@ -3966,66 +5019,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               {wizardStep === 4 && (
                 <div className="bg-slate-950/30 border border-slate-800/60 rounded-xl p-4.5 space-y-4 shadow-sm pb-6 animate-fade-in text-left">
                   <div className="flex items-center gap-2 border-b border-slate-800/50 pb-2 mb-1">
-                    <Edit className="w-4 h-4 text-cyan-405" />
+                    <Edit className="w-4 h-4 text-cyan-410" />
                     <span className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">4. Proposed Budget & Remarks</span>
                   </div>
 
-                  <div className="space-y-4">
-                    {/* Budget */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                        Initial Proposed Budget (₹) *
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        value={createForm.budget}
-                        onChange={(e) => setCreateForm({ ...createForm, budget: Number(e.target.value) })}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
-                      />
-                    </div>
-
-                    {/* Init query remarks */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                        Customer Inbound Scope & Demands (Remarks)
-                      </label>
-                      <textarea
-                        rows={3}
-                        placeholder="List customized requests, physical albums requirement, or crew limits."
-                        value={createForm.remarks}
-                        onChange={(e) => setCreateForm({ ...createForm, remarks: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans"
-                      ></textarea>
-                    </div>
-
-                    {/* Internal Team Notes */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                        Internal Sales Coordinator Notes (Private CRM Notes)
-                      </label>
-                      <textarea
-                        rows={2}
-                        placeholder="E.g., Client seems premium, referred by relative, follow up quickly."
-                        value={internalNotes}
-                        onChange={(e) => setInternalNotes(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans"
-                      ></textarea>
-                    </div>
-
-                    {/* Scheduled Follow-up Date */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                        Next Scheduled CRM Follow-up Date (Optional)
-                      </label>
-                      <input
-                        type="date"
-                        value={followUpDate}
-                        onChange={(e) => setFollowUpDate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-400 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-550/20 transition-all font-mono"
-                      />
-                    </div>
-                  </div>
+                  {renderQuotationAndStep4Section(false)}
                 </div>
               )}
 
@@ -4126,10 +5124,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             key={stage.id}
                             onClick={() => {
                               setSalesStatus(stage.id as CurrentStage);
-                              if (stage.id === 'Order Confirmed') {
-                                // Default payment structures
-                                setFinalPackageAmount(finalTotal > 0 ? finalTotal : subtotal);
-                              }
                             }}
                             className={`px-3 py-2 text-center text-xs font-bold rounded-lg border cursor-pointer transition-all ${
                               isSel 
@@ -4231,8 +5225,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 <button
                   type="button"
                   onClick={handleWizardNext}
-                  disabled={isSaving}
-                  className="px-5.5 py-2 text-xs font-bold bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-xl shadow-lg shadow-cyan-500/10 cursor-pointer border border-transparent transition-colors flex items-center gap-1.5"
+                  disabled={isSaving || (wizardStep === 3 && selectedPkgIds.length === 0)}
+                  className={`px-5.5 py-2 text-xs font-bold text-white rounded-xl shadow-lg border border-transparent transition-colors flex items-center gap-1.5 ${
+                    wizardStep === 3 && selectedPkgIds.length === 0
+                      ? 'bg-slate-800 text-slate-500 border border-slate-850 cursor-not-allowed opacity-50 shadow-none'
+                      : 'bg-cyan-600 hover:bg-cyan-500 shadow-cyan-500/10 cursor-pointer'
+                  }`}
                 >
                   {isSaving ? 'Processing...' : 'Save & Continue →'}
                 </button>
@@ -4833,14 +5831,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Customer Name *</label>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Customer Name (Optional)</label>
                           <input
                             type="text"
                             value={wizardLeadData.customer_name || ''}
                             disabled={isLeadLocked}
                             onChange={(e) => setWizardLeadData({ ...wizardLeadData, customer_name: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white"
-                            required
                           />
                         </div>
                         <div>
@@ -4871,8 +5868,27 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             value={wizardLeadData.email || ''}
                             disabled={isLeadLocked}
                             onChange={(e) => setWizardLeadData({ ...wizardLeadData, email: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
+                            className="w-full bg-slate-955 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Inbound Lead Channel Source *</label>
+                          <select
+                            value={wizardLeadData.lead_source || ''}
+                            disabled={isLeadLocked}
+                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, lead_source: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white cursor-pointer select-element"
+                            required
+                          >
+                            <option value="">── Choose Lead Source ──</option>
+                            <option value="Instagram Marketing">Instagram Marketing</option>
+                            <option value="Facebook Leads">Facebook Leads</option>
+                            <option value="Google Maps Ad">Google Maps Ad</option>
+                            <option value="JustDial Prospect">JustDial Prospect</option>
+                            <option value="Reference">Reference / Word of Mouth</option>
+                            <option value="Past Customer Repeat">Past Customer Repeat</option>
+                            <option value="Walk In Enquiry">Walk In Enquiry</option>
+                          </select>
                         </div>
                         <div className="md:col-span-2">
                           <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Client Residence Address</label>
@@ -4918,27 +5934,35 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             value={wizardLeadData.event_type || ''}
                             disabled={isLeadLocked}
                             onChange={(e) => setWizardLeadData({ ...wizardLeadData, event_type: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white cursor-pointer"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white cursor-pointer font-bold"
                           >
+                            <option value="">Select Event Type</option>
+                            <option value="Birthday">Birthday</option>
+                            <option value="Corporate Event">Corporate Event</option>
+                            <option value="Baby Shower">Baby Shower</option>
+                            <option value="House Warming">House Warming</option>
+                            <option value="Custom Event">Custom Event</option>
                             <option value="Pre-Wedding Shoot">Pre-Wedding Shoot</option>
                             <option value="Wedding cinematic videography">Wedding Cinematic Videography</option>
                             <option value="Maternity Shoot">Maternity Shoot</option>
-                            <option value="Birthday Party / Celebration">Birthday Party / Celebration</option>
                             <option value="Commercial Filmmaking">Commercial Filmmaking</option>
-                            <option value="Other Custom Shoot">Other Custom Shoot</option>
+                            <option value="Other">Other</option>
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Custom Event Type (Optional)</label>
-                          <input
-                            type="text"
-                            value={wizardLeadData.custom_event_name || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, custom_event_name: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white"
-                            placeholder="e.g. Mehendi ceremony, Reception party"
-                          />
-                        </div>
+                        {wizardLeadData.event_type === 'Other' && (
+                          <div className="animate-fade-in-down">
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Custom Event Type *</label>
+                            <input
+                              type="text"
+                              value={wizardLeadData.custom_event_name || ''}
+                              disabled={isLeadLocked}
+                              onChange={(e) => setWizardLeadData({ ...wizardLeadData, custom_event_name: e.target.value })}
+                              className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white"
+                              placeholder="e.g. Mehendi ceremony, Reception party"
+                              required
+                            />
+                          </div>
+                        )}
                         <div>
                           <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Event Date *</label>
                           <input
@@ -4971,23 +5995,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
                             required
                           />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Lead Source *</label>
-                          <select
-                            value={wizardLeadData.lead_source || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, lead_source: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white cursor-pointer"
-                          >
-                            <option value="Instagram Marketing">Instagram Marketing</option>
-                            <option value="Facebook Leads">Facebook Leads</option>
-                            <option value="Google Maps Ad">Google Maps Ad</option>
-                            <option value="JustDial Prospect">JustDial Prospect</option>
-                            <option value="Reference">Reference / Word of Mouth</option>
-                            <option value="Past Customer Repeat">Past Customer Repeat</option>
-                            <option value="Walk In Enquiry">Walk In Enquiry</option>
-                          </select>
                         </div>
                         <div className="md:col-span-2">
                           <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Event Location (Venue Address) *</label>
@@ -5027,12 +6034,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                       </div>
                       <div className="space-y-5 text-left">
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Select Package Option</label>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Select Package Option *</label>
                           <select
                             value={wizardLeadData.selected_package_id || ''}
                             disabled={isLeadLocked}
                             onChange={(e) => handlePackageChange(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white cursor-pointer"
+                            className={`w-full bg-slate-950 border focus:outline-none rounded-xl py-2.5 px-4 text-xs cursor-pointer ${
+                              !wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === ''
+                                ? 'border-rose-500/40 focus:border-rose-500 text-rose-200'
+                                : 'border-slate-800 focus:border-indigo-500 text-white'
+                            }`}
                           >
                             <option value="">── Choose configuration package ──</option>
                             {packages.map((pkg) => (
@@ -5041,6 +6052,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                               </option>
                             ))}
                           </select>
+                          {(!wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === '') && (
+                            <p className="text-rose-450 font-bold text-xs mt-1.5 font-mono animate-pulse flex items-center gap-1.5">
+                              ⚠️ Please select a package before continuing.
+                            </p>
+                          )}
                         </div>
 
                         {packages.find(p => p.package_id === wizardLeadData.selected_package_id) && (() => {
@@ -5110,53 +6126,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         </h3>
                         <p className="text-[11px] text-zinc-400 mt-1">Review target budget metrics, lock final commercial quotes, log internal notes and set next action deadlines.</p>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Proposed Client Budget (₹) *</label>
-                          <input
-                            type="number"
-                            value={wizardLeadData.budget || 0}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, budget: Math.max(0, parseInt(e.target.value) || 0) })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Final Quoted Amount (₹) *</label>
-                          <input
-                            type="number"
-                            value={wizardLeadData.final_quoted_amount || 0}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, final_quoted_amount: Math.max(0, parseInt(e.target.value) || 0) })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-indigo-300 font-mono font-bold"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Next Follow-up Action Date *</label>
-                          <input
-                            type="date"
-                            value={wizardLeadData.next_follow_up_date || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, next_follow_up_date: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
-                            required
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Remarks / External Client Conversation Notes *</label>
-                          <textarea
-                            rows={3}
-                            value={wizardLeadData.remarks || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, remarks: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white"
-                            placeholder="Complete highlights of latest call conversation, callback intervals or negotiation milestones..."
-                            required
-                          />
-                        </div>
-                      </div>
+
+                      {renderQuotationAndStep4Section(true)}
                     </div>
                   )}
 
@@ -5283,8 +6254,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 <button
                   type="button"
                   onClick={() => handleSaveStep(crmWizardStep)}
-                  disabled={isSaving}
-                  className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 text-white text-xs font-mono font-bold uppercase rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                  disabled={isSaving || (crmWizardStep === 3 && (!wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === ''))}
+                  className={`px-5 py-2 text-xs font-mono font-bold uppercase rounded-xl transition-all shadow-md flex items-center gap-1.5 ${
+                    crmWizardStep === 3 && (!wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === '')
+                      ? 'bg-slate-800 text-slate-500 border border-slate-850 cursor-not-allowed opacity-50 shadow-none'
+                      : 'bg-indigo-650 hover:bg-indigo-600 text-white cursor-pointer'
+                  }`}
                 >
                   {isSaving ? (
                     <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>

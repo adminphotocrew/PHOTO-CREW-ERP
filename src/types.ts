@@ -262,6 +262,7 @@ export interface Staff {
   created_at?: string;
   whatsapp_number?: string;
   production_role_speciality?: string;
+  custom_role_specialty?: string;
   experience?: string;
   employee_id?: string;
   address?: string;

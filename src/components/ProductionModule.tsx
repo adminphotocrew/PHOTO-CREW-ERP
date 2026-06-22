@@ -291,13 +291,24 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       
       const defaultTargetDate = l.event_date ? new Date(new Date(l.event_date).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : '';
       
-      return prod || {
+      if (prod) {
+        return {
+          ...prod,
+          editor_assigned: (l as any).assigned_editor || prod.editor_assigned || 'Unassigned',
+          assigned_staff: (l as any).assigned_editors || prod.assigned_staff || '',
+          target_delivery_date: (l as any).delivery_target_date || prod.target_delivery_date || defaultTargetDate,
+          expected_delivery_date: (l as any).delivery_target_date || prod.expected_delivery_date || defaultTargetDate,
+          editing_status: (l as any).current_status || l.status || prod.editing_status
+        };
+      }
+
+      return {
         production_id: `PRD-${l.lead_id}`,
         tracking_id: rf?.tracking_id || order?.order_id || l.lead_id,
         editor_assigned: (l as any).assigned_editor || 'Unassigned',
         assigned_staff: (l as any).assigned_editors || '',
         raw_footage_location: rf?.server_path || '',
-        editing_status: l.status as any,
+        editing_status: ((l as any).current_status || l.status) as any,
         remarks: l.remarks || '',
         project_priority: 'Medium',
         target_delivery_date: (l as any).delivery_target_date || defaultTargetDate,
@@ -326,6 +337,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
   const [staffFormJoiningDate, setStaffFormJoiningDate] = useState('');
   const [staffFormStatus, setStaffFormStatus] = useState<'Active' | 'Inactive'>('Active');
   const [staffFormRole, setStaffFormRole] = useState('');
+  const [customRoleSpecialty, setCustomRoleSpecialty] = useState('');
 
   // Filtering states inside Editor Performance tab
   const [searchStaffName, setSearchStaffName] = useState('');
@@ -571,6 +583,10 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       return;
     }
 
+    const isCustom = staffFormRole === 'Other / Custom Role Specialty';
+    const chosenSpeciality = isCustom ? customRoleSpecialty.trim() : (staffFormRole || 'Video Editor');
+    const chosenRoleName = isCustom ? customRoleSpecialty.trim() : (staffFormRole || 'Production Editor');
+
     const payload = {
       name: staffFormName.trim(),
       employee_id: staffFormEmployeeId.trim() || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -581,8 +597,9 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       city: staffFormAddress.trim().split(',')[0] || 'N/A',
       joining_date: staffFormJoiningDate || new Date().toISOString().split('T')[0],
       status: staffFormStatus,
-      production_role_speciality: staffFormRole || 'Video Editor',
-      role: 'Production Editor',
+      production_role_speciality: chosenSpeciality,
+      custom_role_specialty: isCustom ? customRoleSpecialty.trim() : '',
+      role: chosenRoleName,
       department: 'Post-Production'
     };
 
@@ -658,6 +675,84 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     if (status === 'Approved' || status === 'Final Approval') return 'Final Approval';
     if (status === 'Delivered' || status === 'Project Delivered' || status === 'Payment Pending') return 'Project Delivered';
     if (status === 'Closed' || status === 'Project Closed' || status === 'Completed') return 'Completed';
+    return status;
+  };
+
+  const getAssignedEditorsText = (prod: Production): string => {
+    const assigned_editors = (() => {
+      const fromAssignments = editorAssignments.filter(a => a.production_id === prod.production_id);
+      if (fromAssignments.length > 0) {
+        return fromAssignments.map(a => ({ name: a.staff_name }));
+      }
+      const staffStr = prod.assigned_staff || prod.editor_assigned;
+      if (staffStr && staffStr !== 'Unassigned') {
+        return staffStr.split(',').map(s => ({ name: s.trim() }));
+      }
+      return [];
+    })();
+    return assigned_editors.length > 0
+      ? assigned_editors.map(editor => editor.name).join(', ')
+      : 'Unassigned';
+  };
+
+  const getNextStatuses = (prod: Production): string[] => {
+    const current = getProductionStatus(prod);
+    const valid: string[] = [current]; // Keep current so the select lists it
+    
+    if (current === 'Raw Footage Received') {
+      valid.push('Editor Assigned');
+    } else if (current === 'Editor Assigned') {
+      valid.push('Editing Started', 'Editing In Progress');
+    } else if (current === 'Editing Started') {
+      valid.push('Editing In Progress');
+    } else if (current === 'Editing In Progress') {
+      valid.push('Client Review Sent');
+    } else if (current === 'Client Review Sent') {
+      valid.push('Revision Required', 'Final Approval');
+    } else if (current === 'Revision Required') {
+      valid.push('Revision In Progress', 'Final Approval');
+    } else if (current === 'Revision In Progress') {
+      valid.push('Client Review Sent', 'Final Approval');
+    } else if (current === 'Final Approval') {
+      valid.push('Project Delivered');
+    } else if (current === 'Project Delivered') {
+      valid.push('Completed');
+    }
+    
+    return Array.from(new Set(valid));
+  };
+
+  const getDropdownOptions = (currentStatus: string): string[] => {
+    if (currentStatus === 'Editor Assigned') {
+      return ['Editing Started', 'Editing In Progress'];
+    }
+    if (currentStatus === 'Editing Started') {
+      return ['Editing In Progress', 'Client Review Sent'];
+    }
+    if (currentStatus === 'Editing In Progress') {
+      return ['Client Review Sent'];
+    }
+    if (currentStatus === 'Client Review Sent') {
+      return ['Revision Required', 'Final Approval'];
+    }
+    if (currentStatus === 'Revision Required') {
+      return ['Revision In Progress', 'Final Approval'];
+    }
+    if (currentStatus === 'Revision In Progress') {
+      return ['Client Review Sent', 'Final Approval'];
+    }
+    if (currentStatus === 'Final Approval') {
+      return ['Project Delivered'];
+    }
+    if (currentStatus === 'Project Delivered') {
+      return ['Completed'];
+    }
+    return [];
+  };
+
+  const getStatusDisplayName = (status: string): string => {
+    if (status === 'Client Review Sent' || status === 'Customer Review') return 'Client Review';
+    if (status === 'Completed' || status === 'Project Closed' || status === 'Closed') return 'Project Closed';
     return status;
   };
 
@@ -1119,6 +1214,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
       setStaffFormJoiningDate('');
       setStaffFormStatus('Active');
       setStaffFormRole('');
+      setCustomRoleSpecialty('');
     }
   }, [isStaffModalOpen, editingStaffMember]);
 
@@ -1886,13 +1982,8 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           {/* Editor Assigned */}
                           <td className="p-4 text-left font-sans">
                             <div className="font-bold text-zinc-200">
-                              {prod.editor_assigned && prod.editor_assigned !== 'Unassigned' ? prod.editor_assigned : 'Unassigned'}
+                              {getAssignedEditorsText(prod)}
                             </div>
-                            {prod.assigned_staff ? (
-                              <div className="text-[9px] text-zinc-550 mt-0.5 truncate max-w-[130px]" title={prod.assigned_staff}>
-                                Staff: {prod.assigned_staff}
-                              </div>
-                            ) : null}
                           </td>
 
                           {/* Current Status */}
@@ -1940,7 +2031,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                           <td className="p-4 text-center">
                             <div className="flex flex-col gap-1.5 items-center justify-center">
                               {/* Step 1: Assign Editor */}
-                              {(displayStatus === 'Raw Footage Received') && (
+                              {displayStatus === 'Raw Footage Received' && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1974,216 +2065,45 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 </button>
                               )}
 
-                              {/* Step 2: Start Editing */}
-                              {displayStatus === 'Editor Assigned' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    updateProduction(prod.production_id, { editing_status: 'Editing Started' });
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-yellow-600 border border-yellow-500 text-white hover:bg-yellow-500 hover:border-yellow-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>🎬</span> Start Editing
-                                </button>
-                              )}
-
-                              {/* Step 3: Unified Action workflow: open CRM status update popup */}
-                              {displayStatus === 'Editing Started' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage(status as any);
-                                    setQcNotes(prod.remarks || '');
-                                    setReviewLink(prod.raw_footage_location || '');
-                                    setReviewNotes(prod.remarks || '');
-                                    setRevisionNotes(prod.remarks || '');
-                                    setRevisionDeadline(prod.expected_delivery_date || '');
-                                    setRevisionComments(prod.remarks || '');
-                                    setApprovalNotes(prod.remarks || '');
-                                    setDeliveryLink(prod.raw_footage_location || '');
-                                    setDeliveryDate(prod.delivery_date || '');
-                                    setClosingNotes(prod.remarks || '');
-                                    setWorkflowActionType('manage_status');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-blue-650 border border-blue-600 text-white hover:bg-blue-600 hover:border-blue-550 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>▶</span> In Progress
-                                </button>
-                              )}
-
-                              {displayStatus === 'Editing In Progress' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Editing In Progress');
-                                    setQcNotes(prod.remarks || '');
-                                    setReviewLink(prod.raw_footage_location || '');
-                                    setReviewNotes(prod.remarks || '');
-                                    setRevisionNotes(prod.remarks || '');
-                                    setRevisionDeadline(prod.expected_delivery_date || '');
-                                    setRevisionComments(prod.remarks || '');
-                                    setApprovalNotes(prod.remarks || '');
-                                    setDeliveryLink(prod.raw_footage_location || '');
-                                    setDeliveryDate(prod.delivery_date || '');
-                                    setClosingNotes(prod.remarks || '');
-                                    setWorkflowActionType('manage_status');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-blue-500 border border-blue-400 text-white hover:bg-blue-450 hover:border-blue-350 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>✏️</span> In Progress
-                                </button>
-                              )}
-
-                              {displayStatus === 'Internal QC Review' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Internal QC Review');
-                                    setQcNotes(prod.remarks || '');
-                                    setReviewLink(prod.raw_footage_location || '');
-                                    setReviewNotes(prod.remarks || '');
-                                    setRevisionNotes(prod.remarks || '');
-                                    setRevisionDeadline(prod.expected_delivery_date || '');
-                                    setRevisionComments(prod.remarks || '');
-                                    setApprovalNotes(prod.remarks || '');
-                                    setDeliveryLink(prod.raw_footage_location || '');
-                                    setDeliveryDate(prod.delivery_date || '');
-                                    setClosingNotes(prod.remarks || '');
-                                    setWorkflowActionType('manage_status');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-amber-600 border border-amber-500 text-white hover:bg-amber-500 hover:border-amber-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>🔍</span> In Progress
-                                </button>
-                              )}
-
-                              {displayStatus === 'Client Review Sent' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Client Review Sent');
-                                    setQcNotes(prod.remarks || '');
-                                    setReviewLink(prod.raw_footage_location || '');
-                                    setReviewNotes(prod.remarks || '');
-                                    setRevisionNotes(prod.remarks || '');
-                                    setRevisionDeadline(prod.expected_delivery_date || '');
-                                    setRevisionComments(prod.remarks || '');
-                                    setApprovalNotes(prod.remarks || '');
-                                    setDeliveryLink(prod.raw_footage_location || '');
-                                    setDeliveryDate(prod.delivery_date || '');
-                                    setClosingNotes(prod.remarks || '');
-                                    setWorkflowActionType('manage_status');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-pink-650 border border-pink-600 text-white hover:bg-pink-600 hover:border-pink-550 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>💬</span> In Progress
-                                </button>
-                              )}
-
-                              {displayStatus === 'Revision Required' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Revision Required');
-                                    setQcNotes(prod.remarks || '');
-                                    setReviewLink(prod.raw_footage_location || '');
-                                    setReviewNotes(prod.remarks || '');
-                                    setRevisionNotes(prod.remarks || '');
-                                    setRevisionDeadline(prod.expected_delivery_date || '');
-                                    setRevisionComments(prod.remarks || '');
-                                    setApprovalNotes(prod.remarks || '');
-                                    setDeliveryLink(prod.raw_footage_location || '');
-                                    setDeliveryDate(prod.delivery_date || '');
-                                    setClosingNotes(prod.remarks || '');
-                                    setWorkflowActionType('manage_status');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-red-650 border border-red-600 text-white hover:bg-red-600 hover:border-red-550 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>🔄</span> In Progress
-                                </button>
-                              )}
-
-                              {displayStatus === 'Revision In Progress' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Revision In Progress');
-                                    setQcNotes(prod.remarks || '');
-                                    setReviewLink(prod.raw_footage_location || '');
-                                    setReviewNotes(prod.remarks || '');
-                                    setRevisionNotes(prod.remarks || '');
-                                    setRevisionDeadline(prod.expected_delivery_date || '');
-                                    setRevisionComments(prod.remarks || '');
-                                    setApprovalNotes(prod.remarks || '');
-                                    setDeliveryLink(prod.raw_footage_location || '');
-                                    setDeliveryDate(prod.delivery_date || '');
-                                    setClosingNotes(prod.remarks || '');
-                                    setWorkflowActionType('manage_status');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-orange-600 border border-orange-500 text-white hover:bg-orange-500 hover:border-orange-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>🛠️</span> In Progress
-                                </button>
-                              )}
-
-                              {/* Step 9: Final Approval -> Deliver */}
-                              {(displayStatus === 'Final Approval') && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveWorkflowProd(prod);
-                                    setWfDeliveryLink('');
-                                    setWfGoogleDriveLink(prod.raw_footage_location || '');
-                                    setWfDownloadLink('');
-                                    setWfDeliveryNotes('');
-                                    setWorkflowActionType('deliver_project');
-                                  }}
-                                  className="w-full max-w-[160px] px-3 py-1.5 bg-teal-600 border border-teal-500 text-white hover:bg-teal-500 hover:border-teal-400 transition-all text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1 animate-pulse"
-                                >
-                                  <span>📦</span> Deliver Project
-                                </button>
-                              )}
-
-                              {/* Step 10: Project Delivered -> Close Project */}
-                              {(displayStatus === 'Project Delivered') && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Completed' as any);
-                                    setDeliveryDate(new Date().toISOString().split('T')[0]);
-                                    setClosingNotes('');
-                                    setWorkflowActionType('close_project');
-                                  }}
-                                  className="w-full max-w-[160px] px-2.5 py-1.5 bg-violet-750 border border-violet-700 text-violet-100 hover:bg-violet-700 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  <span>🔐</span> Close Project
-                                </button>
-                              )}
-
-                              {/* Legacy Payment Pending fallback */}
-                              {status === 'Payment Pending' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveWorkflowProd(prod);
-                                    setSelectedStage('Completed' as any);
-                                    setDeliveryDate(new Date().toISOString().split('T')[0]);
-                                    setClosingNotes('');
-                                    setWorkflowActionType('close_project');
-                                  }}
-                                  className="w-full max-w-[160px] px-2.5 py-1.5 bg-cyan-950 border border-cyan-900 text-cyan-400 hover:bg-cyan-900 hover:text-cyan-200 transition-all text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-md cursor-pointer flex items-center justify-center gap-1"
-                                >
-                                  🔐 Close Project
-                                </button>
+                              {/* Dropdown status transition select */}
+                              {displayStatus !== 'Raw Footage Received' && displayStatus !== 'Completed' && (
+                                <div className="w-full max-w-[160px]">
+                                  <label className="block text-[8px] uppercase tracking-wider text-zinc-500 font-bold mb-1 text-left">
+                                    Change Status:
+                                  </label>
+                                  <select
+                                    value={displayStatus}
+                                    onChange={async (e) => {
+                                      const val = e.target.value;
+                                      if (val === displayStatus) return;
+                                      try {
+                                        setIsSaving(true);
+                                        const updates: any = {
+                                          editing_status: val,
+                                        };
+                                        if (val === 'Project Delivered') {
+                                          updates.delivery_date = new Date().toISOString().split('T')[0];
+                                        }
+                                        await updateProduction(prod.production_id, updates);
+                                      } catch (err: any) {
+                                        alert("Failed to update status: " + (err.message || err));
+                                      } finally {
+                                        setIsSaving(false);
+                                      }
+                                    }}
+                                    disabled={isSaving}
+                                    className="w-full text-zinc-100 bg-zinc-950 border border-zinc-800 hover:border-zinc-750 text-[10.5px] font-sans font-medium py-1 px-1.5 rounded focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+                                  >
+                                    <option value={displayStatus} disabled>
+                                      {displayStatus === 'Client Review Sent' ? 'Client Review' : displayStatus}
+                                    </option>
+                                    {getDropdownOptions(displayStatus).map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt === 'Client Review Sent' ? 'Client Review' : (opt === 'Completed' ? 'Project Closed' : opt)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                               )}
 
                               {/* Step 11: Completed */}
@@ -2348,6 +2268,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                     setStaffFormJoiningDate(new Date().toISOString().split('T')[0]);
                     setStaffFormStatus('Active');
                     setStaffFormRole('');
+                    setCustomRoleSpecialty('');
                     setIsStaffModalOpen(true);
                   }}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-450 text-zinc-950 text-xs font-mono font-black uppercase tracking-wider rounded-xl cursor-pointer duration-150 shadow-lg shadow-amber-500/5 hover:scale-[1.01] transition-transform"
@@ -2653,7 +2574,14 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 setStaffFormAddress(member.address || member.city || '');
                                 setStaffFormJoiningDate(member.joining_date);
                                 setStaffFormStatus(member.status);
-                                setStaffFormRole(member.production_role_speciality || '');
+                                const spec = member.production_role_speciality || '';
+                                if (member.custom_role_specialty || (spec && !allRoles.includes(spec))) {
+                                  setStaffFormRole('Other / Custom Role Specialty');
+                                  setCustomRoleSpecialty(member.custom_role_specialty || spec);
+                                } else {
+                                  setStaffFormRole(spec);
+                                  setCustomRoleSpecialty('');
+                                }
                                 setIsStaffModalOpen(true);
                               }}
                               className="p-1.5 bg-zinc-900 hover:bg-zinc-850 hover:text-amber-450 text-zinc-400 border border-zinc-850 rounded-lg transition duration-150 cursor-pointer"
@@ -2728,6 +2656,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                   setStaffFormJoiningDate(new Date().toISOString().split('T')[0]);
                   setStaffFormStatus('Active');
                   setStaffFormRole('');
+                  setCustomRoleSpecialty('');
                   setIsStaffModalOpen(true);
                 }}
                 className="inline-flex items-center gap-1.5 px-5 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-450 text-zinc-950 text-xs font-mono font-black uppercase tracking-wider rounded-xl cursor-pointer duration-150 shadow-lg shadow-amber-500/5 hover:scale-[1.01] transition-transform animate-bounce"
@@ -5378,6 +5307,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             const finalNames = filledRows.map(r => r.staffName).filter(Boolean);
                             const primaryEditor = finalNames[finalNames.length - 1] || 'Unassigned';
                             const assignedStaffJoined = finalNames.join(', ');
+                            const rolesJoined = filledRows.map(r => r.speciality).filter(Boolean).join(', ');
 
                             await updateProduction(activeWorkflowProd.production_id, {
                               editor_assigned: primaryEditor,
@@ -5387,8 +5317,10 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               remarks: wfProjectNotes,
                               project_notes: wfProjectNotes,
                               internal_comments: wfInternalComments,
-                              editing_status: 'Editor Assigned'
-                            });
+                              editing_status: 'Editor Assigned',
+                              production_role: rolesJoined,
+                              assigned_role: rolesJoined
+                            } as any);
 
                             setActiveWorkflowProd(null);
                             setWorkflowActionType(null);
@@ -5398,7 +5330,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             alert("Project Editorial Active");
                           } catch (err: any) {
                             console.error("Failed to assign editor:", err);
-                            setWfError("Database Error: " + (err.message || "Please try again."));
+                            setWfError("Failed to save editor assignment. " + (err.message || "Please try again."));
                           } finally {
                             setIsSaving(false);
                           }
@@ -5736,40 +5668,48 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
                   return (
                     <form
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
-                        const updates: any = {
-                          editing_status: selectedStage,
-                        };
+                        setIsSaving(true);
+                        try {
+                          const updates: any = {
+                            editing_status: selectedStage,
+                          };
 
-                        // Map dynamic fields to remarks or specific fields
-                        if (selectedStage === 'Internal QC Review') {
-                          updates.remarks = qcNotes;
-                        } else if (selectedStage === 'Client Review Sent') {
-                          updates.remarks = reviewNotes;
-                          updates.raw_footage_location = reviewLink || activeWorkflowProd.raw_footage_location;
-                        } else if (selectedStage === 'Revision Required') {
-                          updates.remarks = revisionNotes;
-                          updates.expected_delivery_date = revisionDeadline || activeWorkflowProd.expected_delivery_date;
-                          updates.target_delivery_date = revisionDeadline || activeWorkflowProd.target_delivery_date;
-                        } else if (selectedStage === 'Revision In Progress') {
-                          updates.remarks = revisionComments;
-                        } else if (selectedStage === 'Final Approval') {
-                          updates.remarks = approvalNotes;
-                        } else if (selectedStage === 'Project Delivered') {
-                          updates.remarks = `Delivered via ${deliveryLink}`;
-                          updates.delivery_date = deliveryDate || new Date().toISOString().split('T')[0];
-                          updates.raw_footage_location = deliveryLink || activeWorkflowProd.raw_footage_location;
-                        } else if (selectedStage === 'Completed') {
-                          updates.remarks = closingNotes;
+                          // Map dynamic fields to remarks or specific fields
+                          if (selectedStage === 'Internal QC Review') {
+                            updates.remarks = qcNotes;
+                          } else if (selectedStage === 'Client Review Sent') {
+                            updates.remarks = reviewNotes;
+                            updates.raw_footage_location = reviewLink || activeWorkflowProd.raw_footage_location;
+                          } else if (selectedStage === 'Revision Required') {
+                            updates.remarks = revisionNotes;
+                            updates.expected_delivery_date = revisionDeadline || activeWorkflowProd.expected_delivery_date;
+                            updates.target_delivery_date = revisionDeadline || activeWorkflowProd.target_delivery_date;
+                          } else if (selectedStage === 'Revision In Progress') {
+                            updates.remarks = revisionComments;
+                          } else if (selectedStage === 'Final Approval') {
+                            updates.remarks = approvalNotes;
+                          } else if (selectedStage === 'Project Delivered') {
+                            updates.remarks = `Delivered via ${deliveryLink}`;
+                            updates.delivery_date = deliveryDate || new Date().toISOString().split('T')[0];
+                            updates.raw_footage_location = deliveryLink || activeWorkflowProd.raw_footage_location;
+                          } else if (selectedStage === 'Completed') {
+                            updates.remarks = closingNotes;
+                          }
+
+                          // Execute update
+                          await updateProduction(activeWorkflowProd.production_id, updates);
+
+                          // Close the modal
+                          setActiveWorkflowProd(null);
+                          setWorkflowActionType(null);
+                        } catch (err: any) {
+                          console.error("Failed to update status:", err);
+                          alert("Failed to update status: " + (err.message || err));
+                        } finally {
+                          setIsSaving(false);
                         }
-
-                        // Execute update
-                        updateProduction(activeWorkflowProd.production_id, updates);
-
-                        // Close the modal
-                        setActiveWorkflowProd(null);
-                        setWorkflowActionType(null);
                       }}
                       className="flex flex-col"
                     >
@@ -5834,17 +5774,9 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               onChange={(e) => setSelectedStage(e.target.value as EditingStatus)}
                               className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-2.5 px-3 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono cursor-pointer"
                             >
-                              <option value="Raw Footage Received">Raw Footage Received</option>
-                              <option value="Editor Assigned">Editor Assigned</option>
-                              <option value="Editing Started">Editing Started</option>
-                              <option value="Editing In Progress">Editing In Progress</option>
-                              <option value="Internal QC Review">Internal QC Review</option>
-                              <option value="Client Review Sent">Client Review Sent</option>
-                              <option value="Revision Required">Revision Required</option>
-                              <option value="Revision In Progress">Revision In Progress</option>
-                              <option value="Final Approval">Final Approval</option>
-                              <option value="Project Delivered">Project Delivered</option>
-                              <option value="Completed">Completed</option>
+                              {getNextStatuses(activeWorkflowProd).map(stageOpt => (
+                                <option key={stageOpt} value={stageOpt}>{stageOpt}</option>
+                              ))}
                             </select>
                           </div>
 
@@ -6078,19 +6010,21 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       <div className="flex gap-2 justify-end p-5 border-t border-zinc-900 bg-zinc-900/20">
                         <button
                           type="button"
+                          disabled={isSaving}
                           onClick={() => {
                             setActiveWorkflowProd(null);
                             setWorkflowActionType(null);
                           }}
-                          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-white font-mono uppercase text-[10px] tracking-wider rounded-lg transition-all"
+                          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-white font-mono uppercase text-[10px] tracking-wider rounded-lg transition-all disabled:opacity-50"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-5 py-2 bg-gradient-to-r from-blue-650 to-indigo-650 hover:from-blue-600 hover:to-indigo-600 text-white font-mono uppercase text-[10px] tracking-wider rounded-lg transition-all font-black shadow-lg"
+                          disabled={isSaving}
+                          className="px-5 py-2 bg-gradient-to-r from-blue-650 to-indigo-650 hover:from-blue-600 hover:to-indigo-600 text-white font-mono uppercase text-[10px] tracking-wider rounded-lg transition-all font-black shadow-lg disabled:opacity-50"
                         >
-                          Save Status Update
+                          {isSaving ? 'Saving...' : 'Save Status Update'}
                         </button>
                       </div>
                     </form>
@@ -6343,8 +6277,24 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       {allRoles.map(role => (
                         <option key={role} value={role}>{role}</option>
                       ))}
+                      <option value="Other / Custom Role Specialty">Other / Custom Role Specialty</option>
                     </select>
                   </div>
+
+                  {/* Custom Role Specialty Input */}
+                  {staffFormRole === 'Other / Custom Role Specialty' && (
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="text-[10px] text-amber-500 uppercase font-black block">Custom Role Specialty</label>
+                      <input
+                        type="text"
+                        required
+                        value={customRoleSpecialty}
+                        onChange={(e) => setCustomRoleSpecialty(e.target.value)}
+                        placeholder="e.g. Cinematic Reels Editor"
+                        className="w-full bg-zinc-900 border border-amber-950 px-3.5 py-2.5 text-white text-xs rounded-xl focus:ring-1 focus:ring-amber-500 focus:outline-none placeholder-zinc-650"
+                      />
+                    </div>
+                  )}
 
                   {/* Status */}
                   <div className="space-y-1">

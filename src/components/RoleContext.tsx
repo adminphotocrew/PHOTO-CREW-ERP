@@ -1132,13 +1132,14 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     augmentedOrders.forEach(o => {
       const prodExists = list.some(p => p.tracking_id === o.order_id || p.tracking_id === o.lead_id);
       if (!prodExists) {
-        const defaultTargetDate = o.event_date ? new Date(new Date(o.event_date).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : '';
+        const parentLeadForO = leads.find(l => l.lead_id === o.lead_id);
+        const defaultTargetDate = parentLeadForO?.delivery_target_date || (o.event_date ? new Date(new Date(o.event_date).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : '');
         list.push({
           production_id: `PRD-${o.lead_id}`,
           tracking_id: o.order_id,
-          editor_assigned: 'Unassigned',
+          editor_assigned: parentLeadForO?.assigned_editor || 'Unassigned',
           raw_footage_location: '',
-          editing_status: o.current_stage as any,
+          editing_status: (parentLeadForO?.current_status || parentLeadForO?.status || o.current_stage) as any,
           remarks: '',
           project_priority: 'Medium',
           target_delivery_date: defaultTargetDate,
@@ -1149,20 +1150,32 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return list.map(p => {
       const ord = augmentedOrders.find(o => o.order_id === p.tracking_id || o.lead_id === p.tracking_id);
       const parentLead = leads.find(l => l.lead_id === p.tracking_id || (ord && l.lead_id === ord.lead_id));
+      
       const leadStatus = parentLead?.current_status || parentLead?.status;
+      const leadEditor = parentLead?.assigned_editor;
+      const leadEditors = parentLead?.assigned_editors;
+      const leadTargetDate = parentLead?.delivery_target_date;
+
+      let updatedP = { ...p };
+
       if (leadStatus) {
-        return {
-          ...p,
-          editing_status: leadStatus as any
-        };
+        updatedP.editing_status = leadStatus as any;
+      } else if (ord) {
+        updatedP.editing_status = ord.current_stage as any;
       }
-      if (ord) {
-        return {
-          ...p,
-          editing_status: ord.current_stage as any
-        };
+
+      if (leadEditor && leadEditor !== 'Unassigned') {
+        updatedP.editor_assigned = leadEditor;
       }
-      return p;
+      if (leadEditors) {
+        updatedP.assigned_staff = leadEditors;
+      }
+      if (leadTargetDate) {
+        updatedP.target_delivery_date = leadTargetDate;
+        updatedP.expected_delivery_date = leadTargetDate;
+      }
+
+      return updatedP;
     });
   }, [production, augmentedOrders, leads]);
 
@@ -1204,8 +1217,35 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const stripClientOnlyFields = (table: string, record: any) => {
     if (!record || typeof record !== 'object') return record;
     
-    const cloned = { ...record };
+    let cloned = { ...record };
     delete cloned.customer_id;
+
+    if (table === 'production_staff') {
+      const existing = staff.find(s => s.staff_id === record.staff_id);
+      const merged = existing ? { ...existing, ...cloned } : cloned;
+      
+      const extra: any = {};
+      const localKeys = ['whatsapp_number', 'production_role_speciality', 'custom_role_specialty', 'experience', 'employee_id', 'address', 'city'];
+      for (const k of localKeys) {
+        if (k in merged) {
+          extra[k] = merged[k];
+        }
+      }
+      extra.notes = merged.notes || '';
+      
+      cloned = {
+        staff_id: merged.staff_id,
+        name: merged.name,
+        mobile: merged.mobile,
+        email: merged.email,
+        role: merged.role || 'Production Editor',
+        department: merged.department || 'Post-Production',
+        status: merged.status || 'Active',
+        joining_date: merged.joining_date || new Date().toISOString().split('T')[0],
+        profile_photo: merged.profile_photo || '',
+        notes: JSON.stringify(extra)
+      } as any;
+    }
 
     const allowedColumns: Record<string, string[]> = {
       users: ['id', 'email', 'role', 'full_name', 'phone', 'active', 'created_at', 'password', 'username'],
@@ -1319,11 +1359,16 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             'Pending', 'Editing', 'Customer Review', 'Revision Required', 'Approved', 'Delivered'
           ];
           if (!allowedProductionStages.includes(sanitized.editing_status)) {
-            if (['Closed', 'Project Closed', 'Completed', 'Project Delivered'].includes(sanitized.editing_status)) {
-              sanitized.editing_status = 'Delivered';
-            } else {
-              delete sanitized.editing_status;
-            }
+            const mappedStatus = (() => {
+              const s = sanitized.editing_status;
+              if (['Closed', 'Project Closed', 'Completed', 'Project Delivered', 'Delivered'].includes(s)) return 'Delivered';
+              if (['Final Approval', 'Approved'].includes(s)) return 'Approved';
+              if (['Client Review Sent', 'Customer Review'].includes(s)) return 'Customer Review';
+              if (['Revision Required'].includes(s)) return 'Revision Required';
+              if (['Editor Assigned', 'Editing Started', 'Editing In Progress', 'Revision In Progress', 'Internal QC Review', 'Editing'].includes(s)) return 'Editing';
+              return 'Pending';
+            })();
+            sanitized.editing_status = mappedStatus;
           }
         }
       }
@@ -1902,7 +1947,22 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalStaff = initialStaffSeed;
       }
       if (finalStaff && finalStaff.length > 0) {
-        setStaff(finalStaff);
+        const mappedStaff = finalStaff.map((st: any) => {
+          let extra: any = {};
+          if (st.notes && st.notes.trim().startsWith('{') && st.notes.trim().endsWith('}')) {
+            try {
+              extra = JSON.parse(st.notes);
+            } catch (e) {
+              console.warn("Failed parsing JSON staff notes:", st.notes);
+            }
+          }
+          return {
+            ...st,
+            ...extra,
+            notes: (st.notes && st.notes.trim().startsWith('{') && st.notes.trim().endsWith('}')) ? (extra.notes || '') : st.notes
+          };
+        });
+        setStaff(mappedStaff);
       }
       if (equipRes && equipRes.data) {
         setEquipment(equipRes.data);
@@ -1911,7 +1971,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sync specialties and editor assignments from Supabase if they exist
       try {
         const { data: dbSpecList } = await supabaseClient.from('production_specialties').select('*');
-        if (dbSpecList && dbSpecList.length > 0) {
+        if (dbSpecList) {
           setSpecialities(dbSpecList);
           localStorage.setItem('erp_production_specialities', JSON.stringify(dbSpecList));
         }
@@ -1921,7 +1981,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         const { data: dbAssignList } = await supabaseClient.from('editor_assignments').select('*');
-        if (dbAssignList && dbAssignList.length > 0) {
+        if (dbAssignList) {
           setEditorAssignments(dbAssignList);
           localStorage.setItem('erp_editor_assignments', JSON.stringify(dbAssignList));
         }
@@ -1989,6 +2049,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (table === 'orders') {
                   mappedItem = { ...mappedItem, current_stage: mappedItem.current_stage || mappedItem.order_status };
                 }
+                if (table === 'production_staff') {
+                  let extra: any = {};
+                  if (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) {
+                    try {
+                      extra = JSON.parse(item.notes);
+                    } catch (e) {
+                      console.warn("Real-time parsing error:", e);
+                    }
+                  }
+                  mappedItem = {
+                    ...item,
+                    ...extra,
+                    notes: (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) ? (extra.notes || '') : item.notes
+                  };
+                }
                 const exists = prev.some(x => x[key] === mappedItem[key]);
                 if (exists) return prev;
                 return [mappedItem, ...prev];
@@ -2005,6 +2080,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 if (table === 'orders') {
                   mappedItem = { ...mappedItem, current_stage: mappedItem.current_stage || mappedItem.order_status };
+                }
+                if (table === 'production_staff') {
+                  let extra: any = {};
+                  if (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) {
+                    try {
+                      extra = JSON.parse(item.notes);
+                    } catch (e) {
+                      console.warn("Real-time parsing error:", e);
+                    }
+                  }
+                  mappedItem = {
+                    ...item,
+                    ...extra,
+                    notes: (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) ? (extra.notes || '') : item.notes
+                  };
                 }
                 return prev.map(x => (x[key] === mappedItem[key] ? mappedItem : x));
               });
@@ -2889,36 +2979,74 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const timestamp = new Date().toISOString();
 
-    // Set production state in Supabase
-    if (targetProd) {
-      const rProd = await pushUpdate('production', 'production_id', targetProd.production_id, updates);
-      if (!rProd?.success) {
-        throw new Error("Failed to update production data: " + rProd?.error);
+    // Ensure raw footage row exists if needed before inserting production
+    if (!targetProd) {
+      let tempOrder = augmentedOrders.find(o => o.order_id === inferredTrackingId || o.lead_id === inferredTrackingId);
+      if (!tempOrder) {
+        const rf = rawFootage.find(f => f.tracking_id === inferredTrackingId || f.order_id === inferredTrackingId);
+        if (rf) {
+          tempOrder = augmentedOrders.find(o => o.order_id === rf.order_id);
+        }
       }
-    } else {
-      const newPId = productionId.startsWith('PRD-') ? `PRD-${Math.floor(100000 + Math.random() * 899999)}` : productionId;
-      const newProd: Production = {
-        production_id: newPId,
-        tracking_id: inferredTrackingId,
-        editor_assigned: updates.editor_assigned || 'Unassigned',
-        editing_status: (updates.editing_status || previousStage || 'Raw Footage Received') as any,
-        remarks: updates.remarks || '',
-        project_priority: updates.project_priority || 'Medium',
-        raw_footage_location: updates.raw_footage_location || '',
-        target_delivery_date: updates.target_delivery_date || '',
-        expected_delivery_date: updates.expected_delivery_date || '',
-        ...updates
-      };
-      const rProd = await pushInsert('production', newProd);
-      if (!rProd?.success) {
-        throw new Error("Failed to insert production data: " + rProd?.error);
+      if (tempOrder) {
+        const rfExists = rawFootage.some(f => f.tracking_id === inferredTrackingId);
+        if (!rfExists) {
+          const dummyRF = {
+            tracking_id: inferredTrackingId,
+            order_id: tempOrder.order_id,
+            event_completed_date: tempOrder.event_date || new Date().toISOString().split('T')[0],
+            raw_received: false,
+            server_path: '',
+            uploaded_by: currentUserName,
+            uploaded_date: new Date().toISOString(),
+            status: 'Pending'
+          };
+          const rRF = await pushInsert('raw_footage', dummyRF);
+          if (rRF?.success) {
+            setRawFootage(prev => [dummyRF as any, ...prev]);
+          } else {
+            console.warn("[updateProduction] Failed to auto-insert raw_footage placeholder:", rRF?.error);
+          }
+        }
       }
     }
 
+    // Set production state in Supabase
+    try {
+      if (targetProd) {
+        const rProd = await pushUpdate('production', 'production_id', targetProd.production_id, updates);
+        if (!rProd?.success) {
+          console.warn("[updateProduction] DB operation failed for production table update, will fallback to Leads:", rProd?.error);
+        }
+      } else {
+        const newPId = productionId.startsWith('PRD-') ? `PRD-${Math.floor(100000 + Math.random() * 899999)}` : productionId;
+        const newProd: Production = {
+          production_id: newPId,
+          tracking_id: inferredTrackingId,
+          editor_assigned: updates.editor_assigned || 'Unassigned',
+          editing_status: (updates.editing_status || previousStage || 'Raw Footage Received') as any,
+          remarks: updates.remarks || '',
+          project_priority: updates.project_priority || 'Medium',
+          raw_footage_location: updates.raw_footage_location || '',
+          target_delivery_date: updates.target_delivery_date || '',
+          expected_delivery_date: updates.expected_delivery_date || '',
+          ...updates
+        };
+        const rProd = await pushInsert('production', newProd);
+        if (!rProd?.success) {
+          console.warn("[updateProduction] DB operation failed for production table insert, will fallback to Leads:", rProd?.error);
+        }
+      }
+    } catch (prodErr) {
+      console.error("[updateProduction] Production DB write exception:", prodErr);
+    }
+
+    const actualTrackingId = targetProd ? targetProd.tracking_id : inferredTrackingId;
+
     // Find linked order using all possible connections
-    let tgtOrder = augmentedOrders.find(o => o.order_id === inferredTrackingId || o.lead_id === inferredTrackingId);
+    let tgtOrder = augmentedOrders.find(o => o.order_id === actualTrackingId || o.lead_id === actualTrackingId);
     if (!tgtOrder) {
-      const rf = rawFootage.find(f => f.tracking_id === inferredTrackingId || f.order_id === inferredTrackingId);
+      const rf = rawFootage.find(f => f.tracking_id === actualTrackingId || f.order_id === actualTrackingId);
       if (rf) {
         tgtOrder = augmentedOrders.find(o => o.order_id === rf.order_id);
       }
@@ -2941,7 +3069,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       nextStage = 'Delivered';
     }
 
-    const leadIdToUpdate = tgtOrder?.lead_id || inferredTrackingId;
+    const leadIdToUpdate = tgtOrder?.lead_id || actualTrackingId;
 
     if (nextStage && leadIdToUpdate) {
       const leadUpdates: any = {
@@ -2950,6 +3078,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       if (nextStage) {
         leadUpdates.status = nextStage;
+        leadUpdates.current_status = nextStage;
       }
       if (updates.editor_assigned) {
         leadUpdates.assigned_editor = updates.editor_assigned;
@@ -2959,6 +3088,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (updates.target_delivery_date) {
         leadUpdates.delivery_target_date = updates.target_delivery_date;
+      }
+      if ((updates as any).production_role) {
+        leadUpdates.production_role = (updates as any).production_role;
+      } else if ((updates as any).assigned_role) {
+        leadUpdates.production_role = (updates as any).assigned_role;
       }
       
       console.log("Updating lead:", leadIdToUpdate, leadUpdates);
