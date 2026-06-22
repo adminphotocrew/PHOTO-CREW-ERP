@@ -364,7 +364,7 @@ export const Dashboard: React.FC = () => {
                 👥 HIGH RETENTION CUSTOMER LEADERBOARD
               </div>
               <div className="overflow-x-auto rounded-xl border border-zinc-900 bg-zinc-950/20">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[1100px]">
                   <thead>
                     <tr className="bg-zinc-950/80 border-b border-zinc-850 text-zinc-500 uppercase tracking-widest text-[9px] font-mono">
                       <th className="p-3 pl-4">Customer ID</th>
@@ -722,7 +722,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
             <thead>
               <tr className="bg-zinc-950/80 text-zinc-400 font-bold border-b border-zinc-900 text-[10px] uppercase font-mono tracking-wider">
                 <th className="p-3.5 pl-5">Audit ID</th>

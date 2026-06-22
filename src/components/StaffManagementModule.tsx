@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
 import { Staff } from '../types';
+import { triggerAutoScrollAndFocus } from '../utils';
 import { 
   Users, UserPlus, Phone, Mail, Award, Clock, FileText, ToggleLeft, ToggleRight, Trash2, ShieldAlert,
   Search, Filter, Calendar, FolderOpen, Heart, CheckCircle2, ChevronRight, X, Sparkles, Image
@@ -41,6 +42,12 @@ export const StaffManagementModule: React.FC = () => {
   const [newSpecName, setNewSpecName] = useState('');
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
   const [editingSpecName, setEditingSpecName] = useState('');
+
+  useEffect(() => {
+    if (activeSubTab === 'add') {
+      triggerAutoScrollAndFocus('#add_staff_form', 150);
+    }
+  }, [activeSubTab]);
 
   // Core production roles requested by user
   const PRODUCTION_ROLES = [
@@ -528,7 +535,7 @@ export const StaffManagementModule: React.FC = () => {
 
       {/* ADD / ONBOARD TABLE FORM */}
       {activeSubTab === 'add' && (
-        <form onSubmit={handleAddStaffSubmit} className="bg-zinc-950 border border-zinc-900 p-6 rounded-2xl space-y-6 shadow-xl relative">
+        <form id="add_staff_form" onSubmit={handleAddStaffSubmit} className="bg-zinc-950 border border-zinc-900 p-6 rounded-2xl space-y-6 shadow-xl relative">
           <div className="absolute top-3 left-3 w-1.5 h-1.5 bg-violet-500/50 rounded-full" />
           <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-violet-500/50 rounded-full" />
           

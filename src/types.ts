@@ -107,6 +107,9 @@ export interface Lead {
   production_role?: string;
   delivery_target_date?: string;
   current_status?: string;
+  whatsapp_number?: string;
+  address?: string;
+  city?: string;
 }
 
 export interface LeadPackage {

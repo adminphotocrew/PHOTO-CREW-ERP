@@ -12,7 +12,7 @@ import * as XLSX from 'xlsx';
 import { Production, EditingStatus, Staff } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { ProjectDetailModal } from './ProjectDetailModal';
-import { formatINR } from '../utils';
+import { formatINR, triggerAutoScrollAndFocus } from '../utils';
 import { AppLogo } from './AppLogo';
 import { ProductionCalendar } from './ProductionCalendar';
 import { StaffManagementModule } from './StaffManagementModule';
@@ -311,6 +311,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
 
   // Enhanced Staff and Role states for Editor Performance and Staff Directory
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingStaffMember, setEditingStaffMember] = useState<Staff | null>(null);
   const [viewingStaffMember, setViewingStaffMember] = useState<Staff | null>(null);
   const [selectedMetricDetail, setSelectedMetricDetail] = useState<{ type: string; memberName: string; list: any[] } | null>(null);
@@ -1103,12 +1104,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
         }
       }
 
-      setTimeout(() => {
-        const firstInput = document.querySelector('form select, form textarea, form input[type="text"]') as HTMLElement;
-        if (firstInput) {
-          firstInput.focus();
-        }
-      }, 150);
+      triggerAutoScrollAndFocus('#production_workflow_modal', 150);
     }
   }, [workflowActionType, activeWorkflowProd, editorAssignments]);
 
@@ -1128,12 +1124,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
 
   useEffect(() => {
     if (isStaffModalOpen) {
-      setTimeout(() => {
-        const input = document.querySelector('input[placeholder="e.g. John Doe"]') as HTMLInputElement;
-        if (input) {
-          input.focus();
-        }
-      }, 150);
+      triggerAutoScrollAndFocus('#production_staff_modal', 150);
     }
   }, [isStaffModalOpen]);
 
@@ -1630,7 +1621,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                 </div>
 
                 <div className="overflow-x-auto border border-zinc-900 rounded-xl">
-                  <table className="w-full border-collapse text-left text-xs text-zinc-300">
+                  <table className="w-full border-collapse text-left text-xs text-zinc-300 min-w-[1200px]">
                     <thead>
                       <tr className="border-b border-zinc-900 bg-zinc-900/40 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
                         <th className="p-3 font-bold">Order ID</th>
@@ -1701,7 +1692,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
           {/* TABLE CONTAINER */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-xs text-zinc-300">
+              <table className="w-full border-collapse text-left text-xs text-zinc-300 min-w-[1200px]">
                 <thead>
                   <tr className="border-b border-zinc-900 bg-zinc-950/70 px-4 py-3 font-mono text-[9px] uppercase tracking-wider text-zinc-500">
                     <th className="p-4 font-black">Order ID</th>
@@ -2484,7 +2475,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
           {totalEditors > 0 ? (
             <div className="bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs text-zinc-300">
+              <table className="w-full text-left border-collapse text-xs text-zinc-300 min-w-[1200px]">
                 <thead className="bg-[#0b0c10] text-[9px] font-mono text-zinc-500 uppercase tracking-widest border-b border-zinc-900">
                   <tr>
                     <th className="py-4.5 px-5 font-black">Staff Member</th>
@@ -3046,7 +3037,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
               </h3>
 
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-xs text-zinc-300">
+                <table className="w-full border-collapse text-left text-xs text-zinc-300 min-w-[1200px]">
                   <thead>
                     <tr className="border-b border-zinc-900 bg-zinc-950/70 py-3 font-mono text-[9px] uppercase tracking-wider text-zinc-500">
                       <th className="p-4 font-black">Order ID</th>
@@ -5101,7 +5092,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className={`bg-zinc-950 border border-zinc-900 rounded-2xl ${
+            <div id="production_workflow_modal" className={`bg-zinc-950 border border-zinc-900 rounded-2xl ${
               workflowActionType === 'assign_editor'
                 ? 'w-full md:w-[90%] lg:w-[85%] max-w-5xl'
                 : workflowActionType === 'manage_status'
@@ -5358,7 +5349,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             }
                           }
 
-                          if (hasError) return;
+                          if (hasError || isSaving) return;
 
                           const filledRows = assignmentRows.filter(r => r.speciality && r.staffId);
                           if (filledRows.length === 0) {
@@ -5366,46 +5357,56 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             return;
                           }
 
-                          // 2. Database Sync
-                          const existing = editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id);
-                          for (const ext of existing) {
-                            await deleteEditorAssignment(ext.assignment_id);
-                          }
+                          try {
+                            setIsSaving(true);
+                            // 2. Database Sync
+                            const existing = editorAssignments.filter(a => a.production_id === activeWorkflowProd.production_id);
+                            for (const ext of existing) {
+                              await deleteEditorAssignment(ext.assignment_id);
+                            }
 
-                          for (const val of filledRows) {
-                            await assignEditorToProject({
-                              production_id: activeWorkflowProd.production_id,
-                              staff_id: val.staffId,
-                              staff_name: val.staffName,
-                              speciality: val.speciality,
-                              target_finish_date: wfTargetDeliveryDate || new Date().toISOString().split('T')[0]
+                            for (const val of filledRows) {
+                              await assignEditorToProject({
+                                production_id: activeWorkflowProd.production_id,
+                                staff_id: val.staffId,
+                                staff_name: val.staffName,
+                                speciality: val.speciality,
+                                target_finish_date: wfTargetDeliveryDate || new Date().toISOString().split('T')[0]
+                              });
+                            }
+
+                            const finalNames = filledRows.map(r => r.staffName).filter(Boolean);
+                            const primaryEditor = finalNames[finalNames.length - 1] || 'Unassigned';
+                            const assignedStaffJoined = finalNames.join(', ');
+
+                            await updateProduction(activeWorkflowProd.production_id, {
+                              editor_assigned: primaryEditor,
+                              assigned_staff: assignedStaffJoined,
+                              target_delivery_date: wfTargetDeliveryDate || activeWorkflowProd.target_delivery_date,
+                              project_priority: wfPriority,
+                              remarks: wfProjectNotes,
+                              project_notes: wfProjectNotes,
+                              internal_comments: wfInternalComments,
+                              editing_status: 'Editor Assigned'
                             });
+
+                            setActiveWorkflowProd(null);
+                            setWorkflowActionType(null);
+                            setWfSpeciality('');
+                            setWfEditor('Unassigned');
+                            setWfError('');
+                            alert("Project Editorial Active");
+                          } catch (err: any) {
+                            console.error("Failed to assign editor:", err);
+                            setWfError("Database Error: " + (err.message || "Please try again."));
+                          } finally {
+                            setIsSaving(false);
                           }
-
-                          const finalNames = filledRows.map(r => r.staffName).filter(Boolean);
-                          const primaryEditor = finalNames[finalNames.length - 1] || 'Unassigned';
-                          const assignedStaffJoined = finalNames.join(', ');
-
-                          updateProduction(activeWorkflowProd.production_id, {
-                            editor_assigned: primaryEditor,
-                            assigned_staff: assignedStaffJoined,
-                            target_delivery_date: wfTargetDeliveryDate || activeWorkflowProd.target_delivery_date,
-                            project_priority: wfPriority,
-                            remarks: wfProjectNotes,
-                            project_notes: wfProjectNotes,
-                            internal_comments: wfInternalComments,
-                            editing_status: 'Editor Assigned'
-                          });
-
-                          setActiveWorkflowProd(null);
-                          setWorkflowActionType(null);
-                          setWfSpeciality('');
-                          setWfEditor('Unassigned');
-                          setWfError('');
                         }}
-                        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-650 hover:from-purple-500 hover:to-indigo-550 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all cursor-pointer shadow-lg font-mono font-extrabold"
+                        disabled={isSaving}
+                        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-650 hover:from-purple-500 hover:to-indigo-550 disabled:opacity-50 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all cursor-pointer shadow-lg font-mono font-extrabold"
                       >
-                        Assign Editor
+                        {isSaving ? 'Processing...' : 'Assign Editor'}
                       </button>
                     </div>
 
@@ -6219,6 +6220,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
         {isStaffModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div 
+              id="production_staff_modal"
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}

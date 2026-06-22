@@ -3,7 +3,7 @@ import { useRole } from './RoleContext';
 import { 
   Landmark, DollarSign, Calendar, FileText, CheckCircle2, AlertCircle, Sparkles, Ban
 } from 'lucide-react';
-import { formatINR } from '../utils';
+import { formatINR, triggerAutoScrollAndFocus } from '../utils';
 
 export const PaymentsModule: React.FC = () => {
   const { currentRole, payments, orders, recordPayment } = useRole();
@@ -13,6 +13,7 @@ export const PaymentsModule: React.FC = () => {
 
   // State to manage active record selection
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form State
   const [payAmount, setPayAmount] = useState<number | ''>('');
@@ -26,31 +27,30 @@ export const PaymentsModule: React.FC = () => {
     setProofUrl('');
   };
 
-  const handlePaySubmit = (e: React.FormEvent) => {
+  const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrderId) return;
+    if (!selectedOrderId || isSaving) return;
     if (!payAmount || Number(payAmount) <= 0) {
       alert('Amount must be positive.');
       return;
     }
 
-    recordPayment(selectedOrderId, Number(payAmount), payDate, proofUrl);
-    setSelectedOrderId(null);
-    alert('Payment balance recorded successfully. Stage updated in master ledger!');
+    try {
+      setIsSaving(true);
+      await recordPayment(selectedOrderId, Number(payAmount), payDate, proofUrl);
+      setSelectedOrderId(null);
+      alert('Payment balance recorded successfully. Stage updated in master ledger!');
+    } catch (err: any) {
+      console.error("Failed to record payment:", err);
+      alert("Failed to record payment. Details: " + (err.message || "Please try again."));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   useEffect(() => {
     if (selectedOrderId) {
-      setTimeout(() => {
-        const formEl = document.querySelector('#payments_details_mobile_modal form');
-        if (formEl) {
-          formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        const firstInput = document.querySelector('#payments_details_mobile_modal input') as HTMLInputElement;
-        if (firstInput) {
-          firstInput.focus();
-        }
-      }, 150);
+      triggerAutoScrollAndFocus('#payment_update_modal', 150);
     }
   }, [selectedOrderId]);
 
@@ -248,9 +248,10 @@ export const PaymentsModule: React.FC = () => {
                       </button>
                       <button
                         type="submit"
-                        className="px-5 py-2 bg-gradient-to-r from-rose-500 to-orange-550 hover:opacity-95 text-black font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-rose-500/15"
+                        disabled={isSaving}
+                        className="px-5 py-2 bg-gradient-to-r from-rose-500 to-orange-550 hover:opacity-95 disabled:opacity-50 text-black font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-rose-500/15"
                       >
-                        Commit Ledger Credit
+                        {isSaving ? 'Processing...' : 'Commit Ledger Credit'}
                       </button>
                     </div>
 
@@ -287,7 +288,7 @@ export const PaymentsModule: React.FC = () => {
       {/* Popup Modal for Details (Centered & Responsive for Desktop, Tablet, and Mobile) */}
       {selectedOrderId && (
         <div id="payments_details_mobile_modal" className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl relative flex flex-col">
+          <div id="payment_update_modal" className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl relative flex flex-col">
             <div className="p-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/60 sticky top-0 z-10 backdrop-blur-md">
               <h3 className="text-xs font-black text-white flex items-center gap-1.5 font-mono uppercase tracking-wider">
                 <Landmark className="w-4 h-4 text-rose-500" />
@@ -381,9 +382,10 @@ export const PaymentsModule: React.FC = () => {
                       </button>
                       <button
                         type="submit"
-                        className="px-5 py-2 bg-gradient-to-r from-rose-500 to-orange-550 hover:opacity-95 text-black font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-rose-500/15"
+                        disabled={isSaving}
+                        className="px-5 py-2 bg-gradient-to-r from-rose-500 to-orange-550 hover:opacity-95 disabled:opacity-50 text-black font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-rose-500/15"
                       >
-                        Commit Ledger Credit
+                        {isSaving ? 'Processing...' : 'Commit Ledger Credit'}
                       </button>
                     </div>
 

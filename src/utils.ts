@@ -322,3 +322,25 @@ export function getCustomers(leads: Lead[], orders: Order[], payments: Payment[]
     };
   });
 }
+
+/**
+ * Automatically scrolls to a popup or container and focuses the first input/interactive field inside it.
+ */
+export function triggerAutoScrollAndFocus(selector: string, delayMs: number = 100) {
+  setTimeout(() => {
+    const container = document.querySelector(selector) as HTMLElement;
+    if (container) {
+      // Bring popup into view
+      container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Focus first field
+      const firstInput = container.querySelector(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button[type="submit"]'
+      ) as HTMLElement;
+      if (firstInput) {
+        firstInput.focus({ preventScroll: true });
+      }
+    }
+  }, delayMs);
+}
+

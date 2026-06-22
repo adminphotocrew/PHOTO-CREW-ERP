@@ -6,7 +6,7 @@ import {
 import { Order, CurrentStage, Staff, Equipment } from '../../types';
 import { ProjectDetailModal } from '../ProjectDetailModal';
 import { CameraLensStatsCard, CameraLensTheme } from '../CameraLensStatsCard';
-import { convertTimeToDbFormat } from '../../utils';
+import { convertTimeToDbFormat, triggerAutoScrollAndFocus } from '../../utils';
 
 export const OperationsLeads: React.FC = () => {
   const { 
@@ -82,6 +82,7 @@ export const OperationsLeads: React.FC = () => {
   
   // Inline edit state for assignment
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [assignForm, setAssignForm] = useState({
     photographer_assigned: '',
     videographer_assigned: '',
@@ -343,22 +344,19 @@ export const OperationsLeads: React.FC = () => {
 
   useEffect(() => {
     if (assigningOrderId) {
-      setTimeout(() => {
-        const formEl = document.querySelector('form');
-        if (formEl) {
-          formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        const firstSelect = document.querySelector('select') as HTMLSelectElement;
-        if (firstSelect) {
-          firstSelect.focus();
-        }
-      }, 150);
+      triggerAutoScrollAndFocus('#assign_staff_modal', 150);
     }
   }, [assigningOrderId]);
 
+  useEffect(() => {
+    if (receivingFootageOrderId) {
+      triggerAutoScrollAndFocus('#raw_footage_modal', 150);
+    }
+  }, [receivingFootageOrderId]);
+
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assigningOrderId) return;
+    if (!assigningOrderId || isSaving) return;
     
     // Validate required fields
     if (activeAssignments.length === 0) {
@@ -375,6 +373,7 @@ export const OperationsLeads: React.FC = () => {
     }
 
     try {
+      setIsSaving(true);
       // First save the multi-staff role assignments to Supabase & Context state!
       await saveStaffAssignments(assigningOrderId, activeAssignments);
 
@@ -426,10 +425,12 @@ export const OperationsLeads: React.FC = () => {
       }
 
       setAssigningOrderId(null);
-      alert("Assignment saved successfully!");
+      alert("Crew Assigned Successfully");
     } catch (e: any) {
       console.error("Failed to save assignment:", e);
       alert("Unable to save assignment. Error: " + (e.message || "Please try again."));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -629,7 +630,7 @@ export const OperationsLeads: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto border border-zinc-900 rounded-xl">
-          <table className="w-full border-collapse text-left text-xs text-zinc-300">
+          <table className="w-full border-collapse text-left text-xs text-zinc-300 min-w-[1200px]">
             <thead>
               <tr className="border-b border-zinc-900 bg-zinc-900/40 text-[9px] font-mono uppercase tracking-wider text-zinc-400">
                 <th className="p-3 font-bold">Order ID</th>
@@ -901,16 +902,30 @@ export const OperationsLeads: React.FC = () => {
                         {canEdit && (currentStage === 'Event Scheduled' || currentStage === 'Event Completed') && (
                           <select
                             value=""
+                            disabled={isSaving}
                             onChange={async (e) => {
                               const newStatus = e.target.value;
+                              if (!newStatus) return;
                               if (newStatus === 'Event Completed') {
                                 try {
+                                  setIsSaving(true);
                                   await markEventCompleted(ord.order_id, '');
+                                  alert("Status Updated Successfully");
                                 } catch (error) {
                                   alert(`Failed to update status: ${error}`);
+                                } finally {
+                                  setIsSaving(false);
                                 }
                               } else if (newStatus === 'Event Cancelled') {
-                                // Add logic for cancellation if needed
+                                try {
+                                  setIsSaving(true);
+                                  await updateOrderStage(ord.order_id, 'Event Cancelled' as any);
+                                  alert("Status Updated Successfully");
+                                } catch (error) {
+                                  alert(`Failed to update status: ${error}`);
+                                } finally {
+                                  setIsSaving(false);
+                                }
                               } else if (newStatus === 'Raw Footage Received') {
                                 setReceivingFootageOrderId(ord.order_id);
                                 const existingRf = rawFootage?.find(f => f.order_id === ord.order_id);
@@ -1102,7 +1117,7 @@ export const OperationsLeads: React.FC = () => {
       {/* Slide-over or Inline modal for Crew and Equipment Assignment */}
       {assigningOrderId && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl relative animate-in zoom-in duration-200">
+          <div id="assign_staff_modal" className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl relative animate-in zoom-in duration-200">
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
               <h3 className="text-xs font-mono font-black uppercase text-amber-500 flex items-center gap-2">
                 <span>⚡</span>
@@ -1452,9 +1467,10 @@ export const OperationsLeads: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl cursor-pointer"
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
                 >
-                  Confirm Allocation
+                  {isSaving ? 'Saving...' : 'Confirm Allocation'}
                 </button>
               </div>
             </form>
@@ -1749,7 +1765,7 @@ Please report on time and update status through the portal.`;
       {/* Raw Footage Received Modal */}
       {receivingFootageOrderId && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-805 rounded-2xl w-full max-w-lg shadow-2xl relative p-5 max-h-[90vh] overflow-y-auto space-y-4 scrollbar-thin">
+          <div id="raw_footage_modal" className="bg-zinc-900 border border-zinc-805 rounded-2xl w-full max-w-lg shadow-2xl relative p-5 max-h-[90vh] overflow-y-auto space-y-4 scrollbar-thin">
             <h3 className="text-sm font-bold text-purple-400 font-mono uppercase flex items-center gap-1.5 border-b border-zinc-800 pb-2">
               <span>💿</span> Receive Raw Footage
             </h3>
@@ -1759,43 +1775,52 @@ Please report on time and update status through the portal.`;
 
             <form onSubmit={async (e) => {
               e.preventDefault();
-              
-              // Save equipment handovers/verifications to Supabase & state
-              const handoversToSave = (Object.entries(footageHandoverStates) as [string, any][]).map(([equipName, details]) => ({
-                order_id: receivingFootageOrderId,
-                equipment_name: equipName,
-                return_status: details.return_status,
-                return_date: details.return_date,
-                returned_by: details.returned_by,
-                notes: details.notes
-              }));
-              
-              if (handoversToSave.length > 0) {
-                await addEquipmentHandovers(handoversToSave);
+              if (isSaving) return;
+              try {
+                setIsSaving(true);
+                // Save equipment handovers/verifications to Supabase & state
+                const handoversToSave = (Object.entries(footageHandoverStates) as [string, any][]).map(([equipName, details]) => ({
+                  order_id: receivingFootageOrderId,
+                  equipment_name: equipName,
+                  return_status: details.return_status,
+                  return_date: details.return_date,
+                  returned_by: details.returned_by,
+                  notes: details.notes
+                }));
+                
+                if (handoversToSave.length > 0) {
+                  await addEquipmentHandovers(handoversToSave);
+                }
+
+                // Combine physical storage states into the upload notes column
+                const hardDiskStr = hardDiskReceived ? 'YES' : 'NO';
+                const memoryCardStr = memoryCardReceived ? 'YES' : 'NO';
+                const compositeNotes = [
+                  `Hard Disk Received: ${hardDiskStr}`,
+                  `Memory Card Received: ${memoryCardStr}`,
+                  footageForm.upload_notes ? `Notes: ${footageForm.upload_notes}` : null
+                ].filter(Boolean).join(' | ');
+
+                await confirmRawFootageReceived(
+                  receivingFootageOrderId,
+                  footageForm.footage_link,
+                  footageForm.storage_type,
+                  compositeNotes,
+                  paymentCollectionStatus,
+                  additionalReceived
+                );
+                
+                setReceivingFootageOrderId(null);
+                setFootageForm({ footage_link: '', storage_type: 'Google Drive', upload_notes: '' });
+                setHardDiskReceived(false);
+                setMemoryCardReceived(false);
+                alert("Raw Footage Handover Complete");
+              } catch (err: any) {
+                console.error("Failed to receive raw footage:", err);
+                alert("Failed to save and move raw footage. Error: " + (err.message || "Please try again."));
+              } finally {
+                setIsSaving(false);
               }
-
-              // Combine physical storage states into the upload notes column
-              const hardDiskStr = hardDiskReceived ? 'YES' : 'NO';
-              const memoryCardStr = memoryCardReceived ? 'YES' : 'NO';
-              const compositeNotes = [
-                `Hard Disk Received: ${hardDiskStr}`,
-                `Memory Card Received: ${memoryCardStr}`,
-                footageForm.upload_notes ? `Notes: ${footageForm.upload_notes}` : null
-              ].filter(Boolean).join(' | ');
-
-              confirmRawFootageReceived(
-                receivingFootageOrderId,
-                footageForm.footage_link,
-                footageForm.storage_type,
-                compositeNotes,
-                paymentCollectionStatus,
-                additionalReceived
-              );
-              
-              setReceivingFootageOrderId(null);
-              setFootageForm({ footage_link: '', storage_type: 'Google Drive', upload_notes: '' });
-              setHardDiskReceived(false);
-              setMemoryCardReceived(false);
             }} className="space-y-4 text-left">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono mb-1">
@@ -2055,9 +2080,10 @@ Please report on time and update status through the portal.`;
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-purple-650 hover:bg-purple-700 text-white font-semibold text-xs rounded-xl cursor-pointer"
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-purple-650 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
                 >
-                  Save & Move to Production
+                  {isSaving ? 'Saving...' : 'Save & Move to Production'}
                 </button>
               </div>
             </form>

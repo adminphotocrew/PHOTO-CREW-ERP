@@ -41,7 +41,8 @@ interface RoleContextType {
   quotations: any[];
   addQuotation: (quotation: any) => Promise<void>;
   updateQuotation: (quotationId: string, updates: Partial<any>) => Promise<void>;
-  updateLead: (leadId: string, updates: Partial<Lead>) => void;
+  updateLead: (leadId: string, updates: Partial<Lead>) => Promise<any>;
+  saveLeadPackages: (leadId: string, packagesSelected: Omit<LeadPackage, 'lead_package_id' | 'lead_id'>[]) => Promise<void>;
 
   // Master flow operations
   addLead: (
@@ -55,7 +56,7 @@ interface RoleContextType {
     nextFollowUpDate: string, 
     quotationAmount?: number, 
     negotiationNotes?: string
-  ) => void;
+  ) => Promise<void>;
   confirmOrder: (
     leadId: string, 
     packageName: string, 
@@ -744,6 +745,24 @@ const INITIAL_PACKAGES: Package[] = [
 ];
 
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [globalModalAlert, setGlobalModalAlert] = useState<{ message: string; title: string } | null>(null);
+
+  useEffect(() => {
+    // Beautiful, non-blocking window.alert override for sandboxed frames
+    window.alert = (message: string) => {
+      let title = "Notification";
+      const lower = message.toLowerCase();
+      if (message.startsWith("🎉") || lower.includes("success") || lower.includes("successfully") || lower.includes("completed") || lower.includes("congrat")) {
+        title = "Operation Successful";
+      } else if (lower.includes("fail") || lower.includes("error") || lower.includes("invalid") || lower.includes("required") || lower.includes("mandatory") || lower.includes("not allow")) {
+        title = "Action Required";
+      } else if (lower.includes("warn") || lower.includes("caution") || lower.includes("attention")) {
+        title = "System Warning";
+      }
+      setGlobalModalAlert({ title, message });
+    };
+  }, []);
+
   const [globalDateRange, setGlobalDateRangeState] = useState<{ start: string; end: string }>(() => {
     const savedStart = sessionStorage.getItem('erp_global_start_date');
     const savedEnd = sessionStorage.getItem('erp_global_end_date');
@@ -959,6 +978,46 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('erp_equipment', JSON.stringify(equipment));
   }, [equipment]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_leads', JSON.stringify(leads));
+  }, [leads]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_orders', JSON.stringify(orders));
+  }, [orders]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_operations', JSON.stringify(operations));
+  }, [operations]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_raw_footage', JSON.stringify(rawFootage));
+  }, [rawFootage]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_production', JSON.stringify(production));
+  }, [production]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_payments', JSON.stringify(payments));
+  }, [payments]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_notifications', JSON.stringify(notifications));
+  }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_quotations', JSON.stringify(quotations));
+  }, [quotations]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_lead_packages', JSON.stringify(leadPackages));
+  }, [leadPackages]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_packages', JSON.stringify(packages));
+  }, [packages]);
 
   // Track session/auth state in localStorage to keep developer/user logged-in across refreshes
   useEffect(() => {
@@ -1268,13 +1327,35 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log(`[pushUpdate EXECUTING] on ${table}:`, sanitized);
       let { error, data } = await supabaseClient.from(table).update(sanitized).eq(matchColumn, matchValue).select();
       
-      // Automatic fallback for leads check constraint
-      if (error && table === 'leads' && error.message.includes('leads_status_check') && sanitized.status) {
-         console.warn(`[pushUpdate FALLBACK] leads_status_check violated for status: ${sanitized.status}. Stripping status and retrying with current_status only...`);
-         delete sanitized.status;
-         const fallback = await supabaseClient.from(table).update(sanitized).eq(matchColumn, matchValue).select();
-         error = fallback.error;
-         data = fallback.data;
+      // Automatic unified fallback for database check constraints or value exceptions
+      if (error && (
+        error.message.toLowerCase().includes('constraint') || 
+        error.message.toLowerCase().includes('check') || 
+        error.message.toLowerCase().includes('violate') || 
+        error.message.toLowerCase().includes('status_check') ||
+        error.message.toLowerCase().includes('invalid')
+      )) {
+         let fallbackNeeded = false;
+         if (table === 'leads' && sanitized.status) {
+            console.warn(`[pushUpdate FALLBACK] Constraint error on leads for status (${sanitized.status}). Stripping status and retrying with current_status only...`);
+            delete sanitized.status;
+            fallbackNeeded = true;
+         }
+         if (table === 'orders' && sanitized.order_status) {
+            console.warn(`[pushUpdate FALLBACK] Constraint error on orders for stage (${sanitized.current_stage}). Stripping order_status and retrying...`);
+            delete sanitized.order_status;
+            fallbackNeeded = true;
+         }
+         if (table === 'production' && sanitized.editing_status) {
+            console.warn(`[pushUpdate FALLBACK] Constraint error on production for status (${sanitized.editing_status}). Stripping editing_status and retrying...`);
+            delete sanitized.editing_status;
+            fallbackNeeded = true;
+         }
+         if (fallbackNeeded) {
+            const fallback = await supabaseClient.from(table).update(sanitized).eq(matchColumn, matchValue).select();
+            error = fallback.error;
+            data = fallback.data;
+         }
       }
       if (error) {
         console.error(`[pushUpdate ERROR] in ${table}:`, error);
@@ -2287,6 +2368,27 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     logActivity(`Created Lead: ${newLead.customer_name}`, 'Sales', leadId, 'N/A', 'New Lead');
     return leadId;
+  };
+
+  const saveLeadPackages = async (
+    leadId: string,
+    packagesSelected: Omit<LeadPackage, 'lead_package_id' | 'lead_id'>[]
+  ) => {
+    await pushDelete('lead_packages', 'lead_id', leadId);
+
+    if (packagesSelected && packagesSelected.length > 0) {
+      const formattedPackages: LeadPackage[] = packagesSelected.map((pkg, index) => ({
+        ...pkg,
+        lead_package_id: `LP-${leadId}-${index}-${Math.floor(100 + Math.random() * 900)}`,
+        lead_id: leadId,
+        created_at: new Date().toISOString()
+      }));
+      for (const p of formattedPackages) {
+        await pushInsert('lead_packages', p);
+      }
+    }
+
+    await fetchFromDb();
   };
 
   // 2. Lead Follow-Up (Screen 3)
@@ -3837,22 +3939,26 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateLead = (leadId: string, updates: Partial<Lead>) => {
+  const updateLead = async (leadId: string, updates: Partial<Lead>) => {
+    const timestamp = new Date().toISOString();
+    const res = await pushUpdate('leads', 'lead_id', leadId, { ...updates, updated_at: timestamp });
+    
     setLeads((prev) =>
       prev.map((ld) => {
         if (ld.lead_id === leadId) {
-          const timestamp = new Date().toISOString();
           const updated = {
             ...ld,
             ...updates,
             updated_at: timestamp
           };
-          pushUpdate('leads', 'lead_id', leadId, { ...updates, updated_at: timestamp });
           return updated;
         }
         return ld;
       })
     );
+
+    await fetchFromDb();
+    return res;
   };
 
   const [unlockedRecords, setUnlockedRecords] = useState<UnlockOverride[]>(() => {
@@ -3991,6 +4097,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addQuotation,
         updateQuotation,
         updateLead,
+        saveLeadPackages,
         addLead,
         updateLeadFollowUp,
         confirmOrder,
@@ -4035,6 +4142,66 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }}
     >
       {children}
+      
+      {/* Premium responsive Custom Dialog popup replacing native browser alerts */}
+      {globalModalAlert && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-[4px] animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Top gold calibrator ribbon decorator */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 animate-pulse" />
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${
+                  globalModalAlert.title === 'Operation Successful'
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                    : globalModalAlert.title === 'Action Required'
+                    ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold'
+                    : 'bg-amber-500/10 border border-amber-500/20 text-amber-500'
+                }`}>
+                  {globalModalAlert.title === 'Operation Successful' ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : globalModalAlert.title === 'Action Required' ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-mono font-bold tracking-widest uppercase text-zinc-350">
+                    {globalModalAlert.title}
+                  </h4>
+                  <p className="text-[9px] text-zinc-550 uppercase font-mono tracking-wider">
+                    Studio Desk Feedback
+                  </p>
+                </div>
+              </div>
+              
+              <div className="h-px bg-zinc-900" />
+              
+              <p className="text-xs text-zinc-300 font-sans leading-relaxed break-words whitespace-pre-wrap">
+                {globalModalAlert.message}
+              </p>
+              
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setGlobalModalAlert(null)}
+                  className="w-full px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-750 text-zinc-200 text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-center select-none duration-150"
+                >
+                  Acknowledge
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </RoleContext.Provider>
   );
 };

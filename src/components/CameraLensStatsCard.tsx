@@ -202,7 +202,7 @@ export const CameraLensStatsCard: React.FC<CameraLensStatsCardProps> = ({
             )}
           </div>
           <div className="flex items-baseline justify-center sm:justify-start select-none py-0.5">
-            <span className={`${valSizeClass} font-black text-white tracking-tight group-hover/card:scale-105 transition-transform duration-550 origin-left block break-all`}>
+            <span className={`${valSizeClass} font-black text-white tracking-tight group-hover/card:scale-105 transition-transform duration-550 origin-left block whitespace-nowrap text-ellipsis overflow-hidden truncate max-w-full`}>
               {isCurrency || isPercentage ? (
                 <span>{displayVal}</span>
               ) : (
