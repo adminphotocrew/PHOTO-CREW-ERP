@@ -5,8 +5,12 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function check() {
-  const { data, error } = await supabase.from('leads').select('*').limit(1);
-  console.log("Leads columns:", Object.keys(data[0] || {}));
-  if (error) console.error(error);
+  const { data, error } = await supabase.from('operations').select('event_status, operation_id');
+  if (error) {
+    console.error(error);
+  } else {
+    console.log("Operations event_status values:", data);
+  }
 }
 check();
+

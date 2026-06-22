@@ -24,24 +24,37 @@ export const EventScheduling: React.FC = () => {
     return isAvailableStage && o.current_stage !== 'Closed';
   });
 
-  const handleUpdateSchedule = (orderId: string) => {
+  const handleUpdateSchedule = async (orderId: string) => {
     if (!canEdit) return;
     const op = getOpDetails(orderId);
     
-    // Merge existing details and lock stage as Event Scheduled
-    assignOperations(orderId, {
-      photographer_assigned: op?.photographer_assigned || '',
-      videographer_assigned: op?.videographer_assigned || '',
-      drone_operator_assigned: op?.drone_operator_assigned || 'None',
-      assistant_assigned: op?.assistant_assigned || 'None',
-      equipment_kit: op?.equipment_kit || 'Standard Kit',
-      reporting_time: reportingTime,
-      remarks: remarks || op?.remarks || '',
-      current_stage: 'Event Scheduled' as CurrentStage
-    });
+    try {
+      // Merge existing details and lock stage as Event Scheduled
+      await assignOperations(orderId, {
+        photographer_assigned: op?.photographer_assigned || '',
+        videographer_assigned: op?.videographer_assigned || '',
+        drone_operator_assigned: op?.drone_operator_assigned || 'None',
+        assistant_assigned: op?.assistant_assigned || 'None',
+        equipment_kit: op?.equipment_kit || 'Standard Kit',
+        reporting_time: reportingTime,
+        remarks: remarks || op?.remarks || '',
+        current_stage: 'Event Scheduled' as CurrentStage
+      });
 
-    setSchedulingId(null);
-    alert(`Shoot schedule successfully locked. Stage updated to [Event Scheduled]`);
+      setSchedulingId(null);
+      alert(`Shoot schedule successfully locked. Stage updated to [Event Scheduled]`);
+    } catch (err: any) {
+      if (err.message && (
+        err.message.includes('Invalid event status') ||
+        err.message.includes('operations_event_status_check') ||
+        err.message.includes('violates check constraint') ||
+        err.message.includes('status_check')
+      )) {
+        alert("Invalid event status being sent to database.");
+      } else {
+        alert(`Error scheduling event: ${err.message}`);
+      }
+    }
   };
 
   const handlePrepForm = (orderId: string, time: string, rem: string, currentStage: string) => {

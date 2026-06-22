@@ -26,7 +26,9 @@ export const OperationsLeads: React.FC = () => {
     payments,
     equipmentHandovers,
     addEquipmentHandovers,
-    isDepartmentAllowedToEdit
+    isDepartmentAllowedToEdit,
+    leads,
+    leadPackages
   } = useRole();
 
 
@@ -76,8 +78,7 @@ export const OperationsLeads: React.FC = () => {
   const [activeModalOrderId, setActiveModalOrderId] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  const isAllowedToEdit = isDepartmentAllowedToEdit(currentRole, selectedOrder?.current_stage || 'New Lead');
-  const canEdit = (currentRole === 'Operations Team' || currentRole === 'Business Owner') && isAllowedToEdit;
+  const canEdit = (currentRole === 'Operations Team' || currentRole === 'Business Owner');
   const [projectDossierId, setProjectDossierId] = useState<string | null>(null);
   
   // Inline edit state for assignment
@@ -97,6 +98,42 @@ export const OperationsLeads: React.FC = () => {
     event_date: '',
     event_time: '10:00'
   });
+
+  // Find order and lead for assigning modal
+  const activeOrderInstance = useMemo(() => {
+    return assigningOrderId ? orders.find((o) => o.order_id === assigningOrderId) : null;
+  }, [assigningOrderId, orders]);
+
+  const parentLeadInstance = useMemo(() => {
+    return activeOrderInstance ? (leads || []).find((l) => l.lead_id === activeOrderInstance.lead_id) : null;
+  }, [activeOrderInstance, leads]);
+
+  const selectedLeadPkgs = useMemo(() => {
+    return activeOrderInstance && leadPackages 
+      ? leadPackages.filter((lp) => lp.lead_id === (activeOrderInstance.lead_id || activeOrderInstance.order_id)) 
+      : [];
+  }, [activeOrderInstance, leadPackages]);
+
+  const packageDetailsString = useMemo(() => {
+    return selectedLeadPkgs.length > 0 
+      ? selectedLeadPkgs.map((lp) => `${lp.package_name || 'Generic Package'} (Qty: ${lp.quantity || 1}, Cost: ₹${(lp.final_amount ?? lp.total_amount ?? 0).toLocaleString('en-IN')})`).join('\n')
+      : 'No packages listed';
+  }, [selectedLeadPkgs]);
+
+  const { financeTotal, financeAdvance, financePending } = useMemo(() => {
+    if (!activeOrderInstance) return { financeTotal: 0, financeAdvance: 0, financePending: 0 };
+    const totalPaidPayments = payments 
+      ? payments.filter((p) => p.order_id === activeOrderInstance.order_id || p.lead_id === activeOrderInstance.lead_id).reduce((sum, p) => sum + (p.amount_paid || 0), 0)
+      : 0;
+    const authAdvance = activeOrderInstance.advance_received || totalPaidPayments || 0;
+    const authTotal = activeOrderInstance.quotation_amount || (parentLeadInstance ? parentLeadInstance.budget : 0) || 0;
+    const authPending = Math.max(0, authTotal - authAdvance);
+    return {
+      financeTotal: authTotal,
+      financeAdvance: authAdvance,
+      financePending: authPending
+    };
+  }, [activeOrderInstance, parentLeadInstance, payments]);
 
   // State for completing shoot
   const [closingOrderId, setClosingOrderId] = useState<string | null>(null);
@@ -321,13 +358,13 @@ export const OperationsLeads: React.FC = () => {
       drone_operator_assigned: isNewAssignment ? '' : (op?.drone_operator_assigned || ''),
       assistant_assigned: isNewAssignment ? '' : (op?.assistant_assigned || ''),
       equipment_kit: isNewAssignment ? '' : (op?.equipment_kit || ''),
-      reporting_time: isNewAssignment ? '' : (op?.reporting_time || ''),
+      reporting_time: order.reporting_time || op?.reporting_time || '08:00',
       remarks: isNewAssignment ? '' : (op?.remarks || ''),
       event_status: 'Event Scheduled',
       current_stage: order.current_stage || 'Event Scheduled',
       raw_footage_link: isNewAssignment ? '' : (rf?.server_path || ''),
-      event_date: isNewAssignment ? '' : (order.event_date || ''),
-      event_time: isNewAssignment ? '' : (order.event_time || '')
+      event_date: order.event_date || op?.event_date || '',
+      event_time: order.event_time || op?.event_time || ''
     });
     setAssigningOrderId(order.order_id);
     
@@ -428,7 +465,16 @@ export const OperationsLeads: React.FC = () => {
       alert("Crew Assigned Successfully");
     } catch (e: any) {
       console.error("Failed to save assignment:", e);
-      alert("Unable to save assignment. Error: " + (e.message || "Please try again."));
+      if (e.message && (
+        e.message.includes('Invalid event status being sent to database') ||
+        e.message.includes('operations_event_status_check') ||
+        e.message.includes('violates check constraint') ||
+        e.message.includes('status_check')
+      )) {
+        alert("Invalid event status being sent to database.");
+      } else {
+        alert("Unable to save assignment. Error: " + (e.message || "Please try again."));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -818,19 +864,28 @@ export const OperationsLeads: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-850/60 text-xs">
-            {sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received').length > 0 ? (
-              sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received').map((ord) => {
+            {sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received' && o.current_stage !== 'Raw Footage Received').length > 0 ? (
+              sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received' && o.current_stage !== 'Raw Footage Received').map((ord) => {
                 const op = getOpDetails(ord.order_id);
                 const orderAssignments = staffAssignments ? staffAssignments.filter(sa => sa.order_id === ord.order_id) : [];
 
-                // Generate displayable list of crew assigned
-                const crewNames = [
+                // Filter out any "Unassigned", "None", or empty strings to get the actual assigned staff
+                const cleanCrewNames = [
                   op?.photographer_assigned,
                   op?.videographer_assigned,
                   op?.drone_operator_assigned,
                   op?.assistant_assigned,
-                  ...orderAssignments.map(a => `${a.staff_name} (${a.staff_role})`)
-                ].filter(Boolean);
+                  ...orderAssignments.map(a => a.staff_name)
+                ]
+                  .map(name => name?.trim())
+                  .filter((name): name is string => {
+                    if (!name) return false;
+                    const lower = name.toLowerCase();
+                    return lower !== 'unassigned' && lower !== 'none' && lower !== 'not assigned' && lower !== '';
+                  });
+
+                // De-duplicate the clean crew name array
+                const crewNames = Array.from(new Set(cleanCrewNames));
 
                 const currentStage = ord.current_stage || 'Order Confirmed';
 
@@ -865,14 +920,14 @@ export const OperationsLeads: React.FC = () => {
                     <td className="p-4 text-[11px] text-zinc-350 max-w-[220px]">
                       {crewNames.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {Array.from(new Set(crewNames)).map((member, idx) => (
+                          {crewNames.map((member, idx) => (
                             <span key={idx} className="bg-zinc-850 text-zinc-250 px-1.5 py-0.5 rounded border border-zinc-800 text-[10px] font-mono shrink-0">
                               {member}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-zinc-650 italic">Not Assigned</span>
+                        <span className="text-zinc-500 font-mono text-[10.5px]">Unassigned</span>
                       )}
                     </td>
                     <td className="p-4">
@@ -930,7 +985,7 @@ export const OperationsLeads: React.FC = () => {
                                 setReceivingFootageOrderId(ord.order_id);
                                 const existingRf = rawFootage?.find(f => f.order_id === ord.order_id);
                                 setFootageForm({
-                                  footage_link: existingRf?.server_path || `https://drive.google.com/drive/folders/PC-${ord.order_id}-footage`,
+                                  footage_link: (existingRf && (existingRf.raw_received || existingRf.status === 'Received')) ? (existingRf.server_path || '') : '',
                                   storage_type: 'Google Drive',
                                   upload_notes: ''
                                 });
@@ -1006,7 +1061,7 @@ export const OperationsLeads: React.FC = () => {
                               setReceivingFootageOrderId(ord.order_id);
                               const existingRf = rawFootage?.find(f => f.order_id === ord.order_id);
                               setFootageForm({
-                                footage_link: existingRf?.server_path || `https://drive.google.com/drive/folders/PC-${ord.order_id}-footage`,
+                                footage_link: (existingRf && (existingRf.raw_received || existingRf.status === 'Received')) ? (existingRf.server_path || '') : '',
                                 storage_type: 'Google Drive',
                                 upload_notes: ''
                               });
@@ -1117,360 +1172,510 @@ export const OperationsLeads: React.FC = () => {
       {/* Slide-over or Inline modal for Crew and Equipment Assignment */}
       {assigningOrderId && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div id="assign_staff_modal" className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl relative animate-in zoom-in duration-200">
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-              <h3 className="text-xs font-mono font-black uppercase text-amber-500 flex items-center gap-2">
-                <span>⚡</span>
-                <span>Assign operations allocation ~ {assigningOrderId}</span>
-              </h3>
+          <div id="assign_staff_modal" className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-5xl shadow-2xl relative animate-in zoom-in duration-200 overflow-hidden">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/40">
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-500 text-xs font-bold font-mono">Operations</span>
+                <h3 className="text-sm font-sans font-black text-white">
+                  Project Staffing & Handover Dossier ~ {assigningOrderId}
+                </h3>
+              </div>
               <button 
                 onClick={() => setAssigningOrderId(null)}
-                className="text-zinc-500 hover:text-white font-bold cursor-pointer"
+                className="text-zinc-500 hover:text-white font-bold cursor-pointer transition-colors p-1"
+                type="button"
               >
                 ✕
               </button>
             </div>
-            <form onSubmit={handleAssignSubmit} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* ADVANCED ROLE ALLOCATOR */}
-                <div className="col-span-2 bg-zinc-950/60 p-3.5 rounded-xl border border-zinc-850 space-y-3">
-                  <h4 className="text-[11px] font-mono font-bold uppercase text-amber-500 tracking-wider">
-                    Crew Allocation (Multi-Role Assignment)
-                  </h4>
-                  
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-[10px] font-mono text-zinc-400 mb-1">Select Role</label>
-                      <select
-                        value={selectedRole}
-                        onChange={(e) => {
-                          const role = e.target.value;
-                          setSelectedRole(role);
-                          // select first available staff member as default
-                          const available = getStaffForRole(role);
-                          if (available.length > 0) {
-                            setSelectedStaff(available[0].name);
-                          } else {
-                            setSelectedStaff('');
-                          }
-                        }}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-100"
-                      >
-                        <option value="Lead Photographer">Lead Photographer</option>
-                        <option value="Associate Photographer">Associate Photographer</option>
-                        <option value="Lead Videographer">Lead Videographer</option>
-                        <option value="Drone & Aerial Operator">Drone & Aerial Operator</option>
-                        <option value="Production Assistant">Production Assistant</option>
-                        <option value="Post-Production Editor">Post-Production Editor</option>
-                      </select>
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-[10px] font-mono text-zinc-400 mb-1">Select Member</label>
-                      <select
-                        value={selectedStaff}
-                        onChange={(e) => setSelectedStaff(e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-100"
-                      >
-                        <option value="">-- Choose Staff member --</option>
-                        {getStaffForRole(selectedRole).map(st => (
-                          <option key={st.staff_id} value={st.name}>{st.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!selectedStaff) {
-                          alert('Please select a staff member first.');
-                          return;
-                        }
-                        const memberInfo = getStaffForRole(selectedRole).find(st => st.name === selectedStaff);
-                        const staffId = memberInfo?.staff_id || 'MOCK-' + Math.random().toString(36).substr(2, 4).toUpperCase();
-                        
-                        // Check if role is already assigned for this member
-                        const dupe = activeAssignments.some(a => a.staff_role === selectedRole && a.staff_name === selectedStaff);
-                        if (dupe) {
-                          alert('This member is already assigned to this role.');
-                          return;
-                        }
-                        
-                        setActiveAssignments([...activeAssignments, {
-                          staff_role: selectedRole,
-                          staff_id: staffId,
-                          staff_name: selectedStaff
-                        }]);
-                      }}
-                      className="mt-5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1 h-[36px]"
-                    >
-                      <span>+</span>
-                      <span>Assign</span>
-                    </button>
+            <form onSubmit={handleAssignSubmit} className="flex flex-col">
+              <div className="p-5 overflow-y-auto max-h-[75vh] grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* LEFT SIDE: Sales Handover Dossier (Locked / Read-Only) */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-2">
+                    <span className="text-amber-500 font-bold block">🔒</span>
+                    <span>Sales Handover Dossier (Locked)</span>
                   </div>
 
-                  {/* Summary lists */}
-                  <div className="space-y-1.5 pt-1.5 border-t border-zinc-850/60">
-                    <label className="block text-[10px] font-mono text-zinc-400 font-bold uppercase">
-                      Current Allocation Summary:
-                    </label>
-                    {activeAssignments.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {activeAssignments.map((a, idx) => (
-                          <div 
-                            key={idx} 
-                            className="bg-zinc-900/90 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-zinc-350 flex items-center gap-1.5"
-                          >
-                            <span className="font-mono text-[10px] text-zinc-500">{a.staff_role}:</span>
-                            <span className="font-semibold text-amber-400">{a.staff_name}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveAssignments(activeAssignments.filter((_, i) => i !== idx));
-                              }}
-                              className="text-zinc-500 hover:text-rose-400 font-bold ml-1 text-[10px] cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
+                  {/* Customer Information Card */}
+                  <div className="bg-zinc-950/45 border border-zinc-850 p-4 rounded-2xl space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-3 text-[10px] text-zinc-655 select-none">
+                      👤 CUSTOMER
+                    </div>
+                    <h4 className="text-[11px] font-mono font-bold uppercase text-amber-500 tracking-wider">
+                      Customer Information
+                    </h4>
+                    <div className="space-y-2.5 text-xs">
+                      <div>
+                        <span className="text-[10px] text-zinc-500 block uppercase font-mono">Customer Name</span>
+                        <span className="font-bold text-white font-sans text-xs block">
+                          {activeOrderInstance?.customer_name || parentLeadInstance?.customer_name || 'N/A'}
+                        </span>
                       </div>
-                    ) : (
-                      <div className="text-[10px] text-zinc-500 italic">No personnel assigned to this project yet. Please assign at least one staff member above.</div>
-                    )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] text-zinc-500 block uppercase font-mono">Mobile Number</span>
+                          <span className="font-mono text-zinc-200 font-medium block">
+                            {activeOrderInstance?.mobile || parentLeadInstance?.mobile || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">WhatsApp Number</span>
+                          <span className="font-mono text-zinc-200 font-medium flex items-center gap-1">
+                            {parentLeadInstance?.whatsapp_number || parentLeadInstance?.mobile || activeOrderInstance?.mobile || 'N/A'}
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-505 block uppercase font-mono">Email Coordinates</span>
+                        <span className="text-zinc-300 font-mono text-[11px] break-all block">
+                          {parentLeadInstance?.email || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">Full Address</span>
+                          <span className="text-zinc-200 font-sans text-[11px] block leading-tight">
+                            {parentLeadInstance?.address || activeOrderInstance?.event_location || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-550 block uppercase font-mono">City</span>
+                          <span className="text-zinc-200 font-bold uppercase font-mono text-[11px] block">
+                            {parentLeadInstance?.city || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Event Information Card */}
+                  <div className="bg-zinc-950/45 border border-zinc-850 p-4 rounded-2xl space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-3 text-[10px] text-zinc-655 select-none">
+                      🎥 EVENT
+                    </div>
+                    <h4 className="text-[11px] font-mono font-bold uppercase text-amber-500 tracking-wider">
+                      Event & Package Coordinates
+                    </h4>
+                    <div className="space-y-2.5 text-xs">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">Event Type</span>
+                          <span className="font-semibold text-white uppercase text-[11px] block">
+                            {activeOrderInstance?.event_type || parentLeadInstance?.event_type || 'N/A'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">Shoot Type</span>
+                          <span className="text-zinc-350 font-medium uppercase text-[11px] block">
+                            {activeOrderInstance?.shoot_type || parentLeadInstance?.shoot_type || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-t border-b border-zinc-900 py-2">
+                        <div>
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">Event Date</span>
+                          <span className="font-mono text-white font-bold block">{activeOrderInstance?.event_date || parentLeadInstance?.event_date || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">Event Timing</span>
+                          <span className="font-mono text-zinc-300 block">{activeOrderInstance?.event_time || parentLeadInstance?.event_time || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-505 block uppercase font-mono">Reporting</span>
+                          <span className="font-mono text-amber-400 font-extrabold block">{activeOrderInstance?.reporting_time || parentLeadInstance?.reporting_time || '08:00 AM'}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-505 block uppercase font-mono">Confirmed Package Name</span>
+                        <span className="text-white font-medium block">
+                          {activeOrderInstance?.package_name || 'Custom Shoot Package'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-505 block uppercase font-mono">Package Composition & Line Items</span>
+                        <div className="text-zinc-300 bg-zinc-950/80 px-2.5 py-1.5 rounded-xl border border-zinc-900 font-mono text-[10.5px] whitespace-pre-wrap leading-relaxed max-h-24 overflow-y-auto">
+                          {packageDetailsString}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-505 block uppercase font-mono">CRM Special Notes / Customer Request</span>
+                        <div className="text-zinc-350 italic font-sans text-xs bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900 leading-relaxed max-h-24 overflow-y-auto">
+                          {parentLeadInstance?.remarks || 'No remarks provided.'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Information Card */}
+                  <div className="bg-zinc-950/45 border border-zinc-850 p-4 rounded-2xl space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-3 text-[10px] text-zinc-655 select-none">
+                      💰 FINANCE
+                    </div>
+                    <h4 className="text-[11px] font-mono font-bold uppercase text-emerald-400 tracking-wider">
+                      Financial Summary (View-Only)
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2.5 text-center leading-normal">
+                      <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-900">
+                        <span className="text-[9px] text-zinc-505 block uppercase font-mono">Total Quote</span>
+                        <span className="font-black text-white text-xs font-mono block mt-0.5">₹{financeTotal.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-900">
+                        <span className="text-[9px] text-zinc-550 block uppercase font-mono">Advance Paid</span>
+                        <span className="font-black text-emerald-400 text-xs font-mono block mt-0.5">₹{financeAdvance.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-900">
+                        <span className="text-[9px] text-zinc-550 block uppercase font-mono">Pending Bal</span>
+                        <span className="font-black text-amber-500 text-xs font-mono block mt-0.5">₹{financePending.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Equipment Custom Selection */}
-                <div className="col-span-2 relative">
-                  <label className="block text-[11px] font-mono font-extrabold uppercase text-zinc-400 mb-1">
-                    Assign Equipment Kits & Assemblies *
-                  </label>
-                  
-                  {/* Search and drop-down clicker */}
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        placeholder="Type to search equipment (e.g. Drone, Camera...)"
-                        value={equipmentSearchQuery}
-                        onFocus={() => setIsEquipmentDropdownOpen(true)}
-                        onChange={(e) => setEquipmentSearchQuery(e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-805 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-505 focus:border-amber-400 focus:outline-none"
-                      />
-                      {equipmentSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setEquipmentSearchQuery('')}
-                          className="absolute right-2.5 top-2.5 text-zinc-500 hover:text-zinc-300"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsEquipmentDropdownOpen(!isEquipmentDropdownOpen)}
-                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold font-mono border border-zinc-750"
-                    >
-                      {isEquipmentDropdownOpen ? 'Close ▴' : 'Browse ▾'}
-                    </button>
+                {/* RIGHT SIDE: Operations Allocations (Active Input) */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-2">
+                    <span className="text-sky-400 font-bold block">🛠️</span>
+                    <span>Staff Crew & Equipment Assignments</span>
                   </div>
 
-                  {/* Dropdown Options List */}
-                  {isEquipmentDropdownOpen && (() => {
-                    const filteredGearOptions = availableGearOptions.filter(opt =>
-                      opt.toLowerCase().includes(equipmentSearchQuery.toLowerCase())
-                    );
+                  {/* Crew Assignment Section */}
+                  <div className="bg-zinc-950/60 p-4 rounded-2xl border border-zinc-850 space-y-3">
+                    <h4 className="text-[11px] font-mono font-bold uppercase text-amber-500 tracking-wider">
+                      Crew Allocation (Multi-Role Assignment)
+                    </h4>
                     
-                    return (
-                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl divide-y divide-zinc-900">
-                        {filteredGearOptions.length > 0 ? (
-                          filteredGearOptions.map((opt, i) => {
-                            const isSelected = selectedKits.includes(opt);
-                            return (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-mono text-zinc-400 mb-1">Select Role</label>
+                        <select
+                          value={selectedRole}
+                          onChange={(e) => {
+                            const role = e.target.value;
+                            setSelectedRole(role);
+                            const available = getStaffForRole(role);
+                            if (available.length > 0) {
+                              setSelectedStaff(available[0].name);
+                            } else {
+                              setSelectedStaff('');
+                            }
+                          }}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="Lead Photographer">Lead Photographer</option>
+                          <option value="Associate Photographer">Associate Photographer</option>
+                          <option value="Lead Videographer">Lead Videographer</option>
+                          <option value="Drone & Aerial Operator">Drone & Aerial Operator</option>
+                          <option value="Production Assistant">Production Assistant</option>
+                          <option value="Post-Production Editor">Post-Production Editor</option>
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-mono text-zinc-400 mb-1">Select Member</label>
+                        <select
+                          value={selectedStaff}
+                          onChange={(e) => setSelectedStaff(e.target.value)}
+                          className="w-full bg-zinc-900 border border-zinc-805 rounded-lg p-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="">-- Choose Staff member --</option>
+                          {getStaffForRole(selectedRole).map(st => (
+                            <option key={st.staff_id} value={st.name}>{st.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedStaff) {
+                            alert('Please select a staff member first.');
+                            return;
+                          }
+                          const memberInfo = getStaffForRole(selectedRole).find(st => st.name === selectedStaff);
+                          const staffId = memberInfo?.staff_id || 'MOCK-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+                          
+                          const dupe = activeAssignments.some(a => a.staff_role === selectedRole && a.staff_name === selectedStaff);
+                          if (dupe) {
+                            alert('This member is already assigned to this role.');
+                            return;
+                          }
+                          
+                          setActiveAssignments([...activeAssignments, {
+                            staff_role: selectedRole,
+                            staff_id: staffId,
+                            staff_name: selectedStaff
+                          }]);
+                        }}
+                        className="sm:mt-5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1 h-[36px]"
+                      >
+                        <span>+</span>
+                        <span>Assign</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-zinc-850/60">
+                      <label className="block text-[10px] font-mono text-zinc-400 font-bold uppercase">
+                        Current Allocation Summary:
+                      </label>
+                      {activeAssignments.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeAssignments.map((a, idx) => (
+                            <div 
+                              key={idx} 
+                              className="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-[11px] text-zinc-300 flex items-center gap-1.5"
+                            >
+                              <span className="font-mono text-[10px] text-zinc-500">{a.staff_role}:</span>
+                              <span className="font-semibold text-amber-400">{a.staff_name}</span>
                               <button
-                                key={i}
                                 type="button"
                                 onClick={() => {
-                                  if (isSelected) {
-                                    const updated = selectedKits.filter(k => k !== opt);
-                                    setSelectedKits(updated);
-                                    setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
-                                  } else {
-                                    const updated = [...selectedKits, opt];
-                                    setSelectedKits(updated);
-                                    setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
-                                  }
+                                  setActiveAssignments(activeAssignments.filter((_, i) => i !== idx));
                                 }}
-                                className={`w-full text-left px-4 py-2.5 text-xs transition-colors cursor-pointer flex items-center justify-between ${
-                                  isSelected 
-                                    ? 'bg-amber-400/10 text-amber-300 font-bold' 
-                                    : 'hover:bg-zinc-900 text-zinc-300'
-                                }`}
+                                className="text-zinc-500 hover:text-rose-400 font-bold ml-1 text-[10px] cursor-pointer"
                               >
-                                <span>{opt}</span>
-                                {isSelected ? (
-                                  <span className="text-amber-500 text-[10px] font-mono">✓ Selected</span>
-                                ) : (
-                                  <span className="text-zinc-600 text-[10px] font-mono">+ Add</span>
-                                )}
+                                ✕
                               </button>
-                            );
-                          })
-                        ) : (
-                          <div className="p-4 text-xs text-zinc-500 italic text-center">
-                            No equipment found matching "{equipmentSearchQuery}"
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-zinc-500 italic">No personnel assigned to this project yet. Please assign staff above.</div>
+                      )}
+                    </div>
+                  </div>
 
-                  {/* Selected Equipment Display: removable chips/tags */}
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {selectedKits.length > 0 ? (
-                      selectedKits.map((kit, index) => (
-                        <span 
-                          key={index} 
-                          className="bg-amber-400/10 text-amber-300 px-2.5 py-1 rounded-lg text-[10.5px] font-mono font-medium flex items-center gap-1.5 border border-amber-400/15"
-                        >
-                          <span>{kit}</span>
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              const updated = selectedKits.filter(k => k !== kit);
-                              setSelectedKits(updated);
-                              setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
-                            }} 
-                            className="text-amber-500 hover:text-rose-400 font-bold text-xs"
+                  {/* Equipment Allocation */}
+                  <div className="bg-zinc-950/60 p-4 rounded-2xl border border-zinc-850 space-y-3 relative">
+                    <label className="block text-[11px] font-mono font-extrabold uppercase text-zinc-400">
+                      Assign Equipment Kits & Assemblies
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          placeholder="Type to search equipment (e.g. Drone, Camera...)"
+                          value={equipmentSearchQuery}
+                          onFocus={() => setIsEquipmentDropdownOpen(true)}
+                          onChange={(e) => setEquipmentSearchQuery(e.target.value)}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                        />
+                        {equipmentSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setEquipmentSearchQuery('')}
+                            className="absolute right-2.5 top-2.5 text-zinc-500 hover:text-zinc-300"
                           >
                             ✕
                           </button>
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-[10px] text-zinc-500 italic">No equipment kits or assemblies selected for this operation shoot. Please browse and select.</span>
-                    )}
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsEquipmentDropdownOpen(!isEquipmentDropdownOpen)}
+                        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold font-mono border border-zinc-750"
+                      >
+                        {isEquipmentDropdownOpen ? 'Close ▴' : 'Browse ▾'}
+                      </button>
+                    </div>
+
+                    {isEquipmentDropdownOpen && (() => {
+                      const filteredGearOptions = availableGearOptions.filter(opt =>
+                        opt.toLowerCase().includes(equipmentSearchQuery.toLowerCase())
+                      );
+                      
+                      return (
+                        <div className="absolute left-4 right-4 z-50 mt-1 max-h-56 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl divide-y divide-zinc-900">
+                          {filteredGearOptions.length > 0 ? (
+                            filteredGearOptions.map((opt, i) => {
+                              const isSelected = selectedKits.includes(opt);
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      const updated = selectedKits.filter(k => k !== opt);
+                                      setSelectedKits(updated);
+                                      setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
+                                    } else {
+                                      const updated = [...selectedKits, opt];
+                                      setSelectedKits(updated);
+                                      setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
+                                    }
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-xs transition-colors cursor-pointer flex items-center justify-between ${
+                                    isSelected 
+                                      ? 'bg-amber-400/10 text-amber-300 font-bold' 
+                                      : 'hover:bg-zinc-900 text-zinc-300'
+                                  }`}
+                                >
+                                  <span>{opt}</span>
+                                  {isSelected ? (
+                                    <span className="text-amber-500 text-[10px] font-mono">✓ Selected</span>
+                                  ) : (
+                                    <span className="text-zinc-600 text-[10px] font-mono">+ Add</span>
+                                  )}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="p-4 text-xs italic text-center text-zinc-500">
+                              No equipment matching "{equipmentSearchQuery}"
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {selectedKits.length > 0 ? (
+                        selectedKits.map((kit, index) => (
+                          <span 
+                            key={index} 
+                            className="bg-amber-400/15 text-amber-300 px-2.5 py-1 rounded-lg text-[10.5px] font-mono font-medium flex items-center gap-1.5 border border-amber-400/20"
+                          >
+                            <span>{kit}</span>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const updated = selectedKits.filter(k => k !== kit);
+                                setSelectedKits(updated);
+                                setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
+                              }} 
+                              className="text-amber-500 hover:text-rose-400 font-bold text-xs"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-zinc-550 italic">No equipment kits or assemblies assigned. Please select.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Read-Only Prefilled Timings */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-zinc-950/40 p-4 rounded-2xl border border-zinc-850">
+                    <div>
+                      <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-zinc-500 flex items-center gap-1 select-none">
+                        <span>🔒</span> <span>Event Date</span>
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        readOnly
+                        value={assignForm.event_date}
+                        className="w-full bg-zinc-950/80 border border-zinc-900 text-zinc-400 rounded-xl px-3 py-2 text-xs font-mono cursor-not-allowed select-none animate-pulse"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-zinc-500 flex items-center gap-1 select-none">
+                        <span>🔒</span> <span>Event Time</span>
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        readOnly
+                        value={assignForm.event_time}
+                        className="w-full bg-zinc-950/80 border border-zinc-900 text-zinc-400 rounded-xl px-3 py-2 text-xs font-mono cursor-not-allowed select-none animate-pulse"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-zinc-500 flex items-center gap-1 select-none">
+                        <span>🔒</span> <span>Reporting Time</span>
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        readOnly
+                        value={assignForm.reporting_time || '08:00'}
+                        className="w-full bg-zinc-950/80 border border-zinc-900 text-zinc-400 rounded-xl px-3 py-2 text-xs font-mono cursor-not-allowed select-none animate-pulse"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Operational Notes Remarks */}
+                  <div>
+                    <label className="block text-[11px] font-mono font-extrabold uppercase text-zinc-400 mb-1">
+                      Operations Remarks & Staff Instructions (Safety/Site clearance notes)
+                    </label>
+                    <textarea
+                      rows={2.5}
+                      value={assignForm.remarks}
+                      onChange={(e) => setAssignForm({ ...assignForm, remarks: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-2.5 text-xs text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-amber-400"
+                      placeholder="Enter specific team alerts, logistics, backup setup coordinates, or instructions for assigned staff..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Workflow Dashboard Status */}
+                    <div>
+                      <label className="block text-[11px] font-mono font-extrabold uppercase text-amber-500 mb-1">
+                        Workflow Stage Selection
+                      </label>
+                      <select
+                        value={assignForm.current_stage}
+                        onChange={(e) => setAssignForm({ ...assignForm, current_stage: e.target.value as CurrentStage })}
+                        className="w-full bg-zinc-950 border border-amber-500/20 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="Order Confirmed">Order Confirmed</option>
+                        <option value="Operations Assigned">Operations Assigned</option>
+                        <option value="Event Scheduled">Event Scheduled</option>
+                        <option value="Event Completed">Event Completed</option>
+                        <option value="Raw Footage Received">Raw Footage Received</option>
+                      </select>
+                    </div>
+
+                    {/* Operational Event In progress Status */}
+                    <div>
+                      <label className="block text-[11px] font-zinc-400 font-mono font-extrabold uppercase mb-1 text-sky-400">
+                        Operational Status
+                      </label>
+                      <select
+                        value={assignForm.event_status}
+                        onChange={(e) => setAssignForm({ ...assignForm, event_status: e.target.value as 'Assigned' | 'Completed' })}
+                        className="w-full bg-zinc-950 border border-sky-500/20 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+                      >
+                        <option value="Assigned">Assigned / In Progress</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* S3 or Drive folder link */}
+                  <div>
+                    <label className="block text-[11px] font-mono font-extrabold uppercase text-purple-400 mb-1">
+                      Raw Footage Vault link (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={assignForm.raw_footage_link}
+                      onChange={(e) => setAssignForm({ ...assignForm, raw_footage_link: e.target.value })}
+                      className="w-full bg-zinc-950 border border-purple-500/20 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none font-medium"
+                      placeholder="s3://vault-studio-production/ORD-.../raw/"
+                    />
                   </div>
                 </div>
 
-                {/* Event Date */}
-                <div>
-                  <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-amber-500">
-                    Event Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={assignForm.event_date}
-                    onChange={(e) => setAssignForm({ ...assignForm, event_date: e.target.value })}
-                    className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-                  />
-                </div>
-
-                {/* Event Time */}
-                <div>
-                  <label className="block text-[11px] font-mono font-extrabold uppercase mb-1 text-amber-500">
-                    Event Time *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 10:00 AM - 6:00 PM"
-                    required
-                    value={assignForm.event_time}
-                    onChange={(e) => setAssignForm({ ...assignForm, event_time: e.target.value })}
-                    className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-                  />
-                </div>
-
-                {/* Reporting Time */}
-                <div>
-                  <label className="block text-[11px] font-zinc-400 font-mono font-extrabold uppercase mb-1">
-                    Reporting Time
-                  </label>
-                  <input
-                    type="time"
-                    value={assignForm.reporting_time}
-                    onChange={(e) => setAssignForm({ ...assignForm, reporting_time: e.target.value })}
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-                  />
-                </div>
-
-                {/* Operations Remarks */}
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-mono font-extrabold uppercase text-zinc-400 mb-1">
-                    Safety Brief or Site clearance notes
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={assignForm.remarks}
-                    onChange={(e) => setAssignForm({ ...assignForm, remarks: e.target.value })}
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-2.5 text-xs text-zinc-100"
-                    placeholder="Enter site project conditions or specifics..."
-                  />
-                </div>
-
-                {/* Current Stage Selection */}
-                <div>
-                  <label className="block text-[11px] font-mono font-extrabold uppercase text-amber-500 mb-1">
-                    Current Workflow Stage / Dashboard
-                  </label>
-                  <select
-                    value={assignForm.current_stage}
-                    onChange={(e) => setAssignForm({ ...assignForm, current_stage: e.target.value as CurrentStage })}
-                    className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100"
-                  >
-                    <option value="Order Confirmed">Order Confirmed</option>
-                    <option value="Operations Assigned">Operations Assigned</option>
-                    <option value="Event Scheduled">Event Scheduled</option>
-                    <option value="Event Completed">Event Completed</option>
-                    <option value="Raw Footage Received">Raw Footage Received</option>
-                  </select>
-                </div>
-
-                {/* Event Status Selection */}
-                <div>
-                  <label className="block text-[11px] font-zinc-400 font-mono font-extrabold uppercase mb-1 text-sky-400">
-                    Event Operational Status
-                  </label>
-                  <select
-                    value={assignForm.event_status}
-                    onChange={(e) => setAssignForm({ ...assignForm, event_status: e.target.value as 'Assigned' | 'Completed' })}
-                    className="w-full bg-zinc-950 border border-sky-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100"
-                  >
-                    <option value="Assigned">Assigned / In Progress</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
-
-                {/* Raw Footage Link */}
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-mono font-extrabold uppercase text-purple-400 mb-1">
-                    Raw Footage Link (S3/Cloud storage path)
-                  </label>
-                  <input
-                    type="text"
-                    value={assignForm.raw_footage_link}
-                    onChange={(e) => setAssignForm({ ...assignForm, raw_footage_link: e.target.value })}
-                    className="w-full bg-zinc-950 border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-                    placeholder="s3://photocrew-vault-production/2026/ORD-.../raw/"
-                  />
-                </div>
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
+              {/* Form Actions Footer */}
+              <div className="flex justify-end gap-2 border-t border-zinc-800 p-4 bg-zinc-950/40">
                 <button
                   type="button"
                   onClick={() => setAssigningOrderId(null)}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-xl cursor-pointer"
+                  className="px-5 py-2 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-xs rounded-xl cursor-pointer duration-150 font-mono uppercase tracking-wider text-[11px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5"
+                  className="px-6 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-black text-xs rounded-xl cursor-pointer flex items-center gap-1.5 duration-150 font-mono uppercase tracking-wider text-[11px]"
                 >
-                  {isSaving ? 'Saving...' : 'Confirm Allocation'}
+                  {isSaving ? 'Synchronizing...' : 'Save Allocation'}
                 </button>
               </div>
             </form>
@@ -1828,6 +2033,7 @@ Please report on time and update status through the portal.`;
                 </label>
                 <input
                   type="url"
+                  required
                   value={footageForm.footage_link}
                   onChange={(e) => setFootageForm({ ...footageForm, footage_link: e.target.value })}
                   placeholder="e.g. https://drive.google.com/drive/folders/..."

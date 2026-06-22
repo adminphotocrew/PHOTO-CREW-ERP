@@ -1261,6 +1261,16 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           sanitized[col] = cloned[col];
         }
       }
+      if (table === 'production' && sanitized.editing_status) {
+        const allowed = ['Pending', 'Editing', 'Customer Review', 'Revision Required', 'Approved', 'Delivered'];
+        if (!allowed.includes(sanitized.editing_status)) {
+          if (['Closed', 'Project Closed', 'Completed', 'Project Delivered'].includes(sanitized.editing_status)) {
+            sanitized.editing_status = 'Delivered';
+          } else {
+            sanitized.editing_status = 'Pending';
+          }
+        }
+      }
       return sanitized;
     }
 
@@ -2551,11 +2561,37 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetStatus = event_status || 'Event Scheduled';
     const targetStageNum: CurrentStage = current_stage || 'Event Scheduled';
 
+    // Step 2 & 4: Only allow exact workflow statuses, throw custom error on spelling variations
+    const allowedWorkflowStatuses = [
+      'Order Confirmed',
+      'Event Scheduled',
+      'Event Completed',
+      'Event Cancelled',
+      'Raw Footage Received',
+      'Assigned',
+      'Completed'
+    ];
+    if (!allowedWorkflowStatuses.includes(targetStatus)) {
+      throw new Error(`Invalid event status being sent to database.`);
+    }
+
+    // Map event_status to match DB constraint: CHECK (event_status IN ('Assigned', 'Completed'))
+    let dbEventStatus = 'Assigned';
+    if (
+      targetStatus === 'Completed' || 
+      targetStatus === 'Event Completed' || 
+      targetStatus === 'Raw Footage Received'
+    ) {
+      dbEventStatus = 'Completed';
+    } else {
+      dbEventStatus = 'Assigned';
+    }
+
     const newOp: Operation = {
       operation_id: opId,
       order_id: orderId,
       ...restOpData,
-      event_status: targetStatus,
+      event_status: dbEventStatus,
       updated_by: currentUserName,
     };
 
@@ -2594,6 +2630,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const resOp = await pushUpsert('operations', newOp);
     if (!resOp?.success) {
+      if (resOp?.error?.toLowerCase().includes('operations_event_status_check') || resOp?.error?.toLowerCase().includes('status_check')) {
+        throw new Error('Invalid event status being sent to database.');
+      }
       throw new Error(resOp?.error || "Failed to update operation crew data.");
     }
 
@@ -3080,8 +3119,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error("Failed to update lead status: " + rLead?.error);
     }
 
-    // Also update event_status of corresponding Operations record to 'Raw Footage Received' if exists
-    await pushUpdate('operations', 'order_id', orderId, { event_status: 'Raw Footage Received' });
+    // Also update event_status of corresponding Operations record to 'Completed' (which satisfies DB constraint ('Assigned', 'Completed')) if exists
+    await pushUpdate('operations', 'order_id', orderId, { event_status: 'Completed' });
 
     let existingRf = rawFootage.find(f => f.order_id === orderId);
     let trackingId = existingRf?.tracking_id || `TRK-${Math.floor(2012 + Math.random() * 850)}`;
