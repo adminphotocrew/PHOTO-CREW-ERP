@@ -6,6 +6,7 @@ export type UserRole = 'Business Owner' | 'Sales Team' | 'Operations Team' | 'Pr
 
 export const EVENT_TYPES = [
   'Weddings',
+  'Hamarlok Weddings',
   'Hindu/Malayali Weddings',
   'Engagement',
   'Pre Weddings',

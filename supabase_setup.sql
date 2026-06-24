@@ -60,10 +60,10 @@ CREATE TABLE public.leads (
     budget NUMERIC NOT NULL CHECK (budget >= 0),
     sales_person VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL CHECK (status IN (
-        'New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 
-        'Operations Assigned', 'Event Completed', 'Raw Footage Received', 'Editor Assigned',
-        'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Client Review Sent', 'Customer Review', 'Revision Required', 'Revision In Progress', 'Final Approval', 'Approved', 'Project Delivered', 'Delivered', 
-        'Payment Pending', 'Project Closed', 'Closed'
+        'New Lead', 'Contacted', 'Follow Up', 'Follow-up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 'Lost Lead',
+        'New Order Received', 'Operations Assigned', 'Staff Assigned', 'Event Scheduled', 'Event Completed', 'Event Cancelled', 'Raw Footage Received', 'Operations Stage',
+        'New Project Received', 'Editor Assigned', 'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Customer Review', 'Client Review', 'Client Review Sent', 'Revision Required', 'Revision In Progress', 'Final Approval', 'Approved', 'Client Approved', 'Project Delivered', 'Delivered', 
+        'Payment Pending', 'Project Closed', 'Closed', 'Project On Hold', 'Project Cancelled'
     )),
     remarks TEXT,
     created_by VARCHAR(255) NOT NULL,
@@ -77,8 +77,9 @@ CREATE TABLE public.leads (
     CONSTRAINT leads_event_type_check CHECK (
       event_type IN (
         'Weddings',
-        'Hindu/Malayali Weddings',
+        'Hamarlok Weddings',
         'Hamarlok weddings',
+        'Hindu/Malayali Weddings',
         'Engagement',
         'Pre Weddings',
         'Maternity',
@@ -175,10 +176,10 @@ CREATE TABLE public.orders (
     balance_amount NUMERIC NOT NULL CHECK (balance_amount >= 0),
     order_status VARCHAR(50) NOT NULL CHECK (order_status IN ('Confirmed', 'Completed', 'Delivered', 'Paid', 'Closed')),
     current_stage VARCHAR(50) NOT NULL CHECK (current_stage IN (
-        'New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 
-        'Operations Assigned', 'Event Scheduled', 'Event Completed', 'Raw Footage Received', 
-        'Editing Started', 'Customer Review', 'Approved', 'Delivered', 
-        'Payment Pending', 'Closed'
+        'New Lead', 'Contacted', 'Follow Up', 'Follow-up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 'Lost Lead',
+        'New Order Received', 'Operations Assigned', 'Staff Assigned', 'Event Scheduled', 'Event Completed', 'Event Cancelled', 'Raw Footage Received', 'Operations Stage',
+        'New Project Received', 'Editor Assigned', 'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Customer Review', 'Client Review', 'Client Review Sent', 'Revision Required', 'Revision In Progress', 'Final Approval', 'Approved', 'Client Approved', 'Project Delivered', 'Delivered', 
+        'Payment Pending', 'Project Closed', 'Closed', 'Project On Hold', 'Project Cancelled'
     )),
     sales_person VARCHAR(255) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -233,7 +234,7 @@ CREATE TABLE public.production (
     editing_start_date DATE,
     expected_delivery_date DATE,
     editing_status VARCHAR(50) NOT NULL CHECK (editing_status IN (
-        'Pending', 'Editing', 'Customer Review', 'Revision Required', 'Approved', 'Delivered'
+        'Pending', 'Editing', 'Customer Review', 'Client Review', 'Revision Required', 'Approved', 'Client Approved', 'Final Approval', 'Delivered', 'Project Delivered', 'Closed', 'Project Closed', 'Project On Hold', 'Project Cancelled', 'New Project Received', 'Editor Assigned', 'Editing Started', 'Editing In Progress'
     )),
     customer_review_status VARCHAR(50) CHECK (customer_review_status IN ('Pending Review', 'Feedback Given', 'Approved')),
     delivery_date DATE,

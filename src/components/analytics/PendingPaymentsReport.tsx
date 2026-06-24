@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { motion, AnimatePresence } from 'motion/react';
+import { EVENT_TYPES } from '../../types';
 
 export const PendingPaymentsReport: React.FC = () => {
   const { leads, orders, payments, currentUserName, recordPayment } = useRole();
@@ -180,7 +181,7 @@ export const PendingPaymentsReport: React.FC = () => {
 
   // Unique event types for dropdown
   const uniqueEventTypes = useMemo(() => {
-    const types = new Set<string>();
+    const types = new Set<string>(EVENT_TYPES);
     allPendingRecords.forEach(r => {
       if (r.eventType) types.add(r.eventType);
     });

@@ -23,6 +23,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { formatINR, formatTime12Hour } from '../utils';
+import { EVENT_TYPES } from '../types';
 
 interface UnifiedCalendarProps {
   role: 'sales' | 'operations' | 'production' | 'owner' | 'worker';
@@ -543,7 +544,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
 
   // Unique Event Type tags for filtering dropdown
   const uniqueEventTypes = useMemo(() => {
-    const list = new Set<string>();
+    const list = new Set<string>(EVENT_TYPES);
     roleFilteredEvents.forEach(e => {
       if (e.eventType) list.add(e.eventType);
     });

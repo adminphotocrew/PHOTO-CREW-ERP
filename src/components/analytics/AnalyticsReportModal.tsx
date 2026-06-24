@@ -3,6 +3,7 @@ import { X, Download, Printer, Search, FileSpreadsheet, FileDown, CheckCircle, T
 import { DatePreset, DateRange, getPresetDateRange, isDateInRange, TODAY_REF } from './DateFilterHelper';
 import { DatePresetSelector } from './DatePresetSelector';
 import { formatINR } from '../../utils';
+import { EVENT_TYPES } from '../../types';
 import { jsPDF } from 'jspdf';
 import { useRole } from '../RoleContext';
 import * as XLSX from 'xlsx';
@@ -58,7 +59,10 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
 
   const uniqueEventTypes = useMemo(() => {
     if (reportType !== 'sales') return ['All'];
-    const types = new Set(leads.map(l => l.event_type).filter(Boolean));
+    const types = new Set<string>(EVENT_TYPES);
+    leads.forEach(l => {
+      if (l.event_type) types.add(l.event_type);
+    });
     return ['All', ...Array.from(types)];
   }, [leads, reportType]);
 
