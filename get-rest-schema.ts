@@ -10,14 +10,8 @@ async function run() {
   try {
     const res = await fetch(fetchUrl);
     const schema = await res.json();
-    const usersDef = schema.definitions?.users;
-    if (usersDef) {
-      console.log('Columns in REST schema for table "users":');
-      console.log('Properties:', Object.keys(usersDef.properties));
-      console.log('Full Definition:', JSON.stringify(usersDef, null, 2));
-    } else {
-      console.log('Table "users" definition not found in REST schema.');
-    }
+    console.log('Exposed tables in REST schema:');
+    console.log(Object.keys(schema.definitions || {}));
   } catch (err: any) {
     console.error('Error fetching REST schema:', err);
   }

@@ -28,7 +28,8 @@ export const OperationsLeads: React.FC = () => {
     addEquipmentHandovers,
     isDepartmentAllowedToEdit,
     leads,
-    leadPackages
+    leadPackages,
+    updateEquipment
   } = useRole();
 
 
@@ -253,7 +254,11 @@ export const OperationsLeads: React.FC = () => {
   };
 
   const filteredOrders = useMemo(() => {
-    return operationsOrders.filter(o => {
+    const baseSource = (statusFilter === 'Event Completed' || statusFilter === 'All' || statusFilter === 'Event Scheduled') 
+      ? orders 
+      : operationsOrders;
+
+    return baseSource.filter(o => {
       // Search term validation (Search by Customer Name, Order ID, Mobile Number)
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -272,7 +277,9 @@ export const OperationsLeads: React.FC = () => {
         if (statusFilter === 'Operations Assigned' && o.current_stage !== 'Operations Assigned') return false;
         if (statusFilter === 'Staff Assigned' && !isStaffAssigned) return false;
         if (statusFilter === 'Event Scheduled' && o.current_stage !== 'Event Scheduled') return false;
-        if (statusFilter === 'Event Completed' && o.current_stage !== 'Event Completed') return false;
+        if (statusFilter === 'Event Completed') {
+          return isCompletedEvent(o);
+        }
         if (statusFilter === 'Raw Footage Received' && o.current_stage !== 'Raw Footage Received') return false;
 
         // Custom stats click metrics
@@ -298,13 +305,16 @@ export const OperationsLeads: React.FC = () => {
       return true;
     });
   }, [
+    orders,
     operationsOrders,
     searchTerm,
     statusFilter,
     dateFilter,
     customStartDate,
     customEndDate,
-    staffAssignments
+    staffAssignments,
+    rawFootage,
+    operations
   ]);
 
   // Sorted list implementation
@@ -413,6 +423,33 @@ export const OperationsLeads: React.FC = () => {
       setIsSaving(true);
       // First save the multi-staff role assignments to Supabase & Context state!
       await saveStaffAssignments(assigningOrderId, activeAssignments);
+
+      // Update equipment status in real-time
+      if (equipment && updateEquipment) {
+        const op = getOpDetails(assigningOrderId);
+        const previousKits = op?.equipment_kit ? op.equipment_kit.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+        const removedKits = previousKits.filter(pk => !selectedKits.includes(pk));
+        
+        for (const kitStr of removedKits) {
+          const found = equipment.find(eq => 
+            eq.name === kitStr || 
+            `${eq.name} [${eq.brand} ${eq.model}]` === kitStr
+          );
+          if (found) {
+            await updateEquipment(found.equipment_id, { status: 'Available' });
+          }
+        }
+
+        for (const kitStr of selectedKits) {
+          const found = equipment.find(eq => 
+            eq.name === kitStr || 
+            `${eq.name} [${eq.brand} ${eq.model}]` === kitStr
+          );
+          if (found) {
+            await updateEquipment(found.equipment_id, { status: 'Assigned' });
+          }
+        }
+      }
 
       // Map some main ones to assignForm variables for legacy column compatibility
       const photographer = activeAssignments.find(a => a.staff_role.toLowerCase().includes('photographer'))?.staff_name || '';
@@ -560,12 +597,36 @@ export const OperationsLeads: React.FC = () => {
     alert(`Shoot marked completed for [${closingOrderId}]!`);
   };
 
+  const isCompletedEvent = (o: Order) => {
+    const completedStages = [
+      'Event Completed',
+      'Raw Footage Received',
+      'Editor Assigned',
+      'Editing Started',
+      'Editing In Progress',
+      'Internal QC Review',
+      'Client Review Sent',
+      'Revision Required',
+      'Revision In Progress',
+      'Final Approval',
+      'Project Delivered',
+      'Project Closed',
+      'Customer Review',
+      'Approved',
+      'Delivered',
+      'Payment Pending',
+      'Closed'
+    ];
+    const op = operations.find(x => x.order_id === o.order_id);
+    return completedStages.includes(o.current_stage) || op?.event_status === 'Completed';
+  };
+
   const stats = useMemo(() => {
-    const totalLeads = operationsOrders.length;
+    const totalLeads = orders.length;
     
-    const scheduled = operationsOrders.filter(o => o.current_stage === 'Event Scheduled').length;
+    const scheduled = orders.filter(o => o.current_stage === 'Event Scheduled').length;
     
-    const completed = operationsOrders.filter(o => o.current_stage === 'Event Completed').length;
+    const completed = orders.filter(o => isCompletedEvent(o)).length;
     
     const pending = operationsOrders.filter(o => 
       o.current_stage === 'Order Confirmed' || 
@@ -589,7 +650,7 @@ export const OperationsLeads: React.FC = () => {
       rawFootagePending,
       readyForProduction
     };
-  }, [operationsOrders, rawFootage]);
+  }, [orders, operationsOrders, rawFootage, operations]);
 
   const availableGearOptions = useMemo(() => {
     // Basic preloaded checklist options in case equipment state is small
@@ -610,7 +671,7 @@ export const OperationsLeads: React.FC = () => {
       "Kit Platinum Max: Hasselblad H6D, RED V-Raptor"
     ];
 
-    const dbItems = equipment ? equipment.filter((eq: any) => eq.status === 'Available').map((eq: any) => `${eq.name} [${eq.brand} ${eq.model}]`) : [];
+    const dbItems = equipment ? equipment.map((eq: any) => `${eq.name} [${eq.brand} ${eq.model}]`) : [];
     
     // Combine both and remove duplicates
     const combined = Array.from(new Set([...presets, ...dbItems]));
@@ -633,15 +694,22 @@ export const OperationsLeads: React.FC = () => {
       : <span className="text-amber-500 ml-1 select-none">▼</span>;
   };
 
+  const getCompletionDate = (o: Order) => {
+    const rf = rawFootage ? rawFootage.find(f => f.order_id === o.order_id) : null;
+    if (rf && rf.created_at) {
+      return rf.created_at.split('T')[0];
+    }
+    return o.updated_at ? o.updated_at.split('T')[0] : o.event_date || '—';
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Results Summary Row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {[
           { label: "Total Operations Leads", val: stats.totalLeads, theme: 'purple' as CameraLensTheme, filterValue: 'All', trendText: 'Active', chartPoints: [10, 18, 14, 25, 20, 31, 35] },
           { label: "Scheduled Events", val: stats.scheduled, theme: 'cyan' as CameraLensTheme, filterValue: 'Event Scheduled', trendText: 'Rostered', chartPoints: [5, 9, 7, 14, 11, 16, 15] },
           { label: "Completed Events", val: stats.completed, theme: 'green' as CameraLensTheme, filterValue: 'Event Completed', trendText: 'Closed Out', chartPoints: [8, 15, 12, 20, 16, 25, 24] },
-          { label: "Pending Events", val: stats.pending, theme: 'gold' as CameraLensTheme, filterValue: 'Pending', trendText: 'Pending Assign', chartPoints: [3, 8, 5, 12, 10, 15, 12] },
           { label: "Raw Footage Pending", val: stats.rawFootagePending, theme: 'red' as CameraLensTheme, filterValue: 'Raw Footage Pending', trendText: 'Ingest Lag', chartPoints: [2, 4, 1, 5, 3, 6, 2] },
           { label: "Ready for Production", val: stats.readyForProduction, theme: 'purple' as CameraLensTheme, filterValue: 'Ready for Production', trendText: 'In Suite', chartPoints: [11, 14, 12, 18, 15, 20, 17] },
         ].map((card, idx) => (
@@ -864,8 +932,25 @@ export const OperationsLeads: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-850/60 text-xs">
-            {sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received' && o.current_stage !== 'Raw Footage Received').length > 0 ? (
-              sortedOrders.filter(o => o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received' && o.current_stage !== 'Raw Footage Received').map((ord) => {
+            {(() => {
+              const mainBoardList = sortedOrders.filter(o => {
+                if (statusFilter === 'All') {
+                  return o.current_stage !== 'Order Confirmed' && o.current_stage !== 'New Order Received';
+                }
+                return true;
+              });
+
+              if (mainBoardList.length === 0) {
+                return (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-zinc-500 italic">
+                      No matching operations leads found.
+                    </td>
+                  </tr>
+                );
+              }
+
+              return mainBoardList.map((ord) => {
                 const op = getOpDetails(ord.order_id);
                 const orderAssignments = staffAssignments ? staffAssignments.filter(sa => sa.order_id === ord.order_id) : [];
 
@@ -898,8 +983,9 @@ export const OperationsLeads: React.FC = () => {
                     </td>
                     <td className="p-4 font-bold text-zinc-100">
                       <div>{ord.customer_name}</div>
+                      <div className="text-[10px] text-zinc-400 font-sans font-normal mt-0.5">{ord.event_type}</div>
                       {op?.equipment_kit && (
-                        <div className="flex flex-wrap gap-1 mt-1">
+                        <div className="flex flex-wrap gap-1 mt-1.5">
                           {op.equipment_kit.split(',').map((kit: string, idx: number) => (
                             <span key={idx} className="bg-amber-400/10 text-amber-400 px-1.5 py-0.5 rounded text-[9.5px] font-mono border border-amber-400/10 whitespace-nowrap" title="Assigned Gear">
                               ⚙️ {kit.trim()}
@@ -909,7 +995,12 @@ export const OperationsLeads: React.FC = () => {
                       )}
                     </td>
                     <td className="p-4 font-mono text-zinc-300">
-                      {ord.event_date || <span className="text-zinc-600 italic">—</span>}
+                      <div>{ord.event_date || <span className="text-zinc-600 italic">—</span>}</div>
+                      {isCompletedEvent(ord) && (
+                        <div className="text-[10px] text-emerald-400 mt-0.5 font-sans font-medium">
+                          Done: {getCompletionDate(ord)}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 font-mono text-zinc-300">
                       {ord.event_time || <span className="text-zinc-600 italic">—</span>}
@@ -1157,14 +1248,7 @@ export const OperationsLeads: React.FC = () => {
                   </tr>
                 );
               })
-            ) : (
-              <tr>
-                <td colSpan={12} className="p-12 text-center text-zinc-500">
-                  <Clipboard className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                  <p className="text-xs">No matching confirmed orders found in active list.</p>
-                </td>
-              </tr>
-            )}
+            })()}
           </tbody>
         </table>
       </div>    </div>
@@ -1485,7 +1569,7 @@ export const OperationsLeads: React.FC = () => {
                       </button>
                     </div>
 
-                    {isEquipmentDropdownOpen && (() => {
+                     {isEquipmentDropdownOpen && (() => {
                       const filteredGearOptions = availableGearOptions.filter(opt =>
                         opt.toLowerCase().includes(equipmentSearchQuery.toLowerCase())
                       );
@@ -1494,7 +1578,22 @@ export const OperationsLeads: React.FC = () => {
                         <div className="absolute left-4 right-4 z-50 mt-1 max-h-56 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl divide-y divide-zinc-900">
                           {filteredGearOptions.length > 0 ? (
                             filteredGearOptions.map((opt, i) => {
+                              const eqItem = equipment ? equipment.find(eq => 
+                                eq.name === opt || 
+                                `${eq.name} [${eq.brand} ${eq.model}]` === opt
+                              ) : null;
+                              
                               const isSelected = selectedKits.includes(opt);
+                              
+                              const displayName = eqItem ? `${eqItem.name} (${eqItem.brand} ${eqItem.model})` : opt;
+                              const category = eqItem ? eqItem.type : 'Kit Preset';
+                              const status = eqItem ? eqItem.status : 'Available';
+                              
+                              const statusColor = 
+                                status === 'Available' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                status === 'Assigned' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                'text-zinc-500 bg-zinc-800 border-zinc-700';
+
                               return (
                                 <button
                                   key={i}
@@ -1510,18 +1609,26 @@ export const OperationsLeads: React.FC = () => {
                                       setAssignForm(prev => ({ ...prev, equipment_kit: updated.join(', ') }));
                                     }
                                   }}
-                                  className={`w-full text-left px-4 py-2.5 text-xs transition-colors cursor-pointer flex items-center justify-between ${
+                                  className={`w-full text-left px-4 py-3 text-xs transition-colors cursor-pointer flex items-center justify-between gap-4 ${
                                     isSelected 
                                       ? 'bg-amber-400/10 text-amber-300 font-bold' 
                                       : 'hover:bg-zinc-900 text-zinc-300'
                                   }`}
                                 >
-                                  <span>{opt}</span>
-                                  {isSelected ? (
-                                    <span className="text-amber-500 text-[10px] font-mono">✓ Selected</span>
-                                  ) : (
-                                    <span className="text-zinc-600 text-[10px] font-mono">+ Add</span>
-                                  )}
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-sans text-white text-xs font-semibold">{displayName}</span>
+                                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Category: {category}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase font-mono border ${statusColor}`}>
+                                      {status}
+                                    </span>
+                                    {isSelected ? (
+                                      <span className="text-amber-500 text-[10px] font-mono">✓ Selected</span>
+                                    ) : (
+                                      <span className="text-zinc-600 text-[10px] font-mono">+ Add</span>
+                                    )}
+                                  </div>
                                 </button>
                               );
                             })
@@ -2001,6 +2108,17 @@ Please report on time and update status through the portal.`;
                 
                 if (handoversToSave.length > 0) {
                   await addEquipmentHandovers(handoversToSave);
+                  if (equipment && updateEquipment) {
+                    for (const ho of handoversToSave) {
+                      const found = equipment.find(eq => 
+                        eq.name === ho.equipment_name || 
+                        `${eq.name} [${eq.brand} ${eq.model}]` === ho.equipment_name
+                      );
+                      if (found) {
+                        await updateEquipment(found.equipment_id, { status: 'Available' });
+                      }
+                    }
+                  }
                 }
 
                 // Combine physical storage states into the upload notes column

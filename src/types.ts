@@ -30,7 +30,7 @@ export const EVENT_TYPES = [
 export type Department = 'Sales' | 'Operations' | 'Production' | 'Editor' | 'Dispatch';
 
 export const DEPARTMENT_STAGES: Record<Department, CurrentStage[]> = {
-  Sales: ['New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Order Confirmed'],
+  Sales: ['New Lead', 'Contacted', 'Follow Up', 'Follow-up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 'Lost Lead'],
   Operations: ['Operations Assigned', 'Event Scheduled', 'Event Completed'],
   Production: ['Raw Footage Received'],
   Editor: ['Editing Started', 'Customer Review', 'Revision Required', 'Approved'],
@@ -46,10 +46,13 @@ export const ROLE_DEPARTMENT_MAP: Record<UserRole, Department[]> = {
 
 export type CurrentStage =
   | 'New Lead'
+  | 'Contacted'
   | 'Follow Up'
+  | 'Follow-up'
   | 'Quotation Sent'
   | 'Negotiation'
   | 'Order Confirmed'
+  | 'Lost Lead'
   | 'New Order Received'
   | 'Operations Assigned'
   | 'Event Scheduled'

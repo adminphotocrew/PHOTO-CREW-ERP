@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRole } from './RoleContext';
+import { useRole, mapUserFieldsFromDb } from './RoleContext';
 import { supabaseClient } from '../supabaseClient';
 import { 
-  Plus, Edit, CheckSquare, Search, Filter, Ban, X, Phone, Mail, MapPin, Calendar, DollarSign, Clock, Users, ArrowRight, ChevronDown, Check, Package
+  Plus, Edit, CheckSquare, Search, Filter, Ban, X, Phone, Mail, MapPin, Calendar, DollarSign, Clock, Users, ArrowRight, ChevronDown, Check, Package, Trash2
 } from 'lucide-react';
 import { Lead, CurrentStage, LeadPackage, EVENT_TYPES } from '../types';
 import { CameraLensStatsCard, CameraLensTheme } from './CameraLensStatsCard';
@@ -527,7 +527,19 @@ const highlightText = (text: string, search: string) => {
   );
 };
 
-
+export const LEAD_SOURCES = [
+  'Instagram Marketing',
+  'Facebook Leads',
+  'Google Ads / Search',
+  'Website Inquiry',
+  'WhatsApp / Direct',
+  'Reference / Referral',
+  'YouTube Channel',
+  'Walk In Enquiry',
+  'JustDial / Third Party',
+  'Past Customer Repeat',
+  'Other'
+];
 
 interface SalesModuleProps {
   activeSubTab?: 'list' | 'create' | 'profiles' | 'packages' | 'calendar';
@@ -559,7 +571,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     unlockRecord,
     lockRecord,
     isRecordLocked,
-    isDepartmentAllowedToEdit
+    isDepartmentAllowedToEdit,
+    deleteLead,
+    deleteOrder
   } = useRole();
 
   const [logoBase64, setLogoBase64] = useState<string>('');
@@ -2413,11 +2427,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           setSelectedLead(null);
           showToastMsg("Order Confirmed Successfully.", "success");
         } else {
-          await updateLead(selectedLead.lead_id, {
-            status: wizardLeadData.status,
-            budget: Number(wizardLeadData.final_quoted_amount || wizardLeadData.budget),
-          });
-          
           await updateLeadFollowUp(
             selectedLead.lead_id,
             wizardLeadData.status,
@@ -2581,13 +2590,100 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       // Check Supabase Authentication and Session before creating lead
       if (supabaseClient) {
         try {
-          const { data: { session } } = await supabaseClient.auth.getSession();
-          if (!session || !currentUser) {
+          const { data: sessionData, error: sessionErr } = await supabaseClient.auth.getSession();
+          const { data: userData, error: userErr } = await supabaseClient.auth.getUser();
+
+          const session = sessionData?.session;
+          const authUser = userData?.user;
+
+          console.log('SESSION', session);
+          console.log('USER', authUser);
+
+          if (sessionErr || userErr) {
+            console.warn("Session/user fetch error:", sessionErr || userErr);
+          }
+
+          // If BOTH session and authUser are null AND we don't have a currentUser in React state
+          if (!session && !authUser && !currentUser) {
             showToastMsg("Please login again.", "error");
             return;
           }
-        } catch (authErr) {
-          showToastMsg("Please login again.", "error");
+
+          // Check if session is expired
+          const isExpired = session?.expires_at ? (session.expires_at <= Math.floor(Date.now() / 1000)) : false;
+          if (isExpired && !authUser) {
+            showToastMsg("Session expired.", "error");
+            return;
+          }
+
+          // Users Table Lookup
+          const currentUid = authUser?.id || session?.user?.id || currentUser?.id;
+          const emailFromAuth = authUser?.email || session?.user?.email || currentUser?.email;
+
+          let dbUser: any = null;
+          if (currentUid) {
+            const { data: userById, error: dbUserErr } = await supabaseClient
+              .from('users')
+              .select('*')
+              .eq('id', currentUid)
+              .maybeSingle();
+
+            dbUser = userById;
+            if (dbUserErr) {
+              console.warn("Users table lookup failed in UI:", dbUserErr.message);
+            }
+          }
+
+          if (!dbUser && emailFromAuth) {
+            const { data: dbUserByEmail } = await supabaseClient
+              .from('users')
+              .select('*')
+              .eq('email', emailFromAuth.toLowerCase().trim())
+              .maybeSingle();
+            
+            if (dbUserByEmail && currentUid) {
+              console.log("Aligning user profile ID during lead creation...");
+              await supabaseClient
+                .from('users')
+                .update({ id: currentUid })
+                .eq('email', emailFromAuth.toLowerCase().trim());
+              dbUser = { ...dbUserByEmail, id: currentUid };
+            } else if (dbUserByEmail) {
+              dbUser = dbUserByEmail;
+            }
+          }
+
+          let finalUser = currentUser;
+          if (dbUser) {
+            finalUser = mapUserFieldsFromDb(dbUser);
+          }
+
+          if (!finalUser) {
+            showToastMsg("User record missing from users table.", "error");
+            return;
+          }
+
+          if (emailFromAuth && finalUser.email && finalUser.email.toLowerCase().trim() !== emailFromAuth.toLowerCase().trim()) {
+            showToastMsg("User record email does not match logged-in account.", "error");
+            return;
+          }
+
+          if (!finalUser.role) {
+            showToastMsg("User role not loaded correctly.", "error");
+            return;
+          }
+
+          if (!finalUser.active) {
+            showToastMsg("User account is deactivated.", "error");
+            return;
+          }
+
+          if (finalUser.role !== 'Sales Team' && finalUser.role !== 'Business Owner') {
+            showToastMsg("User does not have permission to create leads.", "error");
+            return;
+          }
+        } catch (authErr: any) {
+          showToastMsg(`Authentication error: ${authErr.message || authErr}`, "error");
           return;
         }
       } else {
@@ -2595,12 +2691,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           showToastMsg("Please login again.", "error");
           return;
         }
-      }
-
-      // Check if user has Sales Team / Business Owner role permission
-      if (currentUser && currentUser.role !== 'Sales Team' && currentUser.role !== 'Business Owner') {
-        showToastMsg("User does not have permission to create leads.", "error");
-        return;
+        if (currentUser.role !== 'Sales Team' && currentUser.role !== 'Business Owner') {
+          showToastMsg("User does not have permission to create leads.", "error");
+          return;
+        }
       }
 
       if (!validateIndianMobile(createForm.mobile)) {
@@ -2655,16 +2749,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         const errMsg = err.message || String(err);
         let displayedMsg = errMsg;
         
-        if (errMsg.includes("row-level security policy") || errMsg.toLowerCase().includes("rls") || errMsg.toLowerCase().includes("security policy")) {
-          displayedMsg = "Supabase RLS policy blocked INSERT.";
-        } else if (errMsg.includes("permission") || errMsg.toLowerCase().includes("permission denied")) {
+        const lowerMsg = errMsg.toLowerCase();
+        if (lowerMsg.includes("row-level security policy") || lowerMsg.includes("rls") || lowerMsg.includes("security policy")) {
+          displayedMsg = "Lead insert blocked by RLS policy.";
+        } else if (lowerMsg.includes("user record missing") || lowerMsg.includes("missing from users table") || lowerMsg.includes("missing from users")) {
+          displayedMsg = "User record missing from users table.";
+        } else if (lowerMsg.includes("session expired") || lowerMsg.includes("jwt expired")) {
+          displayedMsg = "Session expired.";
+        } else if (lowerMsg.includes("permission") || lowerMsg.includes("permission denied")) {
           displayedMsg = "User does not have permission to create leads.";
-        } else if (errMsg.includes("login") || errMsg.toLowerCase().includes("unauthenticated") || errMsg.toLowerCase().includes("jwt")) {
+        } else if (lowerMsg.includes("login") || lowerMsg.includes("unauthenticated") || lowerMsg.includes("jwt")) {
           displayedMsg = "Please login again.";
-        } else if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-          displayedMsg = "Database save failed: connection error.";
         } else {
-          displayedMsg = `Unable to create lead: ${errMsg}`;
+          displayedMsg = errMsg;
         }
         
         showToastMsg(displayedMsg, "error");
@@ -4635,15 +4732,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                           className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 transition-all cursor-pointer"
                         >
                           <option value="">Select Lead Source</option>
-                          <option value="Google Ads">Google Ads</option>
-                          <option value="Meta Ads">Meta Ads</option>
-                          <option value="Website">Website</option>
-                          <option value="WhatsApp">WhatsApp</option>
-                          <option value="Referral">Referral</option>
-                          <option value="Instagram">Instagram</option>
-                          <option value="YouTube font-bold">YouTube</option>
-                          <option value="Walk-in">Walk-in</option>
-                          <option value="Other font-bold">Other</option>
+                          {LEAD_SOURCES.map(source => (
+                            <option key={source} value={source}>{source}</option>
+                          ))}
                         </select>
                       </div>
                       {createForm.lead_source === 'Other' && (
@@ -5489,11 +5580,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 className="w-full bg-slate-900 border border-slate-750 rounded-lg py-1.5 px-3 text-xs text-slate-100/90"
               >
                 <option value="">All Sources</option>
-                <option value="Website Form">Website Form</option>
-                <option value="Instagram">Instagram</option>
-                <option value="Facebook Ad">Facebook Ad</option>
-                <option value="Google Search">Google Search</option>
-                <option value="Referral">Referral</option>
+                {LEAD_SOURCES.map(source => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
               </select>
             </div>
 
@@ -5698,14 +5787,29 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             {lead.created_date ? lead.created_date.split('T')[0] : 'N/A'}
                           </td>
                           <td className="p-3.5 text-right pr-5">
-                            <button
-                              id={`btn_followup_${lead.lead_id}`}
-                              onClick={() => handleSelectLead(lead)}
-                              className="px-3.5 py-1.5 text-xs font-bold bg-zinc-950 hover:bg-zinc-900 text-amber-400 hover:text-white rounded-xl border border-zinc-850 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow"
-                            >
-                              <Edit className="w-3 h-3" />
-                              <span>{isActiveInSales && canEdit ? 'Manage CRM' : 'View CRM'}</span>
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                id={`btn_followup_${lead.lead_id}`}
+                                onClick={() => handleSelectLead(lead)}
+                                className="px-3.5 py-1.5 text-xs font-bold bg-zinc-950 hover:bg-zinc-900 text-amber-400 hover:text-white rounded-xl border border-zinc-850 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow"
+                              >
+                                <Edit className="w-3 h-3" />
+                                <span>{isActiveInSales && canEdit ? 'Manage CRM' : 'View CRM'}</span>
+                              </button>
+                              {canEdit && (
+                                <button
+                                  onClick={async () => {
+                                    if (confirm(`Are you absolutely sure you want to delete lead "${lead.customer_name}"? All associated history, quotations, payments, and operational records will be deleted.`)) {
+                                      await deleteLead(lead.lead_id);
+                                    }
+                                  }}
+                                  className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 hover:border-rose-500/30 rounded-xl transition-all cursor-pointer"
+                                  title="Delete Lead"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -6021,13 +6125,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             required
                           >
                             <option value="">── Choose Lead Source ──</option>
-                            <option value="Instagram Marketing">Instagram Marketing</option>
-                            <option value="Facebook Leads">Facebook Leads</option>
-                            <option value="Google Maps Ad">Google Maps Ad</option>
-                            <option value="JustDial Prospect">JustDial Prospect</option>
-                            <option value="Reference">Reference / Word of Mouth</option>
-                            <option value="Past Customer Repeat">Past Customer Repeat</option>
-                            <option value="Walk In Enquiry">Walk In Enquiry</option>
+                            {LEAD_SOURCES.map(source => (
+                              <option key={source} value={source}>{source}</option>
+                            ))}
                           </select>
                         </div>
                         <div className="md:col-span-2">

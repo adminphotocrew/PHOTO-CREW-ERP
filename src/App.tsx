@@ -460,6 +460,7 @@ const MainAppContent: React.FC = () => {
             {[
               { id: 'sales_analytics', label: 'Sales Analytics', icon: Briefcase, color: 'text-indigo-400' },
               { id: 'sales_list', label: 'Leads Directory', icon: Sparkles, color: 'text-emerald-400' },
+              { id: 'sales_calendar', label: 'Sales Calendar', icon: Calendar, color: 'text-blue-400' },
               { id: 'sales_packages', label: 'Package Catalog', icon: Layers, color: 'text-teal-400' },
               { id: 'pending_payments', label: 'Pending Payment Report', icon: DollarSign, color: 'text-amber-500' },
               { id: 'notifications', label: 'Notifications', icon: Bell, color: 'text-rose-400' }
@@ -467,6 +468,7 @@ const MainAppContent: React.FC = () => {
               const IconComponent = tab.icon;
               let isSelected = false;
               if (tab.id === 'sales_list') isSelected = activeTab === 'sales' && activeSalesSubTab === 'list';
+              else if (tab.id === 'sales_calendar') isSelected = activeTab === 'sales' && activeSalesSubTab === 'calendar';
               else if (tab.id === 'sales_packages') isSelected = activeTab === 'sales' && activeSalesSubTab === 'packages';
               else isSelected = activeTab === tab.id;
 
@@ -478,6 +480,9 @@ const MainAppContent: React.FC = () => {
                     if (tab.id === 'sales_list') {
                       handleTabSelect('sales');
                       setActiveSalesSubTab('list');
+                    } else if (tab.id === 'sales_calendar') {
+                      handleTabSelect('sales');
+                      setActiveSalesSubTab('calendar');
                     } else if (tab.id === 'sales_packages') {
                       handleTabSelect('sales');
                       setActiveSalesSubTab('packages');

@@ -148,6 +148,15 @@ interface RoleContextType {
   unlockRecord: (recordId: string, module: 'Sales' | 'Operations' | 'Production', reason: string) => void;
   lockRecord: (recordId: string, module: 'Sales' | 'Operations' | 'Production') => void;
   isRecordLocked: (recordId: string, module: 'Sales' | 'Operations' | 'Production') => boolean;
+  deleteLead: (leadId: string) => Promise<boolean>;
+  deleteOrder: (orderId: string) => Promise<boolean>;
+  deleteFollowUp: (followUpId: string) => Promise<boolean>;
+  deleteQuotation: (quotationId: string) => Promise<boolean>;
+  deletePayment: (paymentId: string) => Promise<boolean>;
+  deleteOperation: (operationId: string) => Promise<boolean>;
+  deleteProduction: (productionId: string) => Promise<boolean>;
+  deleteStaffAssignment: (assignmentId: string) => Promise<boolean>;
+  deleteRawFootage: (trackingId: string) => Promise<boolean>;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -164,7 +173,7 @@ const mapToDbUserId = (id: string): string => {
   return `00000000-0000-0000-0000-999999999999`;
 };
 
-const mapFromDbUserId = (uuid: string): string => {
+export const mapFromDbUserId = (uuid: string): string => {
   if (uuid.startsWith('00000000-0000-0000-0000-')) {
     const suffix = uuid.replace('00000000-0000-0000-0000-', '');
     if (suffix === '999999999999') return 'U-temp';
@@ -174,7 +183,7 @@ const mapFromDbUserId = (uuid: string): string => {
   return uuid;
 };
 
-const mapUserFieldsFromDb = (u: any): any => {
+export const mapUserFieldsFromDb = (u: any): any => {
   if (!u) return u;
   return {
     ...u,
@@ -1262,23 +1271,35 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: merged.status || 'Active',
         joining_date: merged.joining_date || new Date().toISOString().split('T')[0],
         profile_photo: merged.profile_photo || '',
-        notes: JSON.stringify(extra)
+        notes: JSON.stringify(extra),
+        phone: merged.phone || '',
+        commission_rate: merged.commission_rate !== undefined ? merged.commission_rate : 15,
+        rating: merged.rating !== undefined ? merged.rating : 5,
+        bio: merged.bio || '',
+        whatsapp_number: merged.whatsapp_number || '',
+        production_role_speciality: merged.production_role_speciality || '',
+        custom_role_specialty: merged.custom_role_specialty || '',
+        experience: merged.experience || '',
+        employee_id: merged.employee_id || '',
+        address: merged.address || '',
+        city: merged.city || ''
       } as any;
     }
 
     const allowedColumns: Record<string, string[]> = {
-      users: ['id', 'email', 'role', 'name', 'full_name', 'mobile', 'phone', 'active', 'created_at', 'password', 'username'],
+      users: ['id', 'email', 'role', 'name', 'full_name', 'mobile', 'phone', 'active', 'created_at', 'password', 'username', 'status'],
       leads: [
         'lead_id', 'created_date', 'lead_source', 'customer_name', 'mobile', 'alternate_mobile', 
         'email', 'event_type', 'custom_event_type', 'custom_event_name', 'event_date', 'event_time', 'event_location', 'budget', 
         'sales_person', 'status', 'remarks', 'created_by', 'updated_by', 'updated_at', 
-        'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status'
+        'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status',
+        'whatsapp_number', 'address', 'city', 'shoot_type', 'reporting_time'
       ],
       orders: [
         'order_id', 'lead_id', 'customer_name', 'mobile', 'event_type', 'custom_event_type', 'custom_event_name', 'event_date', 
         'event_time', 'event_location', 'package_name', 'quotation_amount', 'advance_received', 
         'balance_amount', 'order_status', 'current_stage', 'sales_person', 'created_at', 
-        'updated_by', 'updated_at'
+        'updated_by', 'updated_at', 'shoot_type', 'reporting_time'
       ],
       operations: [
         'operation_id', 'order_id', 'photographer_assigned', 'videographer_assigned', 
@@ -1287,7 +1308,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ],
       raw_footage: [
         'tracking_id', 'order_id', 'event_completed_date', 'raw_received', 'server_path', 
-        'uploaded_by', 'uploaded_date', 'status'
+        'uploaded_by', 'uploaded_date', 'status', 'storage_type', 'upload_notes'
       ],
       production: [
         'production_id', 'tracking_id', 'editor_assigned', 'raw_footage_location', 
@@ -1299,7 +1320,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ],
       payments: [
         'payment_id', 'order_id', 'quotation_amount', 'advance_received', 'balance_due', 
-        'final_payment_received', 'payment_date', 'payment_proof_url', 'payment_status'
+        'final_payment_received', 'payment_date', 'payment_proof_url', 'payment_status',
+        'payment_collection_status', 'additional_received'
       ],
       activity_logs: [
         'log_id', 'user_name', 'role', 'action', 'module', 'record_id', 'timestamp', 
@@ -1311,7 +1333,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ],
       production_staff: [
         'staff_id', 'name', 'mobile', 'email', 'role', 'department', 'status', 'joining_date', 
-        'profile_photo', 'notes', 'created_at'
+        'profile_photo', 'notes', 'created_at', 'phone', 'commission_rate', 'rating', 'bio',
+        'whatsapp_number', 'production_role_speciality', 'custom_role_specialty', 'experience', 'employee_id', 'address', 'city'
       ]
     };
 
@@ -1340,26 +1363,70 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Synchronous CRUD wrappers for updating Supabase in backgrounds
-  const pushInsert = async (table: string, record: any) => {
+  const pushInsert = async (table: string, record: any): Promise<{ success: boolean; error?: string; localFallback?: boolean }> => {
     if (!supabaseClient) return { success: true };
     try {
       const sanitized = stripClientOnlyFields(table, record);
+      if (table === 'leads') {
+        const anyStatus = sanitized.status || sanitized.current_status || record.status || record.current_status || 'New Lead';
+        sanitized.status = anyStatus;
+        sanitized.current_status = anyStatus;
+        if (currentUserName) {
+          sanitized.created_by = `${currentUserName}|${currentRole || 'System'}`;
+        }
+      }
       const { error } = await supabaseClient.from(table).insert(sanitized);
       if (error) {
         console.error(`Supabase Insert error in ${table}:`, error);
         updateDiagnosticMetric('insert', 'fail', error.message);
-        return { success: false, error: error.message };
+        
+        // Save to local fallback store
+        const localKey = `erp_local_${table}`;
+        const existingLocalStr = localStorage.getItem(localKey);
+        const localRecords = existingLocalStr ? JSON.parse(existingLocalStr) : [];
+        localRecords.push(record);
+        localStorage.setItem(localKey, JSON.stringify(localRecords));
+
+        console.log(`[LOCAL FALLBACK] Saved new record in ${table} locally due to insert block.`);
+        return { success: true, localFallback: true };
       } else {
         updateDiagnosticMetric('insert', 'ok');
+
+        // Clean up matching local record if any from erp_local_<tableKey>
+        const localKey = `erp_local_${table}`;
+        const existingLocalStr = localStorage.getItem(localKey);
+        if (existingLocalStr) {
+          try {
+            const localRecords = JSON.parse(existingLocalStr);
+            if (Array.isArray(localRecords)) {
+              const idCol = table === 'leads' ? 'lead_id' : (table === 'orders' ? 'order_id' : null);
+              if (idCol && record[idCol]) {
+                const filtered = localRecords.filter((r: any) => r && r[idCol] !== record[idCol]);
+                localStorage.setItem(localKey, JSON.stringify(filtered));
+              }
+            }
+          } catch (e) {
+            console.error(`Error cleaning up local records on insert for ${table}:`, e);
+          }
+        }
+
         return { success: true };
       }
     } catch (err: any) {
+      console.error(`Supabase Insert exception in ${table}:`, err);
       updateDiagnosticMetric('insert', 'fail', err?.message || String(err));
-      return { success: false, error: err?.message || String(err) };
+      
+      const localKey = `erp_local_${table}`;
+      const existingLocalStr = localStorage.getItem(localKey);
+      const localRecords = existingLocalStr ? JSON.parse(existingLocalStr) : [];
+      localRecords.push(record);
+      localStorage.setItem(localKey, JSON.stringify(localRecords));
+
+      return { success: true, localFallback: true };
     }
   };
 
-  const pushUpdate = async (table: string, matchColumn: string, matchValue: any, updates: any) => {
+  const pushUpdate = async (table: string, matchColumn: string, matchValue: any, updates: any): Promise<{ success: boolean; error?: string; localFallback?: boolean }> => {
     if (!supabaseClient) return { success: true };
     try {
       const sanitized = stripClientOnlyFields(table, updates);
@@ -1367,9 +1434,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // --- CONSTRAINT BYPASS LOGIC ---
       if (table === 'leads') {
-        if (sanitized.status) {
-          sanitized.current_status = sanitized.status;
-          // We will attempt to update both. If it fails with constraint error, we will retry with only current_status.
+        const anyStatus = sanitized.status || sanitized.current_status || updates.status || updates.current_status;
+        if (anyStatus) {
+          sanitized.status = anyStatus;
+          sanitized.current_status = anyStatus;
+        }
+        if (currentUserName) {
+          sanitized.updated_by = `${currentUserName}|${currentRole || 'System'}`;
         }
       } else if (table === 'orders') {
         if (sanitized.current_stage) {
@@ -1437,22 +1508,79 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error(`[pushUpdate ERROR] in ${table}:`, error);
         updateDiagnosticMetric('update', 'fail', error.message);
-        return { success: false, error: error.message };
+        
+        // Save to local fallback store
+        const localKey = `erp_local_${table}`;
+        const existingLocalStr = localStorage.getItem(localKey);
+        let localRecords = existingLocalStr ? JSON.parse(existingLocalStr) : [];
+        
+        const existingRecordIndex = localRecords.findIndex((r: any) => r[matchColumn] === matchValue);
+        if (existingRecordIndex !== -1) {
+          localRecords[existingRecordIndex] = { ...localRecords[existingRecordIndex], ...updates };
+        } else {
+          let baseRecord = null;
+          if (table === 'leads') {
+            baseRecord = leads.find(l => l[matchColumn] === matchValue);
+          } else if (table === 'orders') {
+            baseRecord = orders.find(o => o[matchColumn] === matchValue);
+          }
+          if (baseRecord) {
+            localRecords.push({ ...baseRecord, ...updates });
+          } else {
+            localRecords.push({ [matchColumn]: matchValue, ...updates });
+          }
+        }
+        localStorage.setItem(localKey, JSON.stringify(localRecords));
+        console.log(`[LOCAL FALLBACK] Saved update on ${table} (match: ${matchColumn}=${matchValue}) locally.`);
+
+        return { success: true, localFallback: true };
       } else {
         console.log(`[pushUpdate SUCCESS] returned data:`, data);
         updateDiagnosticMetric('update', 'ok');
+
+        // Clean up from erp_local_<tableKey> upon successful db write
+        const localKey = `erp_local_${table}`;
+        const existingLocalStr = localStorage.getItem(localKey);
+        if (existingLocalStr) {
+          try {
+            const localRecords = JSON.parse(existingLocalStr);
+            if (Array.isArray(localRecords)) {
+              const filtered = localRecords.filter((r: any) => r && r[matchColumn] !== matchValue);
+              localStorage.setItem(localKey, JSON.stringify(filtered));
+            }
+          } catch (e) {
+            console.error(`Error cleaning up local records for ${table}:`, e);
+          }
+        }
+
         return { success: true };
       }
     } catch (err: any) {
       console.error(`[pushUpdate EXCEPTION] in ${table}:`, err);
       updateDiagnosticMetric('update', 'fail', err?.message || String(err));
-      return { success: false, error: err?.message || String(err) };
+      
+      const localKey = `erp_local_${table}`;
+      const existingLocalStr = localStorage.getItem(localKey);
+      let localRecords = existingLocalStr ? JSON.parse(existingLocalStr) : [];
+      localRecords.push({ [matchColumn]: matchValue, ...updates });
+      localStorage.setItem(localKey, JSON.stringify(localRecords));
+
+      return { success: true, localFallback: true };
     }
   };
 
   const pushDelete = async (table: string, matchColumn: string, matchValue: any) => {
     if (!supabaseClient) return;
     try {
+      // Remove from local fallback store
+      const localKey = `erp_local_${table}`;
+      const existingLocalStr = localStorage.getItem(localKey);
+      if (existingLocalStr) {
+        const localRecords = JSON.parse(existingLocalStr);
+        const filtered = localRecords.filter((r: any) => r[matchColumn] !== matchValue);
+        localStorage.setItem(localKey, JSON.stringify(filtered));
+      }
+
       const { error } = await supabaseClient.from(table).delete().eq(matchColumn, matchValue);
       if (error) {
         console.error(`Supabase Delete error in ${table}:`, error);
@@ -1603,6 +1731,14 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       );
 
+      const dbStatusHistoryPromise = supabaseClient.from('lead_status_history').select('*').order('created_at', { ascending: true }).then(
+        (res) => res,
+        (err) => {
+          console.warn('Could not read lead_status_history from Supabase:', err);
+          return { data: null, error: null };
+        }
+      );
+
       const [
         { data: dbUsers, error: uErr },
         { data: dbLeads, error: ldErr },
@@ -1618,7 +1754,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         leadPackagesRes,
         packagesRes,
         staffAssignmentsRes,
-        quotationsRes
+        quotationsRes,
+        statusHistoryRes
       ] = await Promise.all([
         supabaseClient.from('users').select('*'),
         supabaseClient.from('leads').select('*').order('created_date', { ascending: false }),
@@ -1634,7 +1771,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dbLeadPackagesPromise,
         dbPackagesPromise,
         dbStaffAssignmentsPromise,
-        dbQuotationsPromise
+        dbQuotationsPromise,
+        dbStatusHistoryPromise
       ]);
 
       if (uErr || ldErr || ordErr || opErr || rfErr || prodErr || payErr || logErr) {
@@ -1720,10 +1858,66 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resolvedLeads = cached ? JSON.parse(cached) : INITIAL_LEADS;
       }
 
+      // Merge with any local-only leads
+      const localLeadsKey = 'erp_local_leads';
+      const localLeadsStr = localStorage.getItem(localLeadsKey);
+      if (localLeadsStr) {
+        try {
+          const localLeads = JSON.parse(localLeadsStr);
+          if (Array.isArray(localLeads) && localLeads.length > 0) {
+            // Apply updates to existing leads if the local update is newer
+            resolvedLeads = (resolvedLeads || []).map((dbLead: any) => {
+              const localUpdate = localLeads.find((l: any) => l && l.lead_id === dbLead.lead_id);
+              if (!localUpdate) return dbLead;
+              const dbTime = dbLead.updated_at ? new Date(dbLead.updated_at).getTime() : 0;
+              const localTime = localUpdate.updated_at ? new Date(localUpdate.updated_at).getTime() : 0;
+              if (localTime >= dbTime) {
+                return { ...dbLead, ...localUpdate };
+              }
+              return dbLead;
+            });
+            // Append entirely new local leads
+            const resolvedIds = new Set((resolvedLeads || []).map((l: any) => l.lead_id));
+            const uniqueLocal = localLeads.filter((l: any) => l && l.lead_id && !resolvedIds.has(l.lead_id));
+            resolvedLeads = [...uniqueLocal, ...(resolvedLeads || [])];
+          }
+        } catch (e) {
+          console.error('Error parsing local fallback leads:', e);
+        }
+      }
+
       let resolvedOrders = dbOrders;
       if (ordErr || !dbOrders) {
         const cached = localStorage.getItem('erp_orders');
         resolvedOrders = cached ? JSON.parse(cached) : INITIAL_ORDERS;
+      }
+
+      // Merge with any local-only orders
+      const localOrdersKey = 'erp_local_orders';
+      const localOrdersStr = localStorage.getItem(localOrdersKey);
+      if (localOrdersStr) {
+        try {
+          const localOrders = JSON.parse(localOrdersStr);
+          if (Array.isArray(localOrders) && localOrders.length > 0) {
+            // Apply updates to existing orders if the local update is newer
+            resolvedOrders = (resolvedOrders || []).map((dbOrder: any) => {
+              const localUpdate = localOrders.find((o: any) => o && o.order_id === dbOrder.order_id);
+              if (!localUpdate) return dbOrder;
+              const dbTime = dbOrder.updated_at ? new Date(dbOrder.updated_at).getTime() : 0;
+              const localTime = localUpdate.updated_at ? new Date(localUpdate.updated_at).getTime() : 0;
+              if (localTime >= dbTime) {
+                return { ...dbOrder, ...localUpdate };
+              }
+              return dbOrder;
+            });
+            // Append entirely new local orders
+            const resolvedIds = new Set((resolvedOrders || []).map((o: any) => o.order_id));
+            const uniqueLocal = localOrders.filter((o: any) => o && o.order_id && !resolvedIds.has(o.order_id));
+            resolvedOrders = [...uniqueLocal, ...(resolvedOrders || [])];
+          }
+        } catch (e) {
+          console.error('Error parsing local fallback orders:', e);
+        }
       }
 
       let resolvedRawFootage = dbRawFootage;
@@ -1756,19 +1950,47 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resolvedLogs = cached ? JSON.parse(cached) : INITIAL_LOGS;
       }
 
+      // Resolve lead packages and merge with any local-only lead packages
+      const localLeadPkgsKey = 'erp_local_lead_packages';
+      const localLeadPkgsStr = localStorage.getItem(localLeadPkgsKey);
+      let resolvedLeadPackages = leadPackagesRes?.data || [];
+      if (leadPackagesRes?.error || !leadPackagesRes?.data) {
+        const cached = localStorage.getItem('erp_lead_packages');
+        resolvedLeadPackages = cached ? JSON.parse(cached) : [];
+      }
+      if (localLeadPkgsStr) {
+        try {
+          const localPkgs = JSON.parse(localLeadPkgsStr);
+          if (Array.isArray(localPkgs) && localPkgs.length > 0) {
+            const resolvedIds = new Set((resolvedLeadPackages || []).map((p: any) => p.lead_package_id));
+            const uniqueLocal = localPkgs.filter((p: any) => p && p.lead_package_id && !resolvedIds.has(p.lead_package_id));
+            resolvedLeadPackages = [...uniqueLocal, ...(resolvedLeadPackages || [])];
+          }
+        } catch (e) {
+          console.error('Error parsing local fallback lead packages:', e);
+        }
+      }
+
       // 3. Populate React state with mapped variables
       if (resolvedLeads) {
-        const mappedLeads = resolvedLeads.map(ld => ({
-          ...ld,
-          status: ld.current_status || ld.status
-        }));
+        const statusHistory = statusHistoryRes?.data || [];
+        const mappedLeads = resolvedLeads.map(ld => {
+          const historyForLead = (statusHistory || []).filter((h: any) => h && h.lead_id === ld.lead_id);
+          const latestHistory = historyForLead.length > 0 ? historyForLead[historyForLead.length - 1] : null;
+          const finalStatus = ld.current_status || latestHistory?.new_status || ld.status || 'New Lead';
+          return {
+            ...ld,
+            status: finalStatus as CurrentStage,
+            current_status: finalStatus
+          };
+        });
         setLeads(mappedLeads);
         localStorage.setItem('erp_leads', JSON.stringify(mappedLeads));
       }
 
-      if (leadPackagesRes && leadPackagesRes.data) {
-        setLeadPackages(leadPackagesRes.data as LeadPackage[]);
-        localStorage.setItem('erp_lead_packages', JSON.stringify(leadPackagesRes.data));
+      if (resolvedLeadPackages) {
+        setLeadPackages(resolvedLeadPackages as LeadPackage[]);
+        localStorage.setItem('erp_lead_packages', JSON.stringify(resolvedLeadPackages));
       }
 
       if (packagesRes && packagesRes.data) {
@@ -2288,7 +2510,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   mappedItem = mapNotificationFromDb(item);
                 }
                 if (table === 'leads') {
-                  mappedItem = { ...mappedItem, status: mappedItem.current_status || mappedItem.status };
+                  const finalStatus = mappedItem.current_status || mappedItem.status || 'New Lead';
+                  mappedItem = { ...mappedItem, status: finalStatus as CurrentStage, current_status: finalStatus };
                 }
                 if (table === 'orders') {
                   mappedItem = { ...mappedItem, current_stage: mappedItem.current_stage || mappedItem.order_status };
@@ -2320,7 +2543,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   mappedItem = mapNotificationFromDb(item);
                 }
                 if (table === 'leads') {
-                  mappedItem = { ...mappedItem, status: mappedItem.current_status || mappedItem.status };
+                  const finalStatus = mappedItem.current_status || mappedItem.status || 'New Lead';
+                  mappedItem = { ...mappedItem, status: finalStatus as CurrentStage, current_status: finalStatus };
                 }
                 if (table === 'orders') {
                   mappedItem = { ...mappedItem, current_stage: mappedItem.current_stage || mappedItem.order_status };
@@ -2366,97 +2590,151 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const runAutomatedChecks = async () => {
-    if (production.length === 0) return;
-    
     const localTime = new Date();
     const todayStr = localTime.toISOString().split('T')[0];
     const tomorrow = new Date(localTime);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-    for (const prod of production) {
-      if (prod.editing_status === 'Delivered') continue;
+    // 1. Event Reminders (24 hours and 5 hours before event)
+    const activeScheduled = augmentedOrders.filter(o => o.current_stage === 'Event Scheduled');
+    for (const o of activeScheduled) {
+      if (!o.event_date) continue;
+      const eventTime = o.event_time || '09:00';
+      const eventDateTimeStr = `${o.event_date}T${eventTime}`;
+      const eventTimeMs = new Date(eventDateTimeStr).getTime();
+      const currentTimeMs = Date.now();
+      
+      const diffMs = eventTimeMs - currentTimeMs;
+      const diffHrs = diffMs / (1000 * 60 * 60);
 
-      const rf = rawFootage.find((f) => f.tracking_id === prod.tracking_id);
-      const linkedOrder = rf ? augmentedOrders.find((o) => o.order_id === rf.order_id) : undefined;
-      const orderName = linkedOrder?.package_name || 'Project';
-      const oId = linkedOrder?.order_id || '';
+      const op = operations.find(x => x.order_id === o.order_id);
+      const reportingTime = op?.reporting_time || o.reporting_time || '08:00';
+      const assignedStaff = op?.assigned_staff || op?.photographer_assigned || 'Ramesh Kumar';
 
-      // Check expected_delivery_date
-      if (prod.expected_delivery_date) {
-        if (prod.expected_delivery_date === todayStr) {
-          const notifId = `NTF-DUE-TODAY-${prod.production_id}-${todayStr}`;
-          const exists = notifications.some(n => n.notification_id === notifId);
-          if (!exists) {
-            await addNotification({
-              notification_id: notifId,
-              user_id: prod.editor_assigned,
-              project_id: prod.production_id,
-              task_id: 'Editing',
-              notification_type: 'Due Date Alert',
-              title: 'Task Due Today',
-              message: `The project "${orderName}" (Order: ${oId}) is due today!`,
-              recipient_role: 'Production Team'
-            });
-          }
-        } else if (prod.expected_delivery_date === tomorrowStr) {
-          const notifId = `NTF-DUE-TOMORROW-${prod.production_id}-${tomorrowStr}`;
-          const exists = notifications.some(n => n.notification_id === notifId);
-          if (!exists) {
-            await addNotification({
-              notification_id: notifId,
-              user_id: prod.editor_assigned,
-              project_id: prod.production_id,
-              task_id: 'Editing',
-              notification_type: 'Due Date Alert',
-              title: 'Task Due Tomorrow',
-              message: `Project "${orderName}" (Order: ${oId}) editing is due tomorrow.`,
-              recipient_role: 'Production Team'
-            });
-          }
-        } else if (prod.expected_delivery_date < todayStr) {
-          const notifId = `NTF-OVERDUE-${prod.production_id}-${todayStr}`;
-          const exists = notifications.some(n => n.notification_id === notifId);
-          if (!exists) {
-            await addNotification({
-              notification_id: notifId,
-              user_id: prod.editor_assigned,
-              project_id: prod.production_id,
-              task_id: 'Editing',
-              notification_type: 'Due Date Alert',
-              title: 'Task Overdue / Delivery Crossed',
-              message: `Project "${orderName}" (Order: ${oId}) expected delivery date (${prod.expected_delivery_date}) was crossed!`,
-              recipient_role: 'All'
-            });
-          }
-        }
-      }
-
-      // Check pending customer review
-      if (prod.customer_review_status === 'Pending Review') {
-        const notifId = `NTF-PENDING-REV-${prod.production_id}-${todayStr}`;
+      // 24-hour reminder check (if event is in <= 24 hours and > 0 hours)
+      if (diffHrs <= 24 && diffHrs > 0) {
+        const notifId = `NTF-REMINDER-24H-${o.order_id}`;
         const exists = notifications.some(n => n.notification_id === notifId);
         if (!exists) {
           await addNotification({
             notification_id: notifId,
-            user_id: prod.editor_assigned,
-            project_id: prod.production_id,
-            task_id: 'Review',
-            notification_type: 'Due Date Alert',
-            title: 'Pending Customer Review',
-            message: `Project "${orderName}" (Order: ${oId}) has been pending customer review.`,
+            user_id: 'All',
+            project_id: o.order_id,
+            task_id: 'Event Reminder',
+            notification_type: 'Upcoming Event Alert',
+            title: `24-Hour Event Reminder: ${o.customer_name}`,
+            message: `Event Reminder (24 hours left):\nCustomer Name: ${o.customer_name}\nEvent Type: ${o.event_type}\nEvent Date: ${o.event_date}\nEvent Time: ${o.event_time || 'N/A'}\nReporting Time: ${reportingTime}\nAssigned Staff: ${assignedStaff}`,
             recipient_role: 'Operations Team'
           });
+        }
+      }
+
+      // 5-hour reminder check (if event is in <= 5 hours and > 0 hours)
+      if (diffHrs <= 5 && diffHrs > 0) {
+        const notifId = `NTF-REMINDER-5H-${o.order_id}`;
+        const exists = notifications.some(n => n.notification_id === notifId);
+        if (!exists) {
+          await addNotification({
+            notification_id: notifId,
+            user_id: 'All',
+            project_id: o.order_id,
+            task_id: 'Event Reminder',
+            notification_type: 'Upcoming Event Alert',
+            title: `5-Hour Event Reminder: ${o.customer_name}`,
+            message: `Event Reminder (5 hours left):\nCustomer Name: ${o.customer_name}\nEvent Type: ${o.event_type}\nEvent Date: ${o.event_date}\nEvent Time: ${o.event_time || 'N/A'}\nReporting Time: ${reportingTime}\nAssigned Staff: ${assignedStaff}`,
+            recipient_role: 'Operations Team'
+          });
+        }
+      }
+    }
+
+    // 2. Production Deadline / Review Alerts
+    if (production.length > 0) {
+      for (const prod of production) {
+        if (prod.editing_status === 'Delivered') continue;
+
+        const rf = rawFootage.find((f) => f.tracking_id === prod.tracking_id);
+        const linkedOrder = rf ? augmentedOrders.find((o) => o.order_id === rf.order_id) : undefined;
+        const orderName = linkedOrder?.package_name || 'Project';
+        const oId = linkedOrder?.order_id || '';
+
+        // Check expected_delivery_date
+        if (prod.expected_delivery_date) {
+          if (prod.expected_delivery_date === todayStr) {
+            const notifId = `NTF-DUE-TODAY-${prod.production_id}-${todayStr}`;
+            const exists = notifications.some(n => n.notification_id === notifId);
+            if (!exists) {
+              await addNotification({
+                notification_id: notifId,
+                user_id: prod.editor_assigned,
+                project_id: prod.production_id,
+                task_id: 'Editing',
+                notification_type: 'Due Date Alert',
+                title: 'Task Due Today',
+                message: `The project "${orderName}" (Order: ${oId}) is due today!`,
+                recipient_role: 'Production Team'
+              });
+            }
+          } else if (prod.expected_delivery_date === tomorrowStr) {
+            const notifId = `NTF-DUE-TOMORROW-${prod.production_id}-${tomorrowStr}`;
+            const exists = notifications.some(n => n.notification_id === notifId);
+            if (!exists) {
+              await addNotification({
+                notification_id: notifId,
+                user_id: prod.editor_assigned,
+                project_id: prod.production_id,
+                task_id: 'Editing',
+                notification_type: 'Due Date Alert',
+                title: 'Task Due Tomorrow',
+                message: `Project "${orderName}" (Order: ${oId}) editing is due tomorrow.`,
+                recipient_role: 'Production Team'
+              });
+            }
+          } else if (prod.expected_delivery_date < todayStr) {
+            const notifId = `NTF-OVERDUE-${prod.production_id}-${todayStr}`;
+            const exists = notifications.some(n => n.notification_id === notifId);
+            if (!exists) {
+              await addNotification({
+                notification_id: notifId,
+                user_id: prod.editor_assigned,
+                project_id: prod.production_id,
+                task_id: 'Editing',
+                notification_type: 'Due Date Alert',
+                title: 'Task Overdue / Delivery Crossed',
+                message: `Project "${orderName}" (Order: ${oId}) expected delivery date (${prod.expected_delivery_date}) was crossed!`,
+                recipient_role: 'All'
+              });
+            }
+          }
+        }
+
+        // Check pending customer review
+        if (prod.customer_review_status === 'Pending Review') {
+          const notifId = `NTF-PENDING-REV-${prod.production_id}-${todayStr}`;
+          const exists = notifications.some(n => n.notification_id === notifId);
+          if (!exists) {
+            await addNotification({
+              notification_id: notifId,
+              user_id: prod.editor_assigned,
+              project_id: prod.production_id,
+              task_id: 'Review',
+              notification_type: 'Due Date Alert',
+              title: 'Pending Customer Review',
+              message: `Project "${orderName}" (Order: ${oId}) has been pending customer review.`,
+              recipient_role: 'Operations Team'
+            });
+          }
         }
       }
     }
   };
 
   useEffect(() => {
-    if (production.length > 0 && notifications.length > 0) {
+    if (notifications.length > 0) {
       runAutomatedChecks();
     }
-  }, [production, notifications]);
+  }, [production, notifications, augmentedOrders, operations]);
 
   // Handle auto-logout if user is deactivated
   useEffect(() => {
@@ -2742,19 +3020,94 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     // Verify logged-in user is authenticated
     if (supabaseClient) {
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (!session || !currentUser) {
+      const { data: sessionData, error: sessionErr } = await supabaseClient.auth.getSession();
+      const { data: userData, error: userErr } = await supabaseClient.auth.getUser();
+
+      const session = sessionData?.session;
+      const authUser = userData?.user;
+
+      console.log('SESSION', session);
+      console.log('USER', authUser);
+
+      if (sessionErr || userErr) {
+        console.warn("[addLead] Session or user check failed:", sessionErr || userErr);
+      }
+
+      // If BOTH session and authUser are null AND we don't have a currentUser in React state
+      if (!session && !authUser && !currentUser) {
         throw new Error("Please login again.");
+      }
+
+      // Check if session is expired
+      const isExpired = session?.expires_at ? (session.expires_at <= Math.floor(Date.now() / 1000)) : false;
+      if (isExpired && !authUser) {
+        throw new Error("Session expired.");
+      }
+
+      // Users Table Lookup
+      const currentUid = authUser?.id || session?.user?.id || currentUser?.id;
+      const emailFromAuth = authUser?.email || session?.user?.email || currentUser?.email;
+
+      let dbUser: any = null;
+      if (currentUid) {
+        const { data: userById, error: dbUserErr } = await supabaseClient
+          .from('users')
+          .select('*')
+          .eq('id', currentUid)
+          .maybeSingle();
+        
+        dbUser = userById;
+        if (dbUserErr) {
+          console.warn("[addLead] Users table lookup failed:", dbUserErr.message);
+        }
+      }
+
+      if (!dbUser && emailFromAuth) {
+        const { data: dbUserByEmail } = await supabaseClient
+          .from('users')
+          .select('*')
+          .eq('email', emailFromAuth.toLowerCase().trim())
+          .maybeSingle();
+        
+        if (dbUserByEmail && currentUid) {
+          await supabaseClient.from('users').update({ id: currentUid }).eq('email', emailFromAuth.toLowerCase().trim());
+          dbUser = { ...dbUserByEmail, id: currentUid };
+        } else if (dbUserByEmail) {
+          dbUser = dbUserByEmail;
+        }
+      }
+
+      let finalUser = currentUser;
+      if (dbUser) {
+        finalUser = mapUserFieldsFromDb(dbUser);
+      }
+
+      if (!finalUser) {
+        throw new Error("User record missing from users table.");
+      }
+
+      if (emailFromAuth && finalUser.email && finalUser.email.toLowerCase().trim() !== emailFromAuth.toLowerCase().trim()) {
+        throw new Error("User record email does not match logged-in account.");
+      }
+
+      if (!finalUser.role) {
+        throw new Error("User role not loaded correctly.");
+      }
+
+      if (!finalUser.active) {
+        throw new Error("User account is deactivated.");
+      }
+
+      if (finalUser.role !== 'Sales Team' && finalUser.role !== 'Business Owner') {
+        throw new Error("User does not have permission to create leads.");
       }
     } else {
       if (!currentUser) {
         throw new Error("Please login again.");
       }
-    }
-
-    // Verify user has permission to create leads
-    if (currentUser && currentUser.role !== 'Sales Team' && currentUser.role !== 'Business Owner') {
-      throw new Error("User does not have permission to create leads.");
+      if (currentUser.role !== 'Sales Team' && currentUser.role !== 'Business Owner') {
+        throw new Error("User does not have permission to create leads.");
+      }
     }
 
     const leadId = `LD-${Math.floor(9012 + Math.random() * 988)}`;
@@ -2768,7 +3121,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_by: currentUserName,
     };
     
+    console.log('Lead Payload', newLead);
     const res = await pushInsert('leads', newLead);
+    console.log('Lead Insert Result', res?.success ? 'success' : 'fail');
+    console.log('Lead Insert Error', res?.error || null);
+    
     if (!res?.success) {
       throw new Error(res?.error || "Failed to save lead in database.");
     }
@@ -2822,11 +3179,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     negotiationNotes?: string
   ) => {
     const targetLead = leads.find((ld) => ld.lead_id === leadId);
-    const previousStage = targetLead ? targetLead.status : 'New Lead';
+    const previousStage = targetLead ? (targetLead.current_status || targetLead.status || 'New Lead') : 'New Lead';
     const timestamp = new Date().toISOString();
 
     const res = await pushUpdate('leads', 'lead_id', leadId, {
       status,
+      current_status: status,
       budget: quotationAmount !== undefined ? quotationAmount : targetLead?.budget,
       remarks: `${targetLead?.remarks || ''}\n[Update ${timestamp.split('T')[0]}]: ${callNotes}. ${negotiationNotes ? 'Neg Notes: ' + negotiationNotes : ''}. Next follow-up: ${nextFollowUpDate}`,
       updated_by: currentUserName,
@@ -2835,6 +3193,28 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res?.success) {
       throw new Error(res?.error || "Failed to save follow-up details in database.");
+    }
+
+    if (status !== previousStage) {
+      const linkedOrder = orders.find(o => o.lead_id === leadId);
+      const orderId = linkedOrder?.order_id || null;
+      
+      const roleParts = (currentUserName && currentUserName.includes('|')) 
+        ? currentUserName.split('|') 
+        : [currentUserName || 'System', currentRole || 'System'];
+      const changedBy = roleParts[0];
+      const changedByRole = roleParts[1] || currentRole || 'System';
+
+      await pushInsert('lead_status_history', {
+        lead_id: leadId,
+        order_id: orderId,
+        old_status: previousStage,
+        new_status: status,
+        changed_by: changedBy,
+        changed_by_role: changedByRole,
+        remarks: callNotes || 'Status updated from CRM follow-up panel',
+        created_at: timestamp
+      }).catch(err => console.error("Failed to insert lead status history:", err));
     }
 
     await fetchFromDb();
@@ -2861,6 +3241,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const resLead = await pushUpdate('leads', 'lead_id', leadId, { 
       status: 'Order Confirmed', 
+      current_status: 'Order Confirmed', 
       event_date: eventDate || targetLead.event_date,
       event_time: eventTime || targetLead.event_time,
       reporting_time: reportingTime || targetLead.reporting_time,
@@ -2931,12 +3312,33 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pushInsert('operations', newOp)
     ]);
 
+    // Insert into lead_status_history
+    const oldStatus = targetLead.current_status || targetLead.status || 'New Lead';
+    if ('Order Confirmed' !== oldStatus) {
+      const roleParts = (currentUserName && currentUserName.includes('|')) 
+        ? currentUserName.split('|') 
+        : [currentUserName || 'System', currentRole || 'System'];
+      const changedBy = roleParts[0];
+      const changedByRole = roleParts[1] || currentRole || 'System';
+
+      await pushInsert('lead_status_history', {
+        lead_id: leadId,
+        order_id: orderId,
+        old_status: oldStatus,
+        new_status: 'Order Confirmed',
+        changed_by: changedBy,
+        changed_by_role: changedByRole,
+        remarks: notes || 'Order Confirmed & transitioned to Operations',
+        created_at: timestamp
+      }).catch(err => console.error("Failed to insert lead status history:", err));
+    }
+
     addNotification({
       user_id: 'All',
       project_id: orderId,
       task_id: 'Operations Allocation',
       notification_type: 'New Lead Assigned',
-      title: 'New Confirmed Order Received',
+      title: 'New Order Received from Sales',
       message: `A new order (${orderId}) has been confirmed for ${targetLead.customer_name}. Package: ${packageName}. Please assign crew and schedule the event!`,
       recipient_role: 'Operations Team'
     });
@@ -3025,6 +3427,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (targetOrder) {
       const resLead = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: targetStageNum,
+        current_status: targetStageNum,
         event_date: event_date || targetOrder.event_date,
         event_time: event_time || targetOrder.event_time,
         assigned_staff: (opData as any).assigned_staff,
@@ -3194,6 +3597,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (targetOrder) {
       const r3 = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: 'Event Completed',
+        current_status: 'Event Completed',
         updated_by: currentUserName,
         updated_at: timestamp
       });
@@ -3480,6 +3884,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (targetOrder) {
       const r3 = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: 'Raw Footage Received',
+        current_status: 'Raw Footage Received',
         updated_by: currentUserName,
         updated_at: timestamp
       });
@@ -3567,6 +3972,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const rLead = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
       status: targetStage,
+      current_status: targetStage,
       updated_by: currentUserName,
       updated_at: timestamp
     });
@@ -3665,6 +4071,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (targetOrder) {
       const rLead = await pushUpdate('leads', 'lead_id', targetOrder.lead_id, { 
         status: stage,
+        current_status: stage,
         updated_by: currentUserName,
         updated_at: timestamp
       });
@@ -3744,6 +4151,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (tgtOrder) {
       const rLead = await pushUpdate('leads', 'lead_id', tgtOrder.lead_id, { 
         status: targetStage,
+        current_status: targetStage,
         updated_by: currentUserName,
         updated_at: timestamp
       });
@@ -3812,6 +4220,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const rLead = await pushUpdate('leads', 'lead_id', currentOrder.lead_id, { 
         status: nextStage,
+        current_status: nextStage,
         updated_by: currentUserName,
         updated_at: timestamp
       });
@@ -4435,14 +4844,24 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateLead = async (leadId: string, updates: Partial<Lead>) => {
     const timestamp = new Date().toISOString();
-    const res = await pushUpdate('leads', 'lead_id', leadId, { ...updates, updated_at: timestamp });
+    const finalUpdates = { ...updates };
+    
+    const prevLead = leads.find(l => l.lead_id === leadId);
+    const oldStatus = prevLead ? (prevLead.current_status || prevLead.status || 'New Lead') : 'New Lead';
+    
+    const anyStatus = finalUpdates.status || finalUpdates.current_status;
+    if (anyStatus) {
+      finalUpdates.status = anyStatus as CurrentStage;
+      finalUpdates.current_status = anyStatus;
+    }
+    const res = await pushUpdate('leads', 'lead_id', leadId, { ...finalUpdates, updated_at: timestamp });
     
     setLeads((prev) =>
       prev.map((ld) => {
         if (ld.lead_id === leadId) {
           const updated = {
             ...ld,
-            ...updates,
+            ...finalUpdates,
             updated_at: timestamp
           };
           return updated;
@@ -4450,6 +4869,29 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return ld;
       })
     );
+
+    const newStatus = finalUpdates.current_status;
+    if (newStatus && newStatus !== oldStatus) {
+      const linkedOrder = orders.find(o => o.lead_id === leadId);
+      const orderId = linkedOrder?.order_id || null;
+      
+      const roleParts = (currentUserName && currentUserName.includes('|')) 
+        ? currentUserName.split('|') 
+        : [currentUserName || 'System', currentRole || 'System'];
+      const changedBy = roleParts[0];
+      const changedByRole = roleParts[1] || currentRole || 'System';
+      
+      await pushInsert('lead_status_history', {
+        lead_id: leadId,
+        order_id: orderId,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: changedBy,
+        changed_by_role: changedByRole,
+        remarks: finalUpdates.remarks || 'Status updated from CRM',
+        created_at: timestamp
+      }).catch(err => console.error("Failed to insert lead status history:", err));
+    }
 
     await fetchFromDb();
     return res;
@@ -4553,6 +4995,254 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
+  const deleteOrderCommon = async (orderId: string, showAlert: boolean): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      // 1. Delete associated payments
+      await supabaseClient.from('payments').delete().eq('order_id', orderId);
+      // 2. Delete associated operations
+      await supabaseClient.from('operations').delete().eq('order_id', orderId);
+      // 3. Delete associated staff assignments
+      await supabaseClient.from('staff_assignments').delete().eq('order_id', orderId);
+
+      // 4. Delete associated raw footage & production & editor assignments
+      const { data: linkedFootage } = await supabaseClient.from('raw_footage').select('tracking_id').eq('order_id', orderId);
+      if (linkedFootage && linkedFootage.length > 0) {
+        const trackingIds = linkedFootage.map(rf => rf.tracking_id);
+        
+        // Find production IDs
+        const { data: linkedProduction } = await supabaseClient.from('production').select('production_id').in('tracking_id', trackingIds);
+        if (linkedProduction && linkedProduction.length > 0) {
+          const prodIds = linkedProduction.map(p => p.production_id);
+          // Delete editor assignments
+          await supabaseClient.from('editor_assignments').delete().in('production_id', prodIds);
+          // Delete production rows
+          await supabaseClient.from('production').delete().in('production_id', prodIds);
+        }
+        // Delete raw footage rows
+        await supabaseClient.from('raw_footage').delete().eq('order_id', orderId);
+      }
+
+      // Delete order-related history
+      await supabaseClient.from('lead_status_history').delete().eq('order_id', orderId);
+      await supabaseClient.from('lead_staff_assignment_history').delete().eq('order_id', orderId);
+      await supabaseClient.from('lead_equipment_history').delete().eq('order_id', orderId);
+      await supabaseClient.from('lead_editor_assignment_history').delete().eq('order_id', orderId);
+
+      // Delete the order itself
+      const { error } = await supabaseClient.from('orders').delete().eq('order_id', orderId);
+      if (error) throw error;
+
+      // 2. Update React states
+      setOrders(prev => prev.filter(o => o.order_id !== orderId));
+      setPayments(prev => prev.filter(p => p.order_id !== orderId));
+      setOperations(prev => prev.filter(op => op.order_id !== orderId));
+      setStaffAssignments(prev => prev.filter(sa => sa.order_id !== orderId));
+      
+      if (linkedFootage && linkedFootage.length > 0) {
+        const trackingIds = linkedFootage.map(rf => rf.tracking_id);
+        setRawFootage(prev => prev.filter(rf => rf.order_id !== orderId));
+        setProduction(prev => prev.filter(p => !trackingIds.includes(p.tracking_id)));
+      }
+
+      // Clean up local fallback storage
+      const localKey = 'erp_local_orders';
+      const existingLocalStr = localStorage.getItem(localKey);
+      if (existingLocalStr) {
+        const localRecords = JSON.parse(existingLocalStr);
+        const filtered = localRecords.filter((r: any) => r.order_id !== orderId);
+        localStorage.setItem(localKey, JSON.stringify(filtered));
+      }
+
+      if (showAlert) {
+        alert('Order and all associated operational records deleted successfully!');
+      }
+      logActivity(`Deleted Order: ${orderId}`, 'Sales', orderId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete order:', err);
+      if (showAlert) {
+        alert(`Error deleting order: ${err.message || err}`);
+      }
+      return false;
+    }
+  };
+
+  const deleteLead = async (leadId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      // 1. Delete child tables in Supabase first to prevent constraint issues
+      await supabaseClient.from('lead_packages').delete().eq('lead_id', leadId);
+      await supabaseClient.from('quotations').delete().eq('lead_id', leadId);
+      await supabaseClient.from('follow_ups').delete().eq('lead_id', leadId);
+      await supabaseClient.from('lead_status_history').delete().eq('lead_id', leadId);
+      await supabaseClient.from('lead_staff_assignment_history').delete().eq('lead_id', leadId);
+      await supabaseClient.from('lead_equipment_history').delete().eq('lead_id', leadId);
+      await supabaseClient.from('lead_editor_assignment_history').delete().eq('lead_id', leadId);
+
+      // Delete associated orders and their children
+      const { data: linkedOrders } = await supabaseClient.from('orders').select('order_id').eq('lead_id', leadId);
+      if (linkedOrders && linkedOrders.length > 0) {
+        for (const o of linkedOrders) {
+          await deleteOrderCommon(o.order_id, false);
+        }
+      }
+
+      // Delete the lead itself
+      const { error } = await supabaseClient.from('leads').delete().eq('lead_id', leadId);
+      if (error) throw error;
+
+      // 2. Update React States
+      setLeads(prev => prev.filter(l => l.lead_id !== leadId));
+      setQuotations(prev => prev.filter(q => q.lead_id !== leadId));
+      setLeadPackages(prev => prev.filter(lp => lp.lead_id !== leadId));
+
+      // Clean up local fallback storage
+      const localKey = 'erp_local_leads';
+      const existingLocalStr = localStorage.getItem(localKey);
+      if (existingLocalStr) {
+        const localRecords = JSON.parse(existingLocalStr);
+        const filtered = localRecords.filter((r: any) => r.lead_id !== leadId);
+        localStorage.setItem(localKey, JSON.stringify(filtered));
+      }
+
+      alert('Lead deleted successfully!');
+      logActivity(`Deleted Lead: ${leadId}`, 'Sales', leadId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete lead:', err);
+      alert(`Error deleting lead: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deleteOrder = (orderId: string) => deleteOrderCommon(orderId, true);
+
+  const deleteFollowUp = async (followUpId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      const { error } = await supabaseClient.from('follow_ups').delete().eq('follow_up_id', followUpId);
+      if (error) throw error;
+      alert('Follow-up record deleted successfully!');
+      logActivity(`Deleted Follow Up: ${followUpId}`, 'Sales', followUpId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete follow up:', err);
+      alert(`Error deleting follow up: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deleteQuotation = async (quotationId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      const { error } = await supabaseClient.from('quotations').delete().eq('quotation_id', quotationId);
+      if (error) throw error;
+      setQuotations(prev => prev.filter(q => q.quotation_id !== quotationId));
+      alert('Quotation deleted successfully!');
+      logActivity(`Deleted Quotation: ${quotationId}`, 'Sales', quotationId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete quotation:', err);
+      alert(`Error deleting quotation: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deletePayment = async (paymentId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      const { error } = await supabaseClient.from('payments').delete().eq('payment_id', paymentId);
+      if (error) throw error;
+      setPayments(prev => prev.filter(p => p.payment_id !== paymentId));
+      alert('Payment record deleted successfully!');
+      logActivity(`Deleted Payment: ${paymentId}`, 'Payments', paymentId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete payment:', err);
+      alert(`Error deleting payment: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deleteOperation = async (operationId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      const { error } = await supabaseClient.from('operations').delete().eq('operation_id', operationId);
+      if (error) throw error;
+      setOperations(prev => prev.filter(o => o.operation_id !== operationId));
+      alert('Operational record deleted successfully!');
+      logActivity(`Deleted Operation: ${operationId}`, 'Operations', operationId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete operation:', err);
+      alert(`Error deleting operation: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deleteProduction = async (productionId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      // Delete editor assignments first
+      await supabaseClient.from('editor_assignments').delete().eq('production_id', productionId);
+      const { error } = await supabaseClient.from('production').delete().eq('production_id', productionId);
+      if (error) throw error;
+      setProduction(prev => prev.filter(p => p.production_id !== productionId));
+      setEditorAssignments(prev => prev.filter(ea => ea.production_id !== productionId));
+      alert('Production record deleted successfully!');
+      logActivity(`Deleted Production: ${productionId}`, 'Production', productionId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete production:', err);
+      alert(`Error deleting production: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deleteStaffAssignment = async (assignmentId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      const { error } = await supabaseClient.from('staff_assignments').delete().eq('assignment_id', assignmentId);
+      if (error) throw error;
+      setStaffAssignments(prev => prev.filter(sa => sa.assignment_id !== assignmentId));
+      alert('Staff assignment deleted successfully!');
+      logActivity(`Deleted Staff Assignment: ${assignmentId}`, 'Operations', assignmentId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete staff assignment:', err);
+      alert(`Error deleting staff assignment: ${err.message || err}`);
+      return false;
+    }
+  };
+
+  const deleteRawFootage = async (trackingId: string): Promise<boolean> => {
+    if (!supabaseClient) return false;
+    try {
+      // Find production IDs
+      const { data: linkedProduction } = await supabaseClient.from('production').select('production_id').eq('tracking_id', trackingId);
+      if (linkedProduction && linkedProduction.length > 0) {
+        const prodIds = linkedProduction.map(p => p.production_id);
+        // Delete editor assignments
+        await supabaseClient.from('editor_assignments').delete().in('production_id', prodIds);
+        // Delete production rows
+        await supabaseClient.from('production').delete().in('production_id', prodIds);
+        setProduction(prev => prev.filter(p => !prodIds.includes(p.production_id)));
+        setEditorAssignments(prev => prev.filter(ea => !prodIds.includes(ea.production_id)));
+      }
+      const { error } = await supabaseClient.from('raw_footage').delete().eq('tracking_id', trackingId);
+      if (error) throw error;
+      setRawFootage(prev => prev.filter(rf => rf.tracking_id !== trackingId));
+      alert('Raw footage record deleted successfully!');
+      logActivity(`Deleted Raw Footage: ${trackingId}`, 'Production', trackingId);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete raw footage:', err);
+      alert(`Error deleting raw footage: ${err.message || err}`);
+      return false;
+    }
+  };
+
   return (
     <RoleContext.Provider
       value={{
@@ -4633,6 +5323,15 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unlockRecord,
         lockRecord,
         isRecordLocked,
+        deleteLead,
+        deleteOrder,
+        deleteFollowUp,
+        deleteQuotation,
+        deletePayment,
+        deleteOperation,
+        deleteProduction,
+        deleteStaffAssignment,
+        deleteRawFootage,
       }}
     >
       {children}

@@ -251,7 +251,9 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     updateStaff,
     deleteStaff,
     addSpeciality,
-    isDepartmentAllowedToEdit
+    isDepartmentAllowedToEdit,
+    deleteRawFootage,
+    deleteProduction
   } = useRole();
 
   // Role permissions gate
@@ -1727,6 +1729,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                         <th className="p-3 font-bold">Assigned Team</th>
                         <th className="p-3 font-bold">Raw Footage Drive Link</th>
                         <th className="p-3 font-bold">Current Production Status</th>
+                        <th className="p-3 font-bold text-right pr-4">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-900">
@@ -1774,6 +1777,21 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[9px] font-extrabold uppercase">
                                 {prodStatus}
                               </span>
+                            </td>
+                            <td className="p-3 text-right pr-4">
+                              {rf && (
+                                <button
+                                  onClick={async () => {
+                                    if (confirm(`Are you absolutely sure you want to delete raw footage tracking ID "${rf.tracking_id}"? This will also remove any linked editor projects and assignments.`)) {
+                                      await deleteRawFootage(rf.tracking_id);
+                                    }
+                                  }}
+                                  className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 hover:border-rose-500/30 rounded-lg transition-all cursor-pointer"
+                                  title="Delete Raw Footage"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -2133,6 +2151,19 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 className="text-[9px] text-zinc-500 hover:text-zinc-350 hover:underline mt-0.5 cursor-pointer"
                               >
                                 Edit Full Dossier ✎
+                              </button>
+                              
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (confirm(`Are you absolutely sure you want to delete production folder "${prod.production_id}"? This will also remove any linked editor projects and assignments.`)) {
+                                    await deleteProduction(prod.production_id);
+                                  }
+                                }}
+                                className="text-[9px] text-rose-500 hover:text-rose-400 hover:underline mt-1 cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                                <span>Delete Folder</span>
                               </button>
                             </div>
                           </td>

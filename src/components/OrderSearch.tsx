@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useRole } from './RoleContext';
 import { 
-  Search, ShieldAlert, Key, Landmark, HelpCircle, MapPin, Calendar, Clock, DollarSign, Camera, FileCheck
+  Search, ShieldAlert, Key, Landmark, HelpCircle, MapPin, Calendar, Clock, DollarSign, Camera, FileCheck, Trash2
 } from 'lucide-react';
 import { formatINR, formatIndianPhoneNumber, formatTime12Hour } from '../utils';
 
 export const OrderSearch: React.FC = () => {
-  const { leads, orders, operations, production, payments, rawFootage } = useRole();
+  const { leads, orders, operations, production, payments, rawFootage, deleteLead, deleteOrder } = useRole();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Search logic covering Lead ID, Order ID, Customer Name, Mobile Number
@@ -106,11 +106,41 @@ export const OrderSearch: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-mono">Current Stage Tracker</span>
-                    <strong className="text-xs bg-indigo-650 text-white rounded px-2.5 py-1 inline-block mt-1 uppercase font-bold tracking-tight">
-                      {lead.status}
-                    </strong>
+                  <div className="text-right flex flex-col items-end gap-1.5">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-mono">Current Stage Tracker</span>
+                      <strong className="text-xs bg-indigo-650 text-white rounded px-2.5 py-1 inline-block mt-1 uppercase font-bold tracking-tight">
+                        {lead.status}
+                      </strong>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {order && (
+                        <button
+                          onClick={async () => {
+                            if (confirm(`Are you absolutely sure you want to delete order "${order.order_id}"? All associated payments, raw footage, production assignments, and operational files will be permanently purged.`)) {
+                              await deleteOrder(order.order_id);
+                            }
+                          }}
+                          className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 hover:border-rose-500/30 rounded-lg text-[10px] font-mono uppercase transition-all cursor-pointer flex items-center gap-1"
+                          title="Delete Order & Cascades"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                          <span>Delete Order</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Are you absolutely sure you want to delete lead "${lead.customer_name}" (${lead.lead_id})? All linked orders, payments, history logs, quotations, and staff rosters will be completely deleted.`)) {
+                            await deleteLead(lead.lead_id);
+                          }
+                        }}
+                        className="px-2 py-1 bg-rose-650 hover:bg-rose-700 text-white rounded-lg text-[10px] font-mono uppercase transition-all cursor-pointer flex items-center gap-1"
+                        title="Delete Lead & Linked Records"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                        <span>Delete Lead</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 

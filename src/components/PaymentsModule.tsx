@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
 import { 
-  Landmark, DollarSign, Calendar, FileText, CheckCircle2, AlertCircle, Sparkles, Ban
+  Landmark, DollarSign, Calendar, FileText, CheckCircle2, AlertCircle, Sparkles, Ban, Trash2
 } from 'lucide-react';
 import { formatINR, triggerAutoScrollAndFocus } from '../utils';
 
 export const PaymentsModule: React.FC = () => {
-  const { currentRole, payments, orders, recordPayment } = useRole();
+  const { currentRole, payments, orders, recordPayment, deletePayment } = useRole();
 
   // Role permissions gate
   const canEdit = currentRole === 'Sales Team' || currentRole === 'Business Owner';
@@ -134,21 +134,36 @@ export const PaymentsModule: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-3 text-right pr-4">
-                        {p.balance_due > 0 && canEdit ? (
-                          <button
-                            onClick={() => handleSelectPayment(p.order_id)}
-                            className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-90 w-full md:w-auto text-rose-400 hover:text-white border border-zinc-850 font-semibold rounded text-[11px] transition-all cursor-pointer"
-                          >
-                            Collect Balance
-                          </button>
-                        ) : p.balance_due <= 0 ? (
-                          <span className="text-[10px] text-emerald-400 font-semibold font-mono flex items-center justify-end gap-1 pr-2">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Settled</span>
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-zinc-600 italic pr-2 font-mono">Gated</span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {p.balance_due > 0 && canEdit ? (
+                            <button
+                              onClick={() => handleSelectPayment(p.order_id)}
+                              className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-90 text-rose-400 hover:text-white border border-zinc-850 font-semibold rounded text-[11px] transition-all cursor-pointer"
+                            >
+                              Collect Balance
+                            </button>
+                          ) : p.balance_due <= 0 ? (
+                            <span className="text-[10px] text-emerald-400 font-semibold font-mono flex items-center justify-end gap-1 pr-2">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Settled</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-zinc-600 italic pr-2 font-mono">Gated</span>
+                          )}
+                          {canEdit && (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`Are you absolutely sure you want to delete payment record for "${p.payment_id}"?`)) {
+                                  await deletePayment(p.payment_id);
+                                }
+                              }}
+                              className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 hover:border-rose-500/30 rounded-lg transition-all cursor-pointer"
+                              title="Delete Payment Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

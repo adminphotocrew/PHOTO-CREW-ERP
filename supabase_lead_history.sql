@@ -91,6 +91,8 @@ DECLARE
     v_new_status VARCHAR(50);
     v_order_id VARCHAR(50);
     v_changed_by VARCHAR(255);
+    v_changed_by_name VARCHAR(255);
+    v_changed_by_role VARCHAR(100);
     v_remarks TEXT;
 BEGIN
     -- Determine which status changed: prioritizing current_status, fallback to status
@@ -114,12 +116,22 @@ BEGIN
     SELECT order_id INTO v_order_id FROM public.orders WHERE lead_id = NEW.lead_id LIMIT 1;
     
     v_changed_by := COALESCE(NEW.updated_by, NEW.created_by, 'System');
+    
+    -- Parse changed_by and changed_by_role if '|' is present
+    IF POSITION('|' IN v_changed_by) > 0 THEN
+        v_changed_by_name := SUBSTRING(v_changed_by FROM 1 FOR POSITION('|' IN v_changed_by) - 1);
+        v_changed_by_role := SUBSTRING(v_changed_by FROM POSITION('|' IN v_changed_by) + 1);
+    ELSE
+        v_changed_by_name := v_changed_by;
+        v_changed_by_role := NULL;
+    END IF;
+    
     v_remarks := NEW.remarks;
 
     INSERT INTO public.lead_status_history (
-        lead_id, order_id, old_status, new_status, changed_by, remarks
+        lead_id, order_id, old_status, new_status, changed_by, changed_by_role, remarks
     ) VALUES (
-        NEW.lead_id, v_order_id, v_old_status, v_new_status, v_changed_by, v_remarks
+        NEW.lead_id, v_order_id, v_old_status, v_new_status, v_changed_by_name, v_changed_by_role, v_remarks
     );
 
     RETURN NEW;

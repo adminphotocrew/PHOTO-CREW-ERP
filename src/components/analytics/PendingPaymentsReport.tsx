@@ -403,7 +403,7 @@ export const PendingPaymentsReport: React.FC = () => {
       </div>
 
       {/* Pending Payment Analytics Cards (Photocrew Lens-Inspired layout) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
         
         {/* Card 1: Total Pending Orders */}
         <div 
@@ -484,47 +484,6 @@ export const PendingPaymentsReport: React.FC = () => {
           </p>
           <p className="text-[8px] text-zinc-500 font-mono">
             WEEKLY COLLECTION PIPELINE
-          </p>
-        </div>
-
-        {/* Card 5: Upcoming Events */}
-        <div 
-          onClick={() => handleCardClick('Upcoming')}
-          className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer overflow-hidden ${
-            activeCardFilter === 'Upcoming'
-              ? 'bg-gradient-to-br from-zinc-850 to-zinc-900 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
-              : 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-750'
-          }`}
-        >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Upcoming Invoices</span>
-            <TrendingUp className="w-4 h-4 text-cyan-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-cyan-400 tracking-tight leading-none mb-1">
-            {stats.upcomingPaymentDue}
-          </p>
-          <p className="text-[8px] text-zinc-500 font-mono">
-            AF SCHEDULED • PRIME 50mm
-          </p>
-          {activeCardFilter === 'Upcoming' && (
-            <div className="absolute bottom-0 right-0 w-2 h-2 bg-amber-500 rounded-tl-md" />
-          )}
-        </div>
-
-        {/* Card 6: Average Outstanding Amount */}
-        <div 
-          onClick={() => handleCardClick('All')}
-          className="relative p-4 rounded-xl border bg-zinc-900/40 border-zinc-800 overflow-hidden"
-        >
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Avg Outstanding</span>
-            <HelpCircle className="w-4 h-4 text-zinc-500" />
-          </div>
-          <p className="text-lg font-extrabold text-zinc-300 tracking-tight leading-none mb-1">
-            {formatPercentageOrINR(stats.averageOutstandingAmount)}
-          </p>
-          <p className="text-[8px] text-zinc-500 font-mono">
-            AF PRE-PRO • ZOOM 24-70
           </p>
         </div>
 
