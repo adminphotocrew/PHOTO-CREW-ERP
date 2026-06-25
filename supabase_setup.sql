@@ -297,8 +297,24 @@ CREATE INDEX idx_analytics_snapshots_recorded_at ON public.analytics_snapshots(r
 DROP FUNCTION IF EXISTS public.get_user_role() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS text AS $$
-  SELECT role::text FROM public.users WHERE id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER;
+DECLARE
+  v_role TEXT;
+BEGIN
+  -- 1. Try to find role by matching user ID
+  SELECT role::text INTO v_role FROM public.users WHERE id = auth.uid();
+  IF v_role IS NOT NULL THEN
+    RETURN v_role;
+  END IF;
+
+  -- 2. Fallback to matching by email from JWT claim
+  SELECT role::text INTO v_role FROM public.users WHERE LOWER(email) = LOWER(auth.jwt()->>'email');
+  IF v_role IS NOT NULL THEN
+    RETURN v_role;
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- 5. ENABLE ROW LEVEL SECURITY (RLS) ON ALL TABLES
