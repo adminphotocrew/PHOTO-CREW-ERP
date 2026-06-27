@@ -1239,10 +1239,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'event_status', 'remarks', 'updated_by'
       ],
       quotations: [
-        'quotation_id', 'lead_id', 'package_name', 'package_price', 'deliverables_description', 
-        'notes_special_customizations', 'discount_amount', 'additional_services_cost', 
+        'quotation_id', 'lead_id', 'quotation_number', 'quotation_amount', 'discount_amount', 
+        'tax_amount', 'final_amount', 'quotation_status', 'valid_until', 'terms_conditions', 
+        'package_name', 'package_price', 'deliverables_description', 
+        'notes_special_customizations', 'additional_services_cost', 
         'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 
-        'created_at', 'created_by'
+        'created_at', 'created_by', 'updated_at'
       ],
       lead_packages: [
         'lead_package_id', 'lead_id', 'package_id', 'package_name', 'package_cost', 'quantity', 
@@ -3475,6 +3477,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         custom_event_type: targetLead.custom_event_type || '',
         event_date: eventDate || targetLead.event_date,
         event_time: eventTime || targetLead.event_time,
+        reporting_time: reportingTime || targetLead.reporting_time || '',
         event_location: targetLead.event_location,
         package_name: packageName,
         quotation_amount: quotationAmount,
@@ -3486,6 +3489,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updated_by: currentUserName,
         updated_at: timestamp,
         client_residence_address: targetLead.client_residence_address || '',
+        city: targetLead.city || '',
+        state: targetLead.state || '',
+        pincode: targetLead.pincode || '',
         desired_event_shoot_type: targetLead.desired_event_shoot_type || '',
         package_price: quotationAmount,
         deliverables_description: targetLead.deliverables_description || '',
@@ -5169,6 +5175,17 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const standardPayload = {
         quotation_status: updatedQuote.quotation_status,
         terms_conditions: packedTerms,
+        package_name: updatedQuote.package_name,
+        package_price: updatedQuote.package_price,
+        deliverables_description: updatedQuote.deliverables_description,
+        notes_special_customizations: updatedQuote.notes_special_customizations,
+        discount_amount: updatedQuote.discount_amount,
+        additional_services_cost: updatedQuote.additional_services_cost,
+        client_residence_address: updatedQuote.client_residence_address,
+        city: updatedQuote.city,
+        state: updatedQuote.state,
+        pincode: updatedQuote.pincode,
+        desired_event_shoot_type: updatedQuote.desired_event_shoot_type,
         updated_at: new Date().toISOString()
       };
 

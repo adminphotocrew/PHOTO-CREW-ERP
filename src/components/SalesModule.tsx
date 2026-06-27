@@ -1987,6 +1987,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         await updateLead(leadObj.lead_id, {
           budget: finalAmt,
           status: 'Quotation Sent' as CurrentStage,
+          package_price: basePkgSum,
+          deliverables_description: leadObj.deliverables_description,
+          notes_special_customizations: leadObj.notes_special_customizations,
+          quotation_discount: quoteDiscount,
+          additional_services_cost: quoteAdditional,
+          client_residence_address: leadObj.client_residence_address,
+          city: leadObj.city,
+          state: leadObj.state,
+          pincode: leadObj.pincode,
+          desired_event_shoot_type: leadObj.desired_event_shoot_type || leadObj.shoot_type,
           remarks: getRemarksPayload(wizardLeadData.remarks, wizardLeadData.notes || '', wizardLeadData.next_follow_up_date, wizardLeadData.whatsapp_number, wizardLeadData.address, wizardLeadData.city)
         });
       } else {
@@ -1998,6 +2008,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         await updateLead(createdLeadId!, {
           budget: finalAmt,
           status: 'Quotation Sent' as CurrentStage,
+          package_price: basePkgSum,
+          deliverables_description: leadObj.deliverables_description,
+          notes_special_customizations: leadObj.notes_special_customizations,
+          quotation_discount: quoteDiscount,
+          additional_services_cost: quoteAdditional,
+          client_residence_address: leadObj.client_residence_address,
+          city: leadObj.city,
+          state: leadObj.state,
+          pincode: leadObj.pincode,
+          desired_event_shoot_type: leadObj.desired_event_shoot_type || leadObj.shoot_type,
           remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city)
         });
       }
@@ -2725,6 +2745,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     setCrmWizardStep(1);
     const activePackages = (leadPackages || []).filter(lp => lp.lead_id === lead.lead_id);
     const primaryLP = activePackages[0];
+    
+    // Find the latest quotation for this lead if it exists
+    const latestQuote = [...(quotations || [])]
+      .filter(q => q.lead_id === lead.lead_id)
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+
+    if (latestQuote) {
+      setActiveQuoteNum(latestQuote.quotation_number || '');
+      setQuoteDiscount(latestQuote.discount_amount || 0);
+      setQuoteAdditional(latestQuote.additional_services_cost || 0);
+    }
 
     setWizardLeadData({
       customer_name: lead.customer_name || '',
@@ -2732,11 +2763,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       whatsapp_number: lead.whatsapp_number || lead.mobile || '',
       email: lead.email || '',
       address: lead.address || '',
-      city: lead.city || '',
-      state: lead.state || '',
-      pincode: lead.pincode || '',
-      client_residence_address: lead.client_residence_address || '',
-      desired_event_shoot_type: lead.desired_event_shoot_type || '',
+      city: latestQuote?.city || lead.city || '',
+      state: latestQuote?.state || lead.state || '',
+      pincode: latestQuote?.pincode || lead.pincode || '',
+      client_residence_address: latestQuote?.client_residence_address || lead.client_residence_address || '',
+      desired_event_shoot_type: latestQuote?.desired_event_shoot_type || lead.desired_event_shoot_type || '',
       // Step 2
       event_type: lead.event_type || '',
       custom_event_name: lead.custom_event_name || '',
@@ -2747,16 +2778,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       lead_source: lead.lead_source || 'Reference',
       shoot_type: lead.shoot_type || '',
       // Step 3
-      selected_package_id: primaryLP?.package_id || '',
-      package_cost: primaryLP ? Number(primaryLP.package_cost) : 0,
-      package_price: primaryLP ? Number(primaryLP.package_cost) : 0,
-      deliverables: primaryLP?.deliverables_description || primaryLP?.package_name || '',
-      deliverables_description: primaryLP?.deliverables_description || '',
-      notes_special_customizations: primaryLP?.notes_special_customizations || '',
+      selected_package_id: latestQuote?.package_id || primaryLP?.package_id || '',
+      package_cost: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : 0),
+      package_price: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : 0),
+      deliverables: latestQuote?.deliverables_description || primaryLP?.deliverables_description || primaryLP?.package_name || '',
+      deliverables_description: latestQuote?.deliverables_description || primaryLP?.deliverables_description || '',
+      notes_special_customizations: latestQuote?.notes_special_customizations || primaryLP?.notes_special_customizations || '',
       notes: lead.remarks || '',
       // Step 4
-      budget: lead.budget || 0,
-      final_quoted_amount: primaryLP ? Number(primaryLP.final_amount) : 0,
+      budget: latestQuote?.quotation_amount || lead.budget || 0,
+      final_quoted_amount: latestQuote?.final_amount || (primaryLP ? Number(primaryLP.final_amount) : 0),
       remarks: lead.remarks || '',
       next_follow_up_date: lead.updated_at ? lead.updated_at.split('T')[0] : new Date().toISOString().split('T')[0],
       // Step 5
@@ -3470,6 +3501,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         package_price: finalTotal,
         deliverables_description: selectedPkgs.map(p => pkgDeliverables[p.id] || p.deliverables || 'N/A').join('\n'),
         notes_special_customizations: selectedPkgs.map(p => pkgNotes[p.id] || '').join('\n'),
+        quotation_discount: quoteDiscount,
+        additional_services_cost: quoteAdditional,
+        client_residence_address: createForm.client_residence_address,
+        city: createForm.city,
+        state: createForm.state,
+        pincode: createForm.pincode,
+        desired_event_shoot_type: createForm.desired_event_shoot_type,
         remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
       });
       alert("Lead Saved Successfully.");
