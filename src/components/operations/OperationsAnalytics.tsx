@@ -523,7 +523,7 @@ export const OperationsAnalytics: React.FC = () => {
 
                 {/* Header lens metrics */}
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-[9px] uppercase font-mono tracking-widest font-black text-zinc-400 truncate max-w-[110px]">{card.label}</span>
+                  <span className="text-[9px] uppercase font-mono tracking-widest font-black text-zinc-400 break-words max-w-[110px]">{card.label}</span>
                   <span className="text-[8px] font-mono font-bold text-zinc-500">{card.focal}</span>
                 </div>
 
@@ -536,7 +536,7 @@ export const OperationsAnalytics: React.FC = () => {
                 </div>
 
                 {/* Description */}
-                <p className="text-[9px] text-zinc-500 mt-2.5 font-mono leading-tight truncate">{card.desc}</p>
+                <p className="text-[9px] text-zinc-500 mt-2.5 font-mono leading-tight break-words">{card.desc}</p>
               </button>
             );
           })}
@@ -590,7 +590,7 @@ export const OperationsAnalytics: React.FC = () => {
                     <td className="py-2.5 px-3 text-zinc-100 font-sans font-medium">{o.customer_name}</td>
                     <td className="py-2.5 px-3 text-zinc-400">{o.event_type}</td>
                     <td className="py-2.5 px-3 text-zinc-200">{formatDate(o.event_date)}</td>
-                    <td className="py-2.5 px-3 text-zinc-400 truncate max-w-xs font-sans text-[11px]">
+                    <td className="py-2.5 px-3 text-zinc-400 break-words max-w-xs font-sans text-[11px]">
                       {getAssignedCrewString(o.order_id)}
                     </td>
                     <td className="py-2.5 px-3">{getStageBadge(o.current_stage)}</td>
@@ -794,7 +794,7 @@ export const OperationsAnalytics: React.FC = () => {
                           
                           <div className="text-[11px] text-zinc-400 font-mono space-y-0.5">
                             <div>🗓️ Date: <span className="text-zinc-200 font-bold">{formatDate(ord.event_date)}</span></div>
-                            <div>🚀 Location: <span className="text-zinc-250 truncate">{ord.event_location}</span></div>
+                            <div>🚀 Location: <span className="text-zinc-250 break-words">{ord.event_location}</span></div>
                             <div>⏰ Reporting Time: <span className="text-amber-400 font-bold">{getReportingTimeOfEvent(ord.order_id)}</span></div>
                           </div>
                         </div>

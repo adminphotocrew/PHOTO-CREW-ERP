@@ -391,7 +391,7 @@ export const UserManagementModule: React.FC = () => {
                       <td className="p-3 space-y-0.5 text-slate-350">
                         <div className="flex items-center gap-1.5">
                           <Mail className="w-3.5 h-3.5 text-slate-550" />
-                          <span className="font-mono text-[11px] truncate max-w-[150px]">{usr.email}</span>
+                          <span className="font-mono text-[11px] break-words max-w-[150px]">{usr.email}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Phone className="w-3.5 h-3.5 text-slate-550" />

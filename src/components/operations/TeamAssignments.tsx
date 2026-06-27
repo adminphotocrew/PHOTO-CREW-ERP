@@ -167,22 +167,22 @@ export const TeamAssignments: React.FC = () => {
                       <div className="grid grid-cols-2 gap-2 text-zinc-300 font-mono text-[11px] bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-850/40">
                         <div className="space-y-0.5">
                           <div className="text-[9px] text-zinc-500 font-bold">📸 PHOTO</div>
-                          <div className="truncate font-sans font-bold text-zinc-200">{op.photographer_assigned}</div>
+                          <div className="break-words font-sans font-bold text-zinc-200">{op.photographer_assigned}</div>
                         </div>
                         <div className="space-y-0.5 border-l border-zinc-850/40 pl-2">
                           <div className="text-[9px] text-zinc-500 font-bold">🎥 VIDEO</div>
-                          <div className="truncate font-sans font-bold text-zinc-200">{op.videographer_assigned}</div>
+                          <div className="break-words font-sans font-bold text-zinc-200">{op.videographer_assigned}</div>
                         </div>
                         {op.drone_operator_assigned !== 'None' && op.drone_operator_assigned && (
                           <div className="col-span-2 border-t border-zinc-850/40 pt-1.5 space-y-0.5">
                             <div className="text-[9px] text-zinc-500 font-bold">🛸 AERIAL PILOT</div>
-                            <div className="truncate font-sans font-bold text-zinc-200">{op.drone_operator_assigned}</div>
+                            <div className="break-words font-sans font-bold text-zinc-200">{op.drone_operator_assigned}</div>
                           </div>
                         )}
                         {op.assistant_assigned !== 'None' && op.assistant_assigned && (
                           <div className="col-span-2 border-t border-zinc-850/40 pt-1.5 space-y-0.5">
                             <div className="text-[9px] text-zinc-500 font-bold">🤝 OPERATIONS ASSISTANT</div>
-                            <div className="truncate font-sans font-bold text-zinc-200">{op.assistant_assigned}</div>
+                            <div className="break-words font-sans font-bold text-zinc-200">{op.assistant_assigned}</div>
                           </div>
                         )}
                       </div>
@@ -193,7 +193,7 @@ export const TeamAssignments: React.FC = () => {
                       {op.equipment_kit ? (
                         <div className="flex flex-wrap gap-1">
                           {op.equipment_kit.split(',').map((kit: string, idx: number) => (
-                            <span key={idx} className="bg-amber-400/10 text-amber-300 px-1.5 py-0.5 border border-amber-400/10 rounded text-[9.5px] font-mono whitespace-nowrap">
+                            <span key={idx} className="bg-amber-400/10 text-amber-300 px-1.5 py-0.5 border border-amber-400/10 rounded text-[9.5px] font-mono ">
                               {kit.trim()}
                             </span>
                           ))}
@@ -287,7 +287,7 @@ export const TeamAssignments: React.FC = () => {
                       </span>
                     </td>
                     {/* Staff Name */}
-                    <td className="py-3 px-4 font-sans font-extrabold text-white text-xs max-w-[150px] truncate-on-mobile break-words">
+                    <td className="py-3 px-4 font-sans font-extrabold text-white text-xs max-w-[150px] break-words-on-mobile break-words">
                       {item.name}
                     </td>
                     {/* Mobile Number */}

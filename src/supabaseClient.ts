@@ -8,7 +8,7 @@ const getAnonKey = () => {
   if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_ANON_KEY) {
     return (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
   }
-  return 'dummy-anon-key';
+  return 'sb_publishable_Qdmf44q1ASJboY1_AZoOVQ_YfYrWvcB';
 };
 
 export const supabaseClient = createClient(getUrl(), getAnonKey(), {

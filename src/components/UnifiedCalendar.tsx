@@ -250,7 +250,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             notification_type: 'Operations Alert',
             project_id: orderId,
             task_id: '1_day_before'
-          }).catch(err => console.error("Auto Reminder generation failed", err));
+          }).catch(err => console.warn("Auto Reminder generation failed", err?.message || err));
         }
       }
 
@@ -265,7 +265,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             notification_type: 'Operations Alert',
             project_id: orderId,
             task_id: 'event_day_morning'
-          }).catch(err => console.error("Auto Daily Brief generation failed", err));
+          }).catch(err => console.warn("Auto Daily Brief generation failed", err?.message || err));
         }
       }
 
@@ -281,7 +281,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             notification_type: 'Operations Alert',
             project_id: orderId,
             task_id: 'overdue_alert'
-          }).catch(err => console.error("Auto Overdue Alert generation failed", err));
+          }).catch(err => console.warn("Auto Overdue Alert generation failed", err?.message || err));
         }
       }
     });
@@ -939,10 +939,10 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                   onClick={() => {
                     setSelectedEvent(ev);
                   }}
-                  className={`px-3 py-1.5 bg-zinc-900/60 hover:bg-zinc-850/80 border border-zinc-805 hover:border-zinc-700 text-[11px] text-zinc-200 rounded-lg flex items-center gap-2 transition cursor-pointer font-medium max-w-[170px] truncate`}
+                  className={`px-3 py-1.5 bg-zinc-900/60 hover:bg-zinc-850/80 border border-zinc-805 hover:border-zinc-700 text-[11px] text-zinc-200 rounded-lg flex items-center gap-2 transition cursor-pointer font-medium max-w-[170px] break-words`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span className="truncate">{ev.customerName} ({ev.eventType})</span>
+                  <span className="break-words">{ev.customerName} ({ev.eventType})</span>
                 </button>
               );
             })}
@@ -978,7 +978,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
               <span>{widgets.todayEvents.length}</span>
               <span className="text-[9px] font-mono font-bold uppercase text-emerald-500/80 bg-emerald-500/10 px-1 py-0.5 rounded scale-90">LIVE</span>
             </div>
-            <div className="text-[10px] text-zinc-450 block mt-0.5 truncate">
+            <div className="text-[10px] text-zinc-450 block mt-0.5 break-words">
               {widgets.todayEvents.length > 0 ? `${widgets.todayEvents[0].customerName}` : 'No shoots rostered'}
             </div>
           </div>
@@ -1001,7 +1001,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
               <span>{widgets.tomorrowEvents.length}</span>
               <span className="text-[9px] font-mono font-bold uppercase text-orange-500/80 bg-orange-500/10 px-1 py-0.5 rounded scale-90">READY</span>
             </div>
-            <div className="text-[10px] text-zinc-450 block mt-0.5 truncate">
+            <div className="text-[10px] text-zinc-450 block mt-0.5 break-words">
               {widgets.tomorrowEvents.length > 0 ? `${widgets.tomorrowEvents[0].customerName}` : 'No sessions locked'}
             </div>
           </div>
@@ -1017,7 +1017,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             <div className="text-xl font-black text-white group-hover:text-blue-400 transition-colors">
               {widgets.upcomingEvents.length}
             </div>
-            <div className="text-[10px] text-zinc-450 block mt-0.5 truncate">
+            <div className="text-[10px] text-zinc-450 block mt-0.5 break-words">
               Shoots & Pipeline dates
             </div>
           </div>
@@ -1043,7 +1043,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             }`}>
               {widgets.overdueTasks.length}
             </div>
-            <div className="text-[10px] text-zinc-450 block mt-0.5 truncate">
+            <div className="text-[10px] text-zinc-450 block mt-0.5 break-words">
               {widgets.overdueTasks.length > 0 ? 'Outstanding schedules' : 'SLA Target stable'}
             </div>
           </div>
@@ -1059,7 +1059,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
             <div className="text-xl font-black text-white group-hover:text-purple-400 transition-colors">
               {widgets.deliveriesDue.length}
             </div>
-            <div className="text-[10px] text-zinc-450 block mt-0.5 truncate">
+            <div className="text-[10px] text-zinc-450 block mt-0.5 break-words">
               Due in post-proc
             </div>
           </div>
@@ -1272,15 +1272,15 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                               className={`${h.bg} ${h.glow} text-[9px] p-1.5 rounded-lg border transition-all duration-150 hover:scale-[1.03] flex flex-col gap-0.5 cursor-pointer`}
                             >
                               <div className="flex justify-between items-center gap-1">
-                                <span className="font-extrabold text-zinc-100 truncate max-w-[65%]">
+                                <span className="font-extrabold text-zinc-100 break-words max-w-[65%]">
                                   {ev.customerName}
                                 </span>
-                                <span className="text-[7px] font-mono leading-none font-bold uppercase py-0.5 px-1 bg-zinc-950/80 rounded border border-zinc-850 text-yellow-500 shrink-0 truncate max-w-[35%]">
+                                <span className="text-[7px] font-mono leading-none font-bold uppercase py-0.5 px-1 bg-zinc-950/80 rounded border border-zinc-850 text-yellow-500 shrink-0 break-words max-w-[35%]">
                                   {ev.currentStage || ev.eventClass}
                                 </span>
                               </div>
                               <div className="text-[7.5px] opacity-75 font-mono flex items-center justify-between gap-1">
-                                <span className="truncate max-w-[60%]">{ev.eventType}</span>
+                                <span className="break-words max-w-[60%]">{ev.eventType}</span>
                                 <span className="text-zinc-400 font-bold shrink-0">{ev.eventTime}</span>
                               </div>
                             </div>
@@ -1360,7 +1360,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                                   <Clock className="w-2.5 h-2.5" />
                                   <span>{ev.eventTime}</span>
                                 </div>
-                                <span className={`${col.badge} text-[9px] font-semibold px-1.5 py-0.5 rounded-md self-start font-mono border text-center whitespace-nowrap overflow-hidden text-ellipsis truncate max-w-full`}>
+                                <span className={`${col.badge} text-[9px] font-semibold px-1.5 py-0.5 rounded-md self-start font-mono border text-center  overflow-hidden text-ellipsis break-words max-w-full`}>
                                   {ev.eventClass}
                                 </span>
                               </div>
@@ -1435,7 +1435,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                             </div>
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-                              <span className="truncate max-w-[200px]">{ev.eventLocation}</span>
+                              <span className="break-words max-w-[200px]">{ev.eventLocation}</span>
                             </div>
                           </div>
                         </div>
@@ -1511,7 +1511,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                                 <span>{ev.eventTime}</span>
                                 <span className="text-zinc-700">•</span>
                                 <MapPin className="w-3 h-3 text-zinc-650" />
-                                <span className="truncate max-w-[200px]">{ev.eventLocation}</span>
+                                <span className="break-words max-w-[200px]">{ev.eventLocation}</span>
                               </div>
                             </div>
                           </div>
@@ -1564,19 +1564,19 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                     >
                       <div className="flex justify-between items-start gap-1">
                         <span className="font-extrabold text-zinc-200 line-clamp-1">{ev.customerName}</span>
-                        <span className={`text-[8px] font-mono px-1.5 py-0.5 border rounded-md whitespace-nowrap shrink-0 ${col.badge}`}>
+                        <span className={`text-[8px] font-mono px-1.5 py-0.5 border rounded-md  shrink-0 ${col.badge}`}>
                           {ev.eventClass}
                         </span>
                       </div>
                       
-                      <div className="flex items-center gap-3 text-[10px] text-zinc-450 font-mono truncate">
+                      <div className="flex items-center gap-3 text-[10px] text-zinc-450 font-mono break-words">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-zinc-600" />
                           <span>{ev.eventTime}</span>
                         </div>
                         <div className="flex items-center gap-1 min-w-0">
                           <MapPin className="w-3 h-3 text-zinc-600" />
-                          <span className="truncate">{ev.eventLocation.split(',')[0]}</span>
+                          <span className="break-words">{ev.eventLocation.split(',')[0]}</span>
                         </div>
                       </div>
                     </div>
@@ -1769,7 +1769,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                   {selectedEvent.packageName && (
                     <>
                       <span className="text-zinc-500 font-mono">Kit Package</span>
-                      <span className="col-span-2 font-semibold truncate text-[11px]">
+                      <span className="col-span-2 font-semibold break-words text-[11px]">
                         {selectedEvent.packageName}
                       </span>
                     </>
@@ -1826,7 +1826,7 @@ export const UnifiedCalendar: React.FC<UnifiedCalendarProps> = ({ role }) => {
                   {selectedEvent.kit && (
                     <>
                       <span className="text-zinc-500">Gears Block</span>
-                      <span className="col-span-2 text-zinc-350 truncate">{selectedEvent.kit}</span>
+                      <span className="col-span-2 text-zinc-350 break-words">{selectedEvent.kit}</span>
                     </>
                   )}
 

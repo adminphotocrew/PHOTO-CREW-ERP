@@ -455,9 +455,9 @@ export const StaffManagementModule: React.FC = () => {
                   <div className="grid grid-cols-3 gap-2 mt-4 py-3 border-t border-b border-zinc-900 text-[10px]">
                     <div className="space-y-1">
                       <div className="text-[9px] font-mono text-zinc-500 uppercase">Mobile</div>
-                      <a href={`tel:${member.mobile}`} className="font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 truncate" title={member.mobile}>
+                      <a href={`tel:${member.mobile}`} className="font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 break-words" title={member.mobile}>
                         <Phone className="w-3 h-3 text-zinc-500 shrink-0" />
-                        <span className="truncate">{member.mobile}</span>
+                        <span className="break-words">{member.mobile}</span>
                       </a>
                     </div>
                     <div className="space-y-1">
@@ -466,18 +466,18 @@ export const StaffManagementModule: React.FC = () => {
                         href={`https://api.whatsapp.com/send?phone=${(member.whatsapp_number || member.mobile || '').replace(/[^0-9]/g, '')}`} 
                         target="_blank" 
                         rel="noreferrer" 
-                        className="font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 truncate" 
+                        className="font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 break-words" 
                         title={member.whatsapp_number || member.mobile}
                       >
                         <span className="text-emerald-450 text-[11px] font-bold shrink-0">💬</span>
-                        <span className="truncate">{member.whatsapp_number || member.mobile}</span>
+                        <span className="break-words">{member.whatsapp_number || member.mobile}</span>
                       </a>
                     </div>
                     <div className="space-y-1">
                       <div className="text-[9px] font-mono text-zinc-500 uppercase">Email</div>
-                      <a href={`mailto:${member.email}`} className="font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 truncate" title={member.email}>
+                      <a href={`mailto:${member.email}`} className="font-mono font-bold text-zinc-300 hover:text-white flex items-center gap-1 break-words" title={member.email}>
                         <Mail className="w-3 h-3 text-zinc-500 shrink-0" />
-                        <span className="truncate">{member.email}</span>
+                        <span className="break-words">{member.email}</span>
                       </a>
                     </div>
                   </div>

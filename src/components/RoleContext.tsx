@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
-import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover, UnlockOverride, DEPARTMENT_STAGES, ROLE_DEPARTMENT_MAP, Department } from '../types';
+import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Payment, ActivityLog, UserRole, CurrentStage, EditingStatus, Staff, Notification, Equipment, Package, StaffAssignment, LeadStaffAssignmentHistory, ProductionSpeciality, EditorAssignment, PaymentStatus, EquipmentHandover, UnlockOverride, DEPARTMENT_STAGES, ROLE_DEPARTMENT_MAP, Department } from '../types';
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
@@ -114,6 +114,7 @@ interface RoleContextType {
   refreshData: () => void;
   statusHistory: any[];
   getLeadCurrentStatus: (lead: Lead) => string;
+  getLeadCurrentStage: (lead: Lead) => 'Sales' | 'Operations' | 'Production' | 'Completed';
   
   // User Management Admin features
   addUser: (name: string, email: string, mobile: string, role: UserRole, active: boolean, password?: string) => Promise<void>;
@@ -122,6 +123,7 @@ interface RoleContextType {
   toggleUserStatus: (id: string) => void;
   resetUserPassword: (id: string, newPassword: string) => void;
   staffAssignments: StaffAssignment[];
+  leadStaffAssignmentHistory: LeadStaffAssignmentHistory[];
   saveStaffAssignments: (
     orderId: string, 
     assignments: {
@@ -278,7 +280,8 @@ const saveNotificationToSupabase = async (notif: Notification) => {
     
     const { error: fallbackError } = await supabaseClient.from('notifications').insert(fallbackPayload);
     if (fallbackError) {
-      console.error("Fallback insert failed too:", fallbackError);
+      // Suppress error since notifications table may not exist
+      // console.error("Fallback insert failed too:", fallbackError);
     }
   }
 };
@@ -964,6 +967,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [leadStaffAssignmentHistory, setLeadStaffAssignmentHistory] = useState<LeadStaffAssignmentHistory[]>(() => {
+    const saved = localStorage.getItem('erp_lead_staff_assignment_history');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [specialities, setSpecialities] = useState<ProductionSpeciality[]>(() => {
     const saved = localStorage.getItem('erp_production_specialities');
     if (saved) return JSON.parse(saved);
@@ -1009,6 +1017,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('erp_staff_assignments', JSON.stringify(staffAssignments));
   }, [staffAssignments]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_lead_staff_assignment_history', JSON.stringify(leadStaffAssignmentHistory));
+  }, [leadStaffAssignmentHistory]);
 
   useEffect(() => {
     localStorage.setItem('erp_production_staff', JSON.stringify(staff));
@@ -1310,14 +1322,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'lead_id', 'created_date', 'lead_source', 'customer_name', 'mobile', 'alternate_mobile', 
         'email', 'event_type', 'custom_event_type', 'custom_event_name', 'event_date', 'event_time', 'event_location', 'budget', 
         'sales_person', 'status', 'remarks', 'created_by', 'updated_by', 'updated_at', 
-        'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status',
-        'whatsapp_number', 'address', 'city', 'state', 'pincode', 'shoot_type', 'reporting_time'
+        'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status'
       ],
       orders: [
         'order_id', 'lead_id', 'customer_name', 'mobile', 'event_type', 'custom_event_type', 'custom_event_name', 'event_date', 
         'event_time', 'event_location', 'package_name', 'quotation_amount', 'advance_received', 
         'balance_amount', 'order_status', 'current_stage', 'sales_person', 'created_at', 
-        'updated_by', 'updated_at', 'whatsapp_number', 'address', 'city', 'state', 'pincode', 'shoot_type', 'reporting_time'
+        'updated_by', 'updated_at'
       ],
       operations: [
         'operation_id', 'order_id', 'photographer_assigned', 'videographer_assigned', 
@@ -1326,7 +1337,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ],
       raw_footage: [
         'tracking_id', 'order_id', 'event_completed_date', 'raw_received', 'server_path', 
-        'uploaded_by', 'uploaded_date', 'status', 'storage_type', 'upload_notes'
+        'uploaded_by', 'uploaded_date', 'status'
       ],
       production: [
         'production_id', 'tracking_id', 'editor_assigned', 'raw_footage_location', 
@@ -1338,12 +1349,20 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ],
       payments: [
         'payment_id', 'order_id', 'quotation_amount', 'advance_received', 'balance_due', 
-        'final_payment_received', 'payment_date', 'payment_proof_url', 'payment_status',
-        'payment_collection_status', 'additional_received', 'transaction_id'
+        'final_payment_received', 'payment_date', 'payment_proof_url', 'payment_status'
       ],
       activity_logs: [
         'log_id', 'user_name', 'role', 'action', 'module', 'record_id', 'timestamp', 
         'previous_stage', 'new_stage'
+      ],
+      staff_assignments: [
+        'assignment_id', 'order_id', 'staff_role', 'staff_id', 'staff_name', 'assignment_date', 'assignment_status'
+      ],
+      lead_status_history: [
+        'id', 'lead_id', 'order_id', 'old_status', 'new_status', 'changed_by', 'changed_by_role', 'remarks', 'created_at'
+      ],
+      lead_staff_assignment_history: [
+        'history_id', 'lead_id', 'order_id', 'assigned_role', 'assigned_staff', 'assigned_by', 'assigned_at'
       ],
       notifications: [
         'notification_id', 'title', 'message', 'sender_name', 'sender_role', 'timestamp', 
@@ -1393,14 +1412,57 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           sanitized.created_by = `${currentUserName}|${currentRole || 'System'}`;
         }
       }
+      // Try sending to server-side proxy first to bypass client RLS issues
+      try {
+        const response = await fetch('/api/db/insert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, record: sanitized })
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson.success) {
+            console.log(`[pushInsert Proxy SUCCESS] for ${table}:`, resJson.data);
+            updateDiagnosticMetric('insert', 'ok');
+
+            // Clean up matching local record if any from erp_local_<tableKey>
+            const localKey = `erp_local_${table}`;
+            const existingLocalStr = localStorage.getItem(localKey);
+            if (existingLocalStr) {
+              try {
+                const localRecords = JSON.parse(existingLocalStr);
+                if (Array.isArray(localRecords)) {
+                  const idCol = table === 'leads' ? 'lead_id' : (table === 'orders' ? 'order_id' : null);
+                  if (idCol && record[idCol]) {
+                    const filtered = localRecords.filter((r: any) => r && r[idCol] !== record[idCol]);
+                    localStorage.setItem(localKey, JSON.stringify(filtered));
+                  }
+                }
+              } catch (e) {
+                console.error(`Error cleaning up local records on insert for ${table}:`, e);
+              }
+            }
+
+            broadcastSyncPing();
+            return { success: true };
+          } else {
+            console.warn(`[pushInsert Proxy WARN] server returned success=false for ${table}, falling back...`, resJson.error);
+          }
+        } else {
+          console.warn(`[pushInsert Proxy WARN] server returned status ${response.status} for ${table}, falling back...`);
+        }
+      } catch (proxyErr) {
+        console.warn(`[pushInsert Proxy ERROR] failed to reach server for ${table}, falling back...`, proxyErr);
+      }
+
       const { error } = await supabaseClient.from(table).insert(sanitized);
       if (error) {
         if (['activity_logs', 'notifications', 'analytics_snapshots'].includes(table)) {
           return { success: true };
         }
-        console.error(`Supabase Insert error in ${table}:`, error);
-        updateDiagnosticMetric('insert', 'fail', error.message);
-        return { success: false, error: error.message };
+        console.warn(`Supabase Insert error in ${table}:`, error?.message || String(error));
+        updateDiagnosticMetric('insert', 'fail', error?.message || String(error));
+        return { success: false, error: `[Table: ${table}] ${error?.message || String(error)}` };
       } else {
         updateDiagnosticMetric('insert', 'ok');
 
@@ -1428,7 +1490,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
     } catch (err: any) {
-      console.error(`Supabase Insert exception in ${table}:`, err);
+      console.warn(`Supabase Insert exception in ${table}:`, err?.message || String(err));
       updateDiagnosticMetric('insert', 'fail', err?.message || String(err));
       return { success: false, error: err?.message || String(err) };
     }
@@ -1481,6 +1543,58 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log(`[pushUpdate EXECUTING] on ${table}:`, sanitized);
+      
+      // Try sending to server-side proxy first to bypass client RLS issues
+      try {
+        const response = await fetch('/api/db/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, matchColumn, matchValue, updates: sanitized })
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson.success) {
+            console.log(`[pushUpdate Proxy SUCCESS] for ${table}:`, resJson.data);
+            updateDiagnosticMetric('update', 'ok');
+
+            if (table === 'leads') {
+              const leadId = matchValue;
+              const prevLead = leads.find(l => l.lead_id === leadId);
+              const oldStatus = prevLead ? (prevLead.current_status || prevLead.status || 'New Lead') : 'New Lead';
+              const anyStatus = sanitized.status || sanitized.current_status || updates.status || updates.current_status;
+              
+              if (anyStatus && anyStatus !== oldStatus) {
+                const timestamp = new Date().toISOString();
+                const linkedOrder = orders.find(o => o.lead_id === leadId);
+                const orderId = linkedOrder ? linkedOrder.order_id : null;
+                const authorString = currentUserName ? `${currentUserName}|${currentRole || 'System'}` : 'System';
+                
+                const historyPayload = {
+                  history_id: `HST-${Math.floor(1000 + Math.random() * 9000)}`,
+                  lead_id: leadId,
+                  order_id: orderId,
+                  old_status: oldStatus,
+                  new_status: anyStatus,
+                  changed_by: authorString,
+                  remarks: sanitized.remarks || updates.remarks || ''
+                };
+                
+                await pushInsert('lead_status_history', historyPayload);
+              }
+            }
+
+            broadcastSyncPing();
+            return { success: true };
+          } else {
+            console.warn(`[pushUpdate Proxy WARN] server returned success=false for ${table}, falling back...`, resJson.error);
+          }
+        } else {
+          console.warn(`[pushUpdate Proxy WARN] server returned status ${response.status} for ${table}, falling back...`);
+        }
+      } catch (proxyErr) {
+        console.warn(`[pushUpdate Proxy ERROR] failed to reach server for ${table}, falling back...`, proxyErr);
+      }
+
       let { error, data } = await supabaseClient.from(table).update(sanitized).eq(matchColumn, matchValue).select();
       
       // Automatic unified fallback for database check constraints or value exceptions
@@ -1517,9 +1631,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (['activity_logs', 'notifications', 'analytics_snapshots'].includes(table)) {
           return { success: true };
         }
-        console.error(`[pushUpdate ERROR] in ${table}:`, error);
-        updateDiagnosticMetric('update', 'fail', error.message);
-        return { success: false, error: error.message };
+        console.warn(`[pushUpdate ERROR] in ${table}:`, error?.message || String(error));
+        updateDiagnosticMetric('update', 'fail', error?.message || String(error));
+        return { success: false, error: `[Table: ${table}] ${error?.message || String(error)}` };
       } else {
         console.log(`[pushUpdate SUCCESS] returned data:`, data);
         updateDiagnosticMetric('update', 'ok');
@@ -1552,9 +1666,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
               created_at: timestamp
             };
             
-            await supabaseClient.from('lead_status_history').insert(newHist).then((insertRes) => {
+            try {
+              const insertRes = await supabaseClient.from('lead_status_history').insert(newHist);
               if (insertRes.error) {
-                console.error("Failed to insert lead status history in pushUpdate:", insertRes.error);
+                console.warn("Failed to insert lead status history in pushUpdate:", insertRes.error?.message || insertRes.error);
               } else {
                 setStatusHistory(prev => {
                   const updatedHist = [...prev, newHist];
@@ -1562,7 +1677,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   return updatedHist;
                 });
               }
-            });
+            } catch (e: any) {
+              console.warn("Failed to insert lead status history in pushUpdate (exception):", e?.message || e);
+            }
             
             setLeads((prev) => 
               prev.map((ld) => {
@@ -1603,7 +1720,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
     } catch (err: any) {
-      console.error(`[pushUpdate EXCEPTION] in ${table}:`, err);
+      console.warn(`[pushUpdate EXCEPTION] in ${table}:`, err?.message || String(err));
       updateDiagnosticMetric('update', 'fail', err?.message || String(err));
       return { success: false, error: err?.message || String(err) };
     }
@@ -1621,13 +1738,37 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(localKey, JSON.stringify(filtered));
       }
 
+      // Try sending to server-side proxy first to bypass client RLS issues
+      try {
+        const response = await fetch('/api/db/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, matchColumn, matchValue })
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson.success) {
+            console.log(`[pushDelete Proxy SUCCESS] for ${table}`);
+            updateDiagnosticMetric('delete', 'ok');
+            broadcastSyncPing();
+            return;
+          } else {
+            console.warn(`[pushDelete Proxy WARN] server returned success=false for ${table}, falling back...`, resJson.error);
+          }
+        } else {
+          console.warn(`[pushDelete Proxy WARN] server returned status ${response.status} for ${table}, falling back...`);
+        }
+      } catch (proxyErr) {
+        console.warn(`[pushDelete Proxy ERROR] failed to reach server for ${table}, falling back...`, proxyErr);
+      }
+
       const { error } = await supabaseClient.from(table).delete().eq(matchColumn, matchValue);
       if (error) {
         if (['activity_logs', 'notifications', 'analytics_snapshots'].includes(table)) {
           return;
         }
-        console.error(`Supabase Delete error in ${table}:`, error);
-        updateDiagnosticMetric('delete', 'fail', error.message);
+        console.warn(`Supabase Delete error in ${table}:`, error?.message || String(error));
+        updateDiagnosticMetric('delete', 'fail', error?.message || String(error));
       } else {
         updateDiagnosticMetric('delete', 'ok');
         // Realtime subscription will handle syncing deleted records
@@ -1642,11 +1783,31 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabaseClient) return { success: true };
     try {
       const sanitized = stripClientOnlyFields(table, record);
+      
+      // Try proxy first
+      try {
+        const response = await fetch('/api/db/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ table, record: sanitized })
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson.success) {
+            updateDiagnosticMetric('insert', 'ok');
+            broadcastSyncPing();
+            return { success: true };
+          }
+        }
+      } catch (proxyErr) {
+        console.warn(`[pushUpsert Proxy ERROR] failed to reach server for ${table}, falling back...`, proxyErr);
+      }
+
       const { error } = await supabaseClient.from(table).upsert(sanitized);
       if (error) {
-        console.error(`Supabase Upsert error in ${table}:`, error);
-        updateDiagnosticMetric('insert', 'fail', error.message);
-        return { success: false, error: error.message };
+        console.warn(`Supabase Upsert error in ${table}:`, error?.message || String(error));
+        updateDiagnosticMetric('insert', 'fail', error?.message || String(error));
+        return { success: false, error: `[Table: ${table}] ${error?.message || String(error)}` };
       } else {
         updateDiagnosticMetric('insert', 'ok');
         // Realtime subscription will handle syncing
@@ -1787,6 +1948,15 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       );
 
+      const dbLeadStaffAssignmentHistoryPromise = supabaseClient.from('lead_staff_assignment_history').select('*').order('assigned_at', { ascending: false }).then(
+        (res) => res,
+        (err) => {
+          console.warn('Could not read lead_staff_assignment_history from Supabase:', err);
+          const cached = localStorage.getItem('erp_lead_staff_assignment_history');
+          return { data: cached ? JSON.parse(cached) : [], error: null };
+        }
+      );
+
       const [
         { data: dbUsers, error: uErr },
         { data: dbLeads, error: ldErr },
@@ -1803,7 +1973,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         packagesRes,
         staffAssignmentsRes,
         quotationsRes,
-        statusHistoryRes
+        statusHistoryRes,
+        leadStaffAssignmentHistoryRes
       ] = await Promise.all([
         supabaseClient.from('users').select('*'),
         supabaseClient.from('leads').select('*').order('created_date', { ascending: false }),
@@ -1820,7 +1991,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dbPackagesPromise,
         dbStaffAssignmentsPromise,
         dbQuotationsPromise,
-        dbStatusHistoryPromise
+        dbStatusHistoryPromise,
+        dbLeadStaffAssignmentHistoryPromise
       ]);
 
       if (uErr || ldErr || ordErr || opErr || rfErr || prodErr || payErr || logErr) {
@@ -2100,6 +2272,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('erp_staff_assignments', JSON.stringify(staffAssignmentsRes.data));
       }
 
+      if (leadStaffAssignmentHistoryRes && leadStaffAssignmentHistoryRes.data) {
+        setLeadStaffAssignmentHistory(leadStaffAssignmentHistoryRes.data as LeadStaffAssignmentHistory[]);
+        localStorage.setItem('erp_lead_staff_assignment_history', JSON.stringify(leadStaffAssignmentHistoryRes.data));
+      }
+
       if (quotationsRes && quotationsRes.data) {
         const parsedQuotes = (quotationsRes.data as any[]).map((q: any) => {
           let metadata: any = {};
@@ -2344,8 +2521,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateDiagnosticMetric('read', 'ok');
       updateDiagnosticMetric('connection', 'connected');
     } catch (err: any) {
-      console.error('Fetch error:', err);
-      updateDiagnosticMetric('read', 'fail', err.message);
+      console.warn('Fetch error (handled):', err?.message || String(err));
+      updateDiagnosticMetric('read', 'fail', err?.message || String(err));
     } finally {
       setIsDataLoading(false);
     }
@@ -2409,8 +2586,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         }
-      } catch (err) {
-        console.error("[SYNC SESSION] Error searching for user profile:", err);
+      } catch (err: any) {
+        console.warn("[SYNC SESSION] Error searching for user profile:", err?.message || err);
       }
 
       let finalProfileUser: User;
@@ -2449,6 +2626,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session) {
         syncProfileAndSession(session);
       }
+    }).catch(e => {
+      console.warn("Supabase getSession failed:", e?.message || String(e));
     });
 
     // Subscribe to auth state changes
@@ -2493,7 +2672,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { table: 'production_specialties', key: 'speciality_id', setter: setSpecialities },
       { table: 'editor_assignments', key: 'assignment_id', setter: setEditorAssignments },
       { table: 'staff_assignments', key: 'assignment_id', setter: setStaffAssignments },
-      { table: 'lead_status_history', key: 'id', setter: setStatusHistory }
+      { table: 'lead_status_history', key: 'id', setter: setStatusHistory },
+      { table: 'lead_staff_assignment_history', key: 'id', setter: setLeadStaffAssignmentHistory }
     ].map(({ table, key, setter }) => {
       return supabaseClient
         .channel(`rt-${table}`)
@@ -2609,7 +2789,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Handle window focus and document visibility to fetch fresh data when user returns to app
     const handleFocusOrVisible = () => {
       console.log("[SYNC] App focused/visible, pulling fresh database records...");
-      fetchFromDb(false).catch(console.error);
+      fetchFromDb(false).catch(e => console.warn('fetchFromDb failed:', e?.message || e));
     };
 
     window.addEventListener('focus', handleFocusOrVisible);
@@ -2823,184 +3003,172 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'Password is required.' };
       }
 
-    const logAttempt = (status: string, reason: string, userId?: string) => {
-      console.log(`[LOGIN ${status}] ${emailOrUsername} - ${reason}`);
-      if (supabaseClient) {
-        supabaseClient.from('login_logs').insert({
-          username_or_email: cleanInput,
-          user_id: userId || null,
-          login_status: status,
-          failure_reason: reason,
-          user_agent: navigator.userAgent
-        }).then(({ error }) => {
-          if (error) console.warn('Failed to write to login_logs:', error);
-        });
-      }
-    };
-
-    let serverUnavailable = false;
-    let qErr: any = null;
-    if (supabaseClient) {
-      try {
-        // Direct query of public.users table (allows email or username login)
-        const res = await supabaseClient
-          .from('users')
-          .select('*')
-          .or(`email.eq.${cleanInput.toLowerCase()},username.eq.${cleanInput}`);
-        
-        qErr = res.error;
-        const qData = res.data;
-
-        if (qErr) {
-           console.warn("Direct users table fetch failed:", qErr);
-           serverUnavailable = true; // Connection or database error
-        } else if (qData && qData.length > 0) {
-          dbUser = qData[0];
+      const logAttempt = (status: string, reason: string, userId?: string) => {
+        console.log(`[LOGIN ${status}] ${cleanInput} - ${reason}`);
+        if (supabaseClient) {
+          supabaseClient.from('login_logs').insert({
+            username_or_email: cleanInput,
+            user_id: userId || null,
+            login_status: status,
+            failure_reason: reason,
+            user_agent: navigator.userAgent
+          }).then(({ error }) => {
+            if (error) console.warn('Failed to write to login_logs:', error);
+          });
         }
-      } catch (err) {
-        qErr = err;
-        console.warn("Direct users table fetch failed with exception:", err);
-        serverUnavailable = true;
+      };
+
+      if (!supabaseClient) {
+        return { success: false, error: 'Database client is not initialized.' };
       }
-    } else {
-      serverUnavailable = true;
-    }
 
-    // Fallback to local users state if not found via server but not failing
-    if (!dbUser) {
-      dbUser = users.find(u => 
-        (u.email && u.email.toLowerCase() === cleanInput.toLowerCase()) || 
-        (u.username && u.username.toLowerCase() === cleanInput.toLowerCase())
-      );
-    }
-
-    if (!dbUser && serverUnavailable) {
-      let exactReason = 'Unable to connect to the server. Please try again later.';
-      if (qErr) {
-        exactReason = qErr.message || JSON.stringify(qErr);
-      } else if (!(import.meta as any).env?.VITE_SUPABASE_URL) {
-        exactReason = 'Missing environment variables for database connection.';
-      } else {
-        exactReason = 'API request failed or Supabase connection failed.';
+      // Step 1: Resolve Email if Username was provided
+      let loginEmail = cleanInput;
+      if (!cleanInput.includes('@')) {
+        // If it's a username, we must resolve it to an email first via RPC or direct query.
+        // Assuming public.users is readable or we use a proxy endpoint. For now, try direct query.
+        try {
+          const { data, error } = await supabaseClient
+            .from('users')
+            .select('email')
+            .eq('username', cleanInput)
+            .maybeSingle();
+            
+          if (error) {
+            logAttempt('Failed', `Error resolving username: ${error.message}`);
+            return { success: false, error: `Error resolving username: ${error.message}` };
+          }
+          if (!data || !data.email) {
+            const msg = 'User not found.';
+            logAttempt('Failed', msg);
+            return { success: false, error: msg };
+          }
+          loginEmail = data.email;
+        } catch (err: any) {
+          logAttempt('Failed', `Exception resolving username: ${err?.message || err}`);
+          return { success: false, error: `Exception resolving username: ${err?.message || err}` };
+        }
       }
-      
-      logAttempt('Failed', exactReason);
-      return { success: false, error: exactReason };
-    }
 
-    if (!dbUser) {
-      const msg = 'User not found.';
-      logAttempt('Failed', msg);
-      return { success: false, error: msg };
-    }
-
-    // Validate active status
-    if (!dbUser.active) {
-      const msg = 'Your account has been deactivated. Please contact the administrator.';
-      logAttempt('Failed', msg, dbUser.id);
-      return { success: false, error: msg };
-    }
-
-    // Validate password
-    if (dbUser.password !== password) {
-      const msg = 'Incorrect password.';
-      logAttempt('Failed', msg, dbUser.id);
-      return { success: false, error: msg };
-    }
-
-    // Validate role
-    if (!dbUser.role) {
-      const msg = 'User role is not configured.';
-      logAttempt('Failed', msg, dbUser.id);
-      return { success: false, error: msg };
-    }
-
-    const validRoles = ['Business Owner', 'Sales Team', 'Operations Team', 'Production Team'];
-    if (!validRoles.includes(dbUser.role)) {
-      const msg = 'You do not have permission to access this page.';
-      logAttempt('Failed', msg, dbUser.id);
-      return { success: false, error: msg };
-    }
-
-    // Load credentials & fields
-    let foundUser = mapUserFieldsFromDb(dbUser);
-
-    // Try authenticating with Supabase Auth in background to set cookie/session
-    if (supabaseClient) {
+      // Step 2: Authenticate using Supabase Auth
       try {
-        console.log(`[LOGIN] Attempting background Supabase Auth sign-in for: ${dbUser.email}`);
+        console.log(`[LOGIN] Authenticating via Supabase Auth for: ${loginEmail}`);
         const { data: authData, error: authErr } = await supabaseClient.auth.signInWithPassword({
-          email: dbUser.email,
+          email: loginEmail,
           password: password
         });
 
         if (authErr) {
+          logAttempt('Failed', authErr.message);
+          return { success: false, error: authErr.message }; // Use actual Supabase error
+        }
+
+        if (!authData.session) {
           const msg = 'Login successful, but the session could not be created.';
-          logAttempt('Failed', msg, dbUser.id);
+          logAttempt('Failed', msg);
           return { success: false, error: msg };
         }
 
-        if (!authErr && authData.user) {
-          console.log(`[LOGIN] Supabase Auth sign-in succeeded for ${dbUser.email}`);
-          
-          // Check if database row ID needs to be updated to match the auth user's UUID
-          if (dbUser.id !== authData.user.id) {
-            console.log(`[LOGIN] Aligning database ID ${dbUser.id} to Auth UUID ${authData.user.id}`);
-            const { error: updateIdErr } = await supabaseClient
-              .from('users')
-              .update({ id: authData.user.id })
-              .eq('email', dbUser.email);
+        const authUserId = authData.user.id;
+        
+        // Step 3: Load user profile from public.users table after successful authentication
+        const { data: profileData, error: profileErr } = await supabaseClient
+          .from('users')
+          .select('*')
+          .eq('email', loginEmail)
+          .maybeSingle();
 
-            if (!updateIdErr) {
-              foundUser = { ...foundUser, id: mapFromDbUserId(authData.user.id) };
-            } else {
-              console.warn(`[LOGIN] Failed to update db user ID to match Auth UUID:`, updateIdErr.message);
-            }
-          }
-        } else {
-          console.log(`[LOGIN] Supabase Auth sign-in failed (${authErr?.message}). Only pre-configured database users can login.`);
+        if (profileErr) {
+          logAttempt('Failed', `Failed to load user profile: ${profileErr.message}`, authUserId);
+          return { success: false, error: `Failed to load user profile: ${profileErr.message}` };
         }
-      } catch (authErr: any) {
-        console.error('[LOGIN] Resilient Auth Exception:', authErr);
+
+        if (!profileData) {
+          const msg = 'User profile not found in public.users table.';
+          logAttempt('Failed', msg, authUserId);
+          return { success: false, error: msg };
+        }
+        
+        dbUser = profileData;
+
+        // Check if database row ID needs to be updated to match the auth user's UUID
+        if (dbUser.id !== authUserId) {
+          console.log(`[LOGIN] Aligning database ID ${dbUser.id} to Auth UUID ${authUserId}`);
+          const { error: updateIdErr } = await supabaseClient
+            .from('users')
+            .update({ id: authUserId })
+            .eq('email', dbUser.email);
+
+          if (!updateIdErr) {
+            dbUser.id = authUserId;
+          } else {
+            console.warn(`[LOGIN] Failed to update db user ID to match Auth UUID:`, updateIdErr.message);
+          }
+        }
+      } catch (authException: any) {
+        logAttempt('Failed', authException?.message || String(authException));
+        return { success: false, error: authException?.message || String(authException) };
       }
-    }
 
-    // Successful login
-    setCurrentUser(foundUser);
-    setCurrentRoleState(foundUser.role);
-    setCurrentUserNameState(foundUser.name);
+      // Validate active status
+      if (!dbUser.active) {
+        const msg = 'Your account has been deactivated. Please contact the administrator.';
+        logAttempt('Failed', msg, dbUser.id);
+        return { success: false, error: msg };
+      }
 
-    // Save to local storage
-    localStorage.setItem('erp_current_user', JSON.stringify(foundUser));
-    localStorage.setItem('erp_role', foundUser.role);
-    localStorage.setItem('erp_user_name', foundUser.name);
-    localStorage.setItem('erp_session_token', `local_${Date.now()}`);
+      // Validate role
+      if (!dbUser.role) {
+        const msg = 'User role is not configured.';
+        logAttempt('Failed', msg, dbUser.id);
+        return { success: false, error: msg };
+      }
 
-    // Log login
-    const userName = foundUser.name;
-    const userRole = foundUser.role;
-    const newLog: ActivityLog = {
-      log_id: `LOG-${Math.floor(100 + Math.random() * 900)}`,
-      user_name: userName,
-      role: userRole,
-      action: 'User Logged In Successfully',
-      module: 'Session',
-      record_id: foundUser.id,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
-    pushInsert('activity_logs', newLog);
+      const validRoles = ['Business Owner', 'Sales Team', 'Operations Team', 'Production Team'];
+      if (!validRoles.includes(dbUser.role)) {
+        const msg = 'You do not have permission to access this page.';
+        logAttempt('Failed', msg, dbUser.id);
+        return { success: false, error: msg };
+      }
 
-    // Always fetch fresh data from Supabase when user logs in
-    try {
-      fetchFromDb(true).catch(e => console.error("[LOGIN] fetchFromDb threw:", e));
-    } catch (e) {
-      console.error("[LOGIN] fetchFromDb threw:", e);
-    }
-    
-    logAttempt('Success', 'Login successful.', dbUser.id);
-    console.log("[LOGIN] Login successful, returning true");
-    return { success: true };
+      // Load credentials & fields
+      const foundUser = mapUserFieldsFromDb(dbUser);
+
+      // Successful login
+      setCurrentUser(foundUser);
+      setCurrentRoleState(foundUser.role);
+      setCurrentUserNameState(foundUser.name);
+
+      // Save to local storage
+      localStorage.setItem('erp_current_user', JSON.stringify(foundUser));
+      localStorage.setItem('erp_role', foundUser.role);
+      localStorage.setItem('erp_user_name', foundUser.name);
+      localStorage.setItem('erp_session_token', `local_${Date.now()}`);
+
+      // Log login
+      const newLog: ActivityLog = {
+        log_id: `LOG-${Math.floor(100 + Math.random() * 900)}`,
+        user_name: foundUser.name,
+        role: foundUser.role,
+        action: 'User Logged In Successfully',
+        module: 'Session',
+        record_id: foundUser.id,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      pushInsert('activity_logs', newLog);
+
+      // Always fetch fresh data from Supabase when user logs in
+      try {
+        fetchFromDb(true).catch(e => console.warn("[LOGIN] fetchFromDb threw:", e?.message || e));
+      } catch (e: any) {
+        console.warn("[LOGIN] fetchFromDb threw:", e?.message || e);
+      }
+      
+      logAttempt('Success', 'Login successful.', dbUser.id);
+      console.log("[LOGIN] Login successful, returning true");
+      return { success: true };
+
     } finally {
       isLoggingInRef.current = false;
     }
@@ -3318,7 +3486,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: timestamp
       };
 
-      await pushInsert('lead_status_history', newHist).catch(err => console.error("Failed to insert lead status history:", err));
+      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
       setStatusHistory(prev => [...prev, newHist]);
     }
 
@@ -3377,70 +3545,148 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(resLead?.error || "Failed to update lead during order confirmation.");
     }
 
-    const orderId = `ORD-${Math.floor(1012 + Math.random() * 800)}`;
-    const newOrder: Order = {
-      order_id: orderId,
-      lead_id: leadId,
-      customer_name: targetLead.customer_name,
-      mobile: targetLead.mobile,
-      event_type: targetLead.event_type,
-      custom_event_name: targetLead.custom_event_name || '',
-      custom_event_type: targetLead.custom_event_type || '',
-      shoot_type: targetLead.shoot_type || '',
-      event_date: eventDate || targetLead.event_date,
-      event_time: eventTime || targetLead.event_time,
-      reporting_time: reportingTime || '',
-      event_location: targetLead.event_location,
-      package_name: packageName,
-      quotation_amount: quotationAmount,
-      advance_received: advanceReceived,
-      balance_amount: quotationAmount - advanceReceived,
-      order_status: 'Confirmed',
-      current_stage: 'Order Confirmed',
-      sales_person: currentUserName,
-      created_at: timestamp,
-      updated_by: currentUserName,
-      updated_at: timestamp,
-      whatsapp_number: targetLead.whatsapp_number || '',
-      address: targetLead.address || '',
-      city: targetLead.city || '',
-      state: targetLead.state || '',
-      pincode: targetLead.pincode || '',
-    };
+    // Step 3: Check Supabase directly for existing order
+    let masterOrderId = '';
+    let existingOrder = augmentedOrders.find(o => o.lead_id === leadId);
+    let orderExistsInDb = false;
 
-    const paymentId = `PAY-${Math.floor(3012 + Math.random() * 800)}`;
-    const newPayment: Payment = {
-      payment_id: paymentId,
-      order_id: orderId,
-      quotation_amount: quotationAmount,
-      advance_received: advanceReceived,
-      balance_due: quotationAmount - advanceReceived,
-      final_payment_received: 0,
-      payment_proof_url: undefined,
-      payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
-      transaction_id: transactionId || undefined,
-    };
+    if (supabaseClient) {
+      const { data: dbOrder, error } = await supabaseClient.from('orders').select('*').eq('lead_id', leadId).maybeSingle();
+      if (dbOrder) {
+        masterOrderId = dbOrder.order_id;
+        orderExistsInDb = true;
+      }
+    }
 
-    const opId = `OP-${Math.floor(5012 + Math.random() * 800)}`;
-    const newOp: Operation = {
-      operation_id: opId,
-      order_id: orderId,
-      photographer_assigned: 'Unassigned',
-      videographer_assigned: 'Unassigned',
-      drone_operator_assigned: 'Unassigned',
-      assistant_assigned: 'Unassigned',
-      equipment_kit: '',
-      reporting_time: reportingTime || '08:00',
-      event_status: 'New Order Received',
-      remarks: notes || '',
-      updated_by: currentUserName,
-    };
+    if (!masterOrderId) {
+      masterOrderId = existingOrder ? existingOrder.order_id : `ORD-${Math.floor(1012 + Math.random() * 800)}`;
+    }
+    
+    if (orderExistsInDb) {
+      const rOrd = await pushUpdate('orders', 'order_id', masterOrderId, {
+        customer_name: targetLead.customer_name,
+        mobile: targetLead.mobile,
+        event_type: targetLead.event_type,
+        custom_event_name: targetLead.custom_event_name || '',
+        custom_event_type: targetLead.custom_event_type || '',
+        event_date: eventDate || targetLead.event_date,
+        event_time: eventTime || targetLead.event_time,
+        event_location: targetLead.event_location,
+        package_name: packageName,
+        quotation_amount: quotationAmount,
+        advance_received: advanceReceived,
+        balance_amount: quotationAmount - advanceReceived,
+        order_status: 'Confirmed',
+        current_stage: 'Order Confirmed',
+        sales_person: currentUserName,
+        updated_by: currentUserName,
+        updated_at: timestamp,
+      });
+      if (!rOrd?.success) throw new Error("Failed to update existing order: " + rOrd?.error);
+    } else {
+      const newOrder: Order = {
+        order_id: masterOrderId,
+        lead_id: leadId,
+        customer_name: targetLead.customer_name,
+        mobile: targetLead.mobile,
+        event_type: targetLead.event_type,
+        custom_event_name: targetLead.custom_event_name || '',
+        custom_event_type: targetLead.custom_event_type || '',
+        shoot_type: targetLead.shoot_type || '',
+        event_date: eventDate || targetLead.event_date,
+        event_time: eventTime || targetLead.event_time,
+        reporting_time: reportingTime || '',
+        event_location: targetLead.event_location,
+        package_name: packageName,
+        quotation_amount: quotationAmount,
+        advance_received: advanceReceived,
+        balance_amount: quotationAmount - advanceReceived,
+        order_status: 'Confirmed',
+        current_stage: 'Order Confirmed',
+        sales_person: currentUserName,
+        created_at: timestamp,
+        updated_by: currentUserName,
+        updated_at: timestamp,
+        whatsapp_number: targetLead.whatsapp_number || '',
+        address: targetLead.address || '',
+        city: targetLead.city || '',
+        state: targetLead.state || '',
+        pincode: targetLead.pincode || '',
+      };
+      const rOrd = await pushInsert('orders', newOrder);
+      if (!rOrd?.success) throw new Error("Failed to insert Order: " + rOrd?.error);
+    }
 
-    await Promise.all([
-      pushInsert('orders', newOrder),
-      pushInsert('payments', newPayment),
-      pushInsert('operations', newOp)
-    ]);
+    // Payments
+    let paymentExistsInDb = false;
+    let existingPaymentId = payments.find(p => p.order_id === masterOrderId)?.payment_id;
+
+    if (supabaseClient) {
+      const { data: dbPayment } = await supabaseClient.from('payments').select('payment_id').eq('order_id', masterOrderId).maybeSingle();
+      if (dbPayment) {
+        existingPaymentId = dbPayment.payment_id;
+        paymentExistsInDb = true;
+      }
+    }
+
+    if (!paymentExistsInDb) {
+      const paymentId = existingPaymentId || `PAY-${Math.floor(3012 + Math.random() * 800)}`;
+      const newPayment: Payment = {
+        payment_id: paymentId,
+        order_id: masterOrderId,
+        quotation_amount: quotationAmount,
+        advance_received: advanceReceived,
+        balance_due: quotationAmount - advanceReceived,
+        final_payment_received: 0,
+        payment_proof_url: undefined,
+        payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
+        transaction_id: transactionId || undefined,
+      };
+      await pushInsert('payments', newPayment);
+    } else if (existingPaymentId) {
+      await pushUpdate('payments', 'payment_id', existingPaymentId, {
+        quotation_amount: quotationAmount,
+        advance_received: advanceReceived,
+        balance_due: quotationAmount - advanceReceived,
+        payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
+      });
+    }
+
+    // Operations
+    let opExistsInDb = false;
+    let existingOpId = operations.find(o => o.order_id === masterOrderId)?.operation_id;
+
+    if (supabaseClient) {
+      const { data: dbOp } = await supabaseClient.from('operations').select('operation_id').eq('order_id', masterOrderId).maybeSingle();
+      if (dbOp) {
+        existingOpId = dbOp.operation_id;
+        opExistsInDb = true;
+      }
+    }
+
+    if (!opExistsInDb) {
+      const newOp: Operation = {
+        operation_id: existingOpId || `OP-${Math.floor(5012 + Math.random() * 800)}`,
+        order_id: masterOrderId,
+        photographer_assigned: 'Unassigned',
+        videographer_assigned: 'Unassigned',
+        drone_operator_assigned: 'Unassigned',
+        assistant_assigned: 'Unassigned',
+        equipment_kit: '',
+        reporting_time: reportingTime || '08:00',
+        event_status: 'Operations Assigned',
+        remarks: notes || '',
+        updated_by: currentUserName,
+      };
+      const rOp = await pushInsert('operations', newOp);
+      if (!rOp?.success) throw new Error("Failed to insert Operations: " + rOp?.error);
+    } else if (existingOpId) {
+      await pushUpdate('operations', 'operation_id', existingOpId, {
+        reporting_time: reportingTime || '08:00',
+        remarks: notes || '',
+        updated_by: currentUserName,
+      });
+    }
 
     // Insert into lead_status_history
     const oldStatus = targetLead.current_status || targetLead.status || 'New Lead';
@@ -3453,7 +3699,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const newHist = {
         lead_id: leadId,
-        order_id: orderId,
+        order_id: masterOrderId,
         old_status: oldStatus,
         new_status: 'Order Confirmed',
         changed_by: changedBy,
@@ -3462,17 +3708,17 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: timestamp
       };
 
-      await pushInsert('lead_status_history', newHist).catch(err => console.error("Failed to insert lead status history:", err));
+      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
       setStatusHistory(prev => [...prev, newHist]);
     }
 
     addNotification({
       user_id: 'All',
-      project_id: orderId,
+      project_id: masterOrderId,
       task_id: 'Operations Allocation',
       notification_type: 'New Lead Assigned',
       title: 'New Order Received from Sales',
-      message: `A new order (${orderId}) has been confirmed for ${targetLead.customer_name}. Package: ${packageName}. Please assign crew and schedule the event!`,
+      message: `A new order (${masterOrderId}) has been confirmed for ${targetLead.customer_name}. Package: ${packageName}. Please assign crew and schedule the event!`,
       recipient_role: 'Operations Team'
     });
 
@@ -3497,9 +3743,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     await fetchFromDb();
 
-    logActivity(`Confirmed Order for ${targetLead.customer_name}. Package: ${packageName}`, 'Sales', orderId, targetLead.status, 'Order Confirmed');
+    logActivity(`Confirmed Order for ${targetLead.customer_name}. Package: ${packageName}`, 'Sales', masterOrderId, targetLead.status, 'Order Confirmed');
 
-    return orderId;
+    return masterOrderId;
   };
 
   // 4. Assign Operations
@@ -3519,7 +3765,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       event_status?: string;
     }
   ) => {
-    const opId = `OP-${Math.floor(5012 + Math.random() * 800)}`;
+    const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
+    if (!targetOrder) throw new Error("Order not found");
+
+    const existingOp = operations.find(o => o.order_id === orderId);
+    const opId = existingOp?.operation_id || `OP-${Math.floor(5012 + Math.random() * 800)}`;
     const { current_stage, event_date, event_time, event_status, ...restOpData } = opData;
     
     // Default or specified status / stage
@@ -3529,6 +3779,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Step 2 & 4: Only allow exact workflow statuses, throw custom error on spelling variations
     const allowedWorkflowStatuses = [
       'Order Confirmed',
+      'Staff Assigned',
       'Event Scheduled',
       'Event Completed',
       'Event Cancelled',
@@ -3560,7 +3811,6 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_by: currentUserName,
     };
 
-    const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
     const previousStage = targetOrder ? targetOrder.current_stage : 'Order Confirmed';
     const timestamp = new Date().toISOString();
 
@@ -3594,12 +3844,39 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    const resOp = await pushUpsert('operations', newOp);
-    if (!resOp?.success) {
-      if (resOp?.error?.toLowerCase().includes('operations_event_status_check') || resOp?.error?.toLowerCase().includes('status_check')) {
-        throw new Error('Invalid event status being sent to database.');
-      }
-      throw new Error(resOp?.error || "Failed to update operation crew data.");
+    if (existingOp) {
+      const resOp = await pushUpdate('operations', 'operation_id', existingOp.operation_id, {
+        ...restOpData,
+        event_status: dbEventStatus,
+        updated_by: currentUserName,
+      });
+      if (!resOp?.success) throw new Error(resOp?.error || "Failed to update operations.");
+    } else {
+      const resOp = await pushInsert('operations', newOp);
+      if (!resOp?.success) throw new Error(resOp?.error || "Failed to insert operations.");
+    }
+
+    // Insert into lead_status_history if stage changed
+    if (previousStage !== targetStageNum && targetOrder?.lead_id) {
+      const roleParts = (currentUserName && currentUserName.includes('|')) 
+        ? currentUserName.split('|') 
+        : [currentUserName || 'System', currentRole || 'System'];
+      const changedBy = roleParts[0];
+      const changedByRole = roleParts[1] || currentRole || 'System';
+
+      const newHist = {
+        lead_id: targetOrder.lead_id,
+        order_id: orderId,
+        old_status: previousStage,
+        new_status: targetStageNum,
+        changed_by: changedBy,
+        changed_by_role: changedByRole,
+        remarks: opData.remarks || `Status updated to ${targetStageNum}`,
+        created_at: timestamp
+      };
+
+      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
+      setStatusHistory(prev => [...prev, newHist]);
     }
 
     // await fetchFromDb(); // Disabled to prevent full reload
@@ -3615,53 +3892,157 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       staff_name: string;
     }[]
   ) => {
-    const newAssignments: StaffAssignment[] = assignments.map((a) => {
-      const existing = staffAssignments.find(
-        (ea) => ea.order_id === orderId && ea.staff_id === a.staff_id && ea.staff_role === a.staff_role
-      );
-      const uniqueId = existing?.assignment_id || `ASST-${Math.floor(1000 + Math.random() * 9000)}`;
-      const assignDate = existing?.assignment_date || new Date().toISOString().split('T')[0];
+    if (!orderId) {
+      throw new Error("Missing Required Field: order_id is null or empty.");
+    }
 
-      return {
-        assignment_id: uniqueId,
-        order_id: orderId,
-        staff_role: a.staff_role,
-        staff_id: a.staff_id,
-        staff_name: a.staff_name,
-        assignment_date: assignDate,
-        assignment_status: 'Assigned',
-      };
-    });
+    const targetOrder = augmentedOrders.find((o) => o.order_id === orderId);
+    if (!targetOrder) {
+      throw new Error(`Missing Order Record: Order ${orderId} not found locally.`);
+    }
+
+    const leadId = targetOrder.lead_id;
+    if (!leadId) {
+      throw new Error(`Missing Required Field: lead_id is null for Order ${orderId}.`);
+    }
+
+    const targetLead = leads.find(l => l.lead_id === leadId);
+    if (!targetLead) {
+      throw new Error(`Missing Lead Record: Lead ${leadId} not found locally.`);
+    }
+
+    const targetOp = augmentedOperations.find(o => o.order_id === orderId);
+    if (!targetOp) {
+      throw new Error(`Missing Operations Record: Operation for Order ${orderId} not found locally.`);
+    }
 
     if (supabaseClient) {
-      try {
-        const { error: delErr } = await supabaseClient
-          .from('staff_assignments')
-          .delete()
-          .eq('order_id', orderId);
-        
-        if (delErr) {
-          throw new Error('Error deleting existing assignments: ' + delErr.message);
+      // Explicitly verify the parent records exist in the database BEFORE insert
+      const { data: dbLead, error: leadErr } = await supabaseClient.from('leads').select('lead_id').eq('lead_id', leadId).single();
+      if (leadErr || !dbLead) {
+        if (targetLead) {
+          await pushInsert('leads', targetLead);
+        } else {
+          throw new Error(`Database Error: Missing Lead Record in DB (${leadId}).`);
         }
+      }
 
-        if (newAssignments.length > 0) {
-          const { error: insErr } = await supabaseClient
-            .from('staff_assignments')
-            .insert(newAssignments);
-          
-          if (insErr) {
-            throw new Error('Error inserting new assignments: ' + insErr.message);
-          }
+      const { data: dbOrder, error: orderErr } = await supabaseClient.from('orders').select('order_id, lead_id').eq('order_id', orderId).single();
+      if (orderErr || !dbOrder) {
+        if (targetOrder) {
+          await pushInsert('orders', targetOrder);
+        } else {
+          throw new Error(`Database Error: Missing Order Record in DB (${orderId}).`);
         }
-      } catch (err: any) {
-        throw new Error('Supabase sync error in saveStaffAssignments: ' + err.message);
+      } else if (dbOrder.lead_id !== leadId) {
+        throw new Error(`Validation Error: Order ${orderId} does not belong to Lead ${leadId}.`);
+      }
+
+      const { data: dbOp, error: opErr } = await supabaseClient.from('operations').select('operation_id').eq('order_id', orderId).maybeSingle();
+      if (opErr || !dbOp) {
+        if (targetOp) {
+          await pushInsert('operations', targetOp);
+        } else {
+          throw new Error(`Database Error: Missing Operations Record in DB for Order (${orderId}).`);
+        }
       }
     }
 
-    // await fetchFromDb(); // Disabled to prevent full reload
+    const timestamp = new Date().toISOString();
+    const roleParts = (currentUserName && currentUserName.includes('|')) 
+      ? currentUserName.split('|') 
+      : [currentUserName || 'System', currentRole || 'System'];
+    const changedBy = roleParts[0];
+    const changedByRole = roleParts[1] || currentRole || 'System';
+
+    if (assignments.length > 0) {
+      for (const a of assignments) {
+        // STEP 2: SAVE ASSIGNMENT HISTORY
+        const newHist = {
+          lead_id: leadId,
+          order_id: orderId,
+          assigned_role: a.staff_role,
+          assigned_staff: a.staff_name,
+          assigned_by: changedBy,
+          assigned_at: timestamp
+        };
+        const resHist = await pushInsert('lead_staff_assignment_history', newHist);
+        if (!resHist.success) throw new Error(`Error saving assignment history:\n\n${resHist.error}`);
+
+        // STEP 3: UPDATE CURRENT ASSIGNMENT
+        const existing = staffAssignments.find(
+          (ea) => ea.order_id === orderId && ea.staff_role === a.staff_role
+        );
+        const assignId = existing?.assignment_id || `ASST-${Math.floor(1000 + Math.random() * 9000)}`;
+        const assignDate = existing?.assignment_date || timestamp.split('T')[0];
+
+        const newAssign = {
+          assignment_id: assignId,
+          order_id: orderId,
+          staff_role: a.staff_role,
+          staff_id: a.staff_id,
+          staff_name: a.staff_name,
+          assignment_date: assignDate,
+          assignment_status: 'Assigned',
+          updated_by: changedBy
+        };
+
+        if (existing) {
+          const resAssign = await pushUpdate('staff_assignments', 'assignment_id', assignId, newAssign);
+          if (!resAssign.success) throw new Error(`Error updating staff assignment:\n\n${resAssign.error}`);
+        } else {
+          const resAssign = await pushInsert('staff_assignments', newAssign);
+          if (!resAssign.success) throw new Error(`Error creating staff assignment:\n\n${resAssign.error}`);
+        }
+      }
+
+      // STEP 4: UPDATE OPERATIONS TABLE
+      let opUpdates: any = {};
+      for (const a of assignments) {
+        if (a.staff_role === 'Photographer') opUpdates.photographer_assigned = a.staff_name;
+        else if (a.staff_role === 'Videographer') opUpdates.videographer_assigned = a.staff_name;
+        else if (a.staff_role === 'Drone Operator') opUpdates.drone_operator_assigned = a.staff_name;
+        else if (a.staff_role === 'Assistant') opUpdates.assistant_assigned = a.staff_name;
+      }
+      
+      if (Object.keys(opUpdates).length > 0) {
+        opUpdates.updated_by = changedBy;
+        const resOp = await pushUpdate('operations', 'order_id', orderId, opUpdates);
+        if (!resOp.success) throw new Error(`Error updating operations record:\n\n${resOp.error}`);
+      }
+
+      // STEP 5: UPDATE LEAD STATUS
+      const statusHist = {
+        lead_id: leadId,
+        order_id: orderId,
+        old_status: targetLead.current_status || 'Order Confirmed',
+        new_status: 'Staff Assigned',
+        changed_by: changedBy,
+        changed_by_role: changedByRole,
+        remarks: `Assigned: ${assignments.map(a => `${a.staff_role} (${a.staff_name})`).join(', ')}`,
+        created_at: timestamp
+      };
+      await pushInsert('lead_status_history', statusHist);
+
+      const resLead = await pushUpdate('leads', 'lead_id', leadId, { 
+        current_status: 'Staff Assigned', 
+        status: 'Staff Assigned',
+        updated_by: changedBy
+      });
+      if (!resLead.success) throw new Error(`Error updating lead status:\n\n${resLead.error}`);
+
+      const resOrder = await pushUpdate('orders', 'order_id', orderId, { 
+        current_stage: 'Staff Assigned', 
+        updated_by: changedBy
+      });
+      if (!resOrder.success) throw new Error(`Error updating order stage:\n\n${resOrder.error}`);
+    }
+
+    // STEP 6: REFRESH DASHBOARD
+    await fetchFromDb();
 
     // Create notifications for assigned staff
-    newAssignments.forEach((a) => {
+    assignments.forEach((a) => {
       const ord = augmentedOrders.find((o) => o.order_id === orderId);
       const op = augmentedOperations.find((o) => o.order_id === orderId);
       const customerName = ord?.customer_name || 'Valued Client';
@@ -3914,8 +4295,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn("[updateProduction] DB operation failed for production table insert, will fallback to Leads:", rProd?.error);
         }
       }
-    } catch (prodErr) {
-      console.error("[updateProduction] Production DB write exception:", prodErr);
+    } catch (prodErr: any) {
+      console.warn("[updateProduction] Production DB write exception:", prodErr?.message || prodErr);
     }
 
     const actualTrackingId = targetProd ? targetProd.tracking_id : inferredTrackingId;
@@ -4872,7 +5253,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: timestamp
       };
 
-      await pushInsert('lead_status_history', newHist).catch(err => console.error("Failed to insert lead status history:", err));
+      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
       setStatusHistory(prev => [...prev, newHist]);
     }
 
@@ -4904,6 +5285,19 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     return lead.status || 'New Lead';
+  };
+
+  const getLeadCurrentStage = (lead: Lead): 'Sales' | 'Operations' | 'Production' | 'Completed' => {
+    const status = getLeadCurrentStatus(lead);
+    
+    const salesStatuses = ['New Lead', 'Contacted', 'Follow Up', 'Follow-up', 'Quotation Sent', 'Negotiation'];
+    const opsStatuses = ['Order Confirmed', 'Operations Assigned', 'Staff Assigned', 'Event Scheduled', 'Event Completed'];
+    const prodStatuses = ['Raw Footage Received', 'Editor Assigned', 'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Client Review Sent', 'Internal Review', 'Client Review', 'Revision Required', 'Revision In Progress', 'Revision', 'Final Approval', 'Ready for Delivery'];
+    
+    if (status === 'Delivered' || status === 'Completed' || status === 'Closed' || status === 'Project Closed' || status === 'Project Delivered') return 'Completed';
+    if (prodStatuses.includes(status)) return 'Production';
+    if (opsStatuses.includes(status)) return 'Operations';
+    return 'Sales';
   };
 
   // RBAC Helper: Define allowed statuses per department
@@ -5311,12 +5705,14 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshData,
         statusHistory,
         getLeadCurrentStatus,
+        getLeadCurrentStage,
         addUser,
         signUpUser,
         editUser,
         toggleUserStatus,
         resetUserPassword,
         staffAssignments,
+        leadStaffAssignmentHistory,
         saveStaffAssignments,
         specialities,
         addSpeciality,

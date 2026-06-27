@@ -151,8 +151,8 @@ export const OrderSearch: React.FC = () => {
                     <span className="text-[10px] font-bold text-slate-500 font-mono tracking-wider block uppercase">
                       📞 Client CRM Info
                     </span>
-                    <p className="text-slate-350 truncate">Mobile: <strong className="text-slate-200">{formatIndianPhoneNumber(lead.mobile)}</strong></p>
-                    <p className="text-slate-350 truncate">Email: <span className="text-slate-200">{lead.email}</span></p>
+                    <p className="text-slate-350 break-words">Mobile: <strong className="text-slate-200">{formatIndianPhoneNumber(lead.mobile)}</strong></p>
+                    <p className="text-slate-350 break-words">Email: <span className="text-slate-200">{lead.email}</span></p>
                     <p className="text-slate-350">Event Location: <span className="text-slate-200">{lead.event_location}</span></p>
                     <p className="text-slate-350">Date & Time: <span className="text-slate-200">{lead.event_date} @ {formatTime12Hour(lead.event_time)}</span></p>
                   </div>
@@ -184,7 +184,7 @@ export const OrderSearch: React.FC = () => {
                       <div className="space-y-1 text-slate-350 text-[11px]">
                         <p>Editor: <strong className="text-slate-200">{prod.editor_assigned}</strong></p>
                         <p>Status: <span className="font-semibold text-amber-400">{prod.editing_status}</span></p>
-                        <p className="truncate">S3 Paths: <span className="text-[9px] font-mono select-all text-slate-400">{prod.raw_footage_location}</span></p>
+                        <p className="break-words">S3 Paths: <span className="text-[9px] font-mono select-all text-slate-400">{prod.raw_footage_location}</span></p>
                       </div>
                     ) : (
                       <p className="text-slate-500 italic mt-1 font-mono text-[10px]">Unassigned from editor timeline queue.</p>

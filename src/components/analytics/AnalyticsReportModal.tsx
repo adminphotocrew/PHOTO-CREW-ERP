@@ -719,13 +719,13 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({
                   <thead>
                     <tr className="border-b border-zinc-850 bg-zinc-900 text-zinc-400 font-mono text-[10px] uppercase tracking-wide">
                       {Object.keys(filteredRows[0]).map((header) => (
-                        <th key={header} className="p-3 font-extrabold whitespace-nowrap">
+                        <th key={header} className="p-3 font-extrabold ">
                           {header.replace(/_/g, ' ')}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-900 text-zinc-300 font-mono text-[11px] whitespace-nowrap">
+                  <tbody className="divide-y divide-zinc-900 text-zinc-300 font-mono text-[11px] ">
                     {filteredRows.map((row, rIdx) => (
                       <tr key={rIdx} className="hover:bg-zinc-900/40 transition-colors">
                         {Object.keys(row).map((header, cIdx) => {

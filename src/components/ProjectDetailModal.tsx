@@ -107,7 +107,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-2 px-2.5 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`py-2 px-2.5 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition-all cursor-pointer  ${
                   isActive 
                     ? 'border-amber-500 text-amber-400 bg-amber-500/5' 
                     : 'border-transparent text-zinc-450 hover:text-zinc-200'
@@ -372,25 +372,25 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                     <div className="grid grid-cols-2 gap-4 font-mono text-xs">
                       <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-900 hover:border-zinc-850">
                         <span className="text-[9.5px] text-zinc-550 uppercase tracking-wide block">PRO PHOTOGRAPHER</span>
-                        <p className="text-zinc-200 mt-1 font-bold text-xs truncate">
+                        <p className="text-zinc-200 mt-1 font-bold text-xs break-words">
                           {operation.photographer_assigned || 'Unassigned'}
                         </p>
                       </div>
                       <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-900 hover:border-zinc-850">
                         <span className="text-[9.5px] text-zinc-550 uppercase tracking-wide block">CINEMATOGRAPHER</span>
-                        <p className="text-zinc-200 mt-1 font-bold text-xs truncate">
+                        <p className="text-zinc-200 mt-1 font-bold text-xs break-words">
                           {operation.videographer_assigned || 'Unassigned'}
                         </p>
                       </div>
                       <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-900 hover:border-zinc-850">
                         <span className="text-[9.5px] text-zinc-550 uppercase tracking-wide block">DRONE CAPTAIN</span>
-                        <p className="text-zinc-200 mt-1 font-bold text-xs truncate">
+                        <p className="text-zinc-200 mt-1 font-bold text-xs break-words">
                           {operation.drone_operator_assigned || 'Unassigned'}
                         </p>
                       </div>
                       <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-900 hover:border-zinc-850">
                         <span className="text-[9.5px] text-zinc-550 uppercase tracking-wide block">CREW HELPER ASSIST</span>
-                        <p className="text-zinc-200 mt-1 font-bold text-xs truncate">
+                        <p className="text-zinc-200 mt-1 font-bold text-xs break-words">
                           {operation.assistant_assigned || 'Unassigned'}
                         </p>
                       </div>
@@ -402,7 +402,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                         {operation.equipment_kit ? (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {operation.equipment_kit.split(',').map((kit: string, idx: number) => (
-                              <span key={idx} className="bg-amber-400/10 text-amber-400 px-2 py-0.5 border border-amber-400/10 rounded-lg text-[9.5px] font-mono whitespace-nowrap">
+                              <span key={idx} className="bg-amber-400/10 text-amber-400 px-2 py-0.5 border border-amber-400/10 rounded-lg text-[9.5px] font-mono ">
                                 ⚙️ {kit.trim()}
                               </span>
                             ))}
@@ -468,7 +468,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                   </div>
                   <div className="bg-[#030303] p-1.5 px-3 rounded-lg border border-zinc-850 flex-1 w-full max-w-md">
                     <span className="text-[9px] text-zinc-500 uppercase block tracking-wider">Vault Server Path</span>
-                    <span className="text-zinc-350 select-all truncate block text-[10px] text-left">{footage.server_path}</span>
+                    <span className="text-zinc-350 select-all break-words block text-[10px] text-left">{footage.server_path}</span>
                   </div>
                   <div className="flex items-center gap-1.5 bg-violet-500/10 border border-violet-500/20 rounded-md p-1.5 px-3 text-[10px] font-bold text-violet-400 uppercase tracking-tight">
                     <CheckCircle className="w-3.5 h-3.5 text-violet-400" />
@@ -526,7 +526,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
                     <div className="space-y-4 font-mono text-xs">
                       <div>
                         <span className="text-[10px] text-zinc-550 uppercase tracking-widest block">Customer Review Link</span>
-                        <p className="text-zinc-350 truncate mt-1 bg-zinc-950 p-1.5 px-3 rounded border border-zinc-900 select-all text-[11px]">
+                        <p className="text-zinc-350 break-words mt-1 bg-zinc-950 p-1.5 px-3 rounded border border-zinc-900 select-all text-[11px]">
                           {prod.client_review_url || 'https://review.photocrew.erps.com/rev-loop-client...'}
                         </p>
                       </div>
@@ -626,7 +626,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ isOpen, 
 
                     <div className="border-t border-zinc-900/85 pt-3">
                       <span className="text-[10px] text-zinc-550 uppercase tracking-widest block">Audit Receipt URL Link</span>
-                      <p className="text-zinc-350 truncate mt-1 bg-zinc-950 p-1.5 px-3 rounded border border-zinc-900 select-all text-[11px]">
+                      <p className="text-zinc-350 break-words mt-1 bg-zinc-950 p-1.5 px-3 rounded border border-zinc-900 select-all text-[11px]">
                         {payment.proof_path_url || 'https://photocrew-receipts.s3.amazonaws.com/rec-31942.pdf'}
                       </p>
                     </div>

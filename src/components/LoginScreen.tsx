@@ -186,7 +186,7 @@ export const LoginScreen: React.FC = () => {
       setDbErrorDetails('Live active database handshake verified. Full CRUD capability and standard row permissions are operational.');
 
     } catch (err: any) {
-      console.error('Supabase connection test failed:', err);
+      console.warn('Supabase connection test failed:', err?.message || err);
       const errMsg = String(err?.message || err || '').toLowerCase();
       if (errMsg.includes('failed to fetch') || errMsg.includes('network') || errMsg.includes('dns')) {
         setDbStatus('disconnected');
@@ -234,7 +234,7 @@ export const LoginScreen: React.FC = () => {
         setError(result.error || 'Login failed. Unknown error occurred.');
       }
     } catch (err: any) {
-      console.error(`[LOGIN SUBMIT] Exception:`, err);
+      console.warn(`[LOGIN SUBMIT] Exception:`, err?.message || String(err));
       setIsLoading(false);
       setError(err?.message || 'Login failed due to an internal server error.');
     }
@@ -312,7 +312,7 @@ export const LoginScreen: React.FC = () => {
       }, 1500);
 
     } catch (err: any) {
-      console.error('Account registration failure:', err);
+      console.warn('Account registration failure:', err?.message || err);
       setSignUpError(err?.message || 'Access registration rejected by directory controller.');
     } finally {
       setSignUpLoading(false);
@@ -520,7 +520,7 @@ export const LoginScreen: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-zinc-500 truncate mt-0.5 font-mono">{usr.email}</p>
+                    <p className="text-[10px] text-zinc-500 break-words mt-0.5 font-mono">{usr.email}</p>
                     <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-zinc-900/50 text-[9px]">
                       <span className={`px-1.5 py-0.5 rounded font-mono uppercase tracking-wider text-[8px] font-bold ${theme.bg}`}>
                         {usr.role.replace(' Team', '')}
@@ -611,7 +611,7 @@ export const LoginScreen: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5 gap-y-2 text-[10px] font-mono">
                 <div className="flex items-center justify-between p-2 bg-zinc-950 rounded-xl border border-zinc-900">
                   <span className="text-zinc-550">Supabase URL</span>
-                  <span className="text-zinc-350 truncate max-w-[120px]" title={(import.meta as any).env?.VITE_SUPABASE_URL}>
+                  <span className="text-zinc-350 break-words max-w-[120px]" title={(import.meta as any).env?.VITE_SUPABASE_URL}>
                     {(import.meta as any).env?.VITE_SUPABASE_URL ? `${(import.meta as any).env.VITE_SUPABASE_URL.substring(0, 12)}...${(import.meta as any).env.VITE_SUPABASE_URL.substring((import.meta as any).env.VITE_SUPABASE_URL.length - 8)}` : 'Not Configured'}
                   </span>
                 </div>
@@ -660,7 +660,7 @@ export const LoginScreen: React.FC = () => {
                   Database Diagnostic Report
                 </span>
                 {diagnosticFailMsg && (
-                  <span className="text-[8px] text-rose-400 font-mono max-w-[150px] truncate" title={diagnosticFailMsg}>
+                  <span className="text-[8px] text-rose-400 font-mono max-w-[150px] break-words" title={diagnosticFailMsg}>
                     Err: {diagnosticFailMsg}
                   </span>
                 )}

@@ -109,7 +109,7 @@ const PackageCatalogueView: React.FC = () => {
                   {pkg.team_members && (
                     <div className="flex justify-between text-zinc-400">
                       <span className="text-zinc-500 font-mono text-[10px]">CREW PROFILE:</span>
-                      <span className="text-right truncate max-w-[150px]">{pkg.team_members}</span>
+                      <span className="text-right break-words max-w-[150px]">{pkg.team_members}</span>
                     </div>
                   )}
                 </div>
@@ -124,7 +124,7 @@ const PackageCatalogueView: React.FC = () => {
                 {pkg.seasonal_offer && (
                   <div className="bg-amber-500/5 border border-amber-500/10 p-2 rounded-lg text-[10px] text-amber-400/80 flex items-center gap-1.5 font-mono">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                    <span className="truncate">Special: {pkg.seasonal_offer}</span>
+                    <span className="break-words">Special: {pkg.seasonal_offer}</span>
                   </div>
                 )}
               </div>

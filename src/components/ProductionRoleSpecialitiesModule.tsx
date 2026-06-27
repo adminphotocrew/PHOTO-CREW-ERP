@@ -37,8 +37,8 @@ export const ProductionRoleSpecialitiesModule: React.FC = () => {
       await addSpeciality(newSpecName.trim());
       setNewSpecName('');
       setIsAdding(false);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.warn("Failed saving speciality", err?.message || err);
       alert('Failed to save speciality.');
     }
   };
@@ -54,8 +54,8 @@ export const ProductionRoleSpecialitiesModule: React.FC = () => {
       await updateSpeciality(id, editingName.trim());
       setEditingId(null);
       setEditingName('');
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.warn("Failed updating", err?.message || err);
       alert('Failed to update speciality.');
     }
   };
@@ -64,8 +64,8 @@ export const ProductionRoleSpecialitiesModule: React.FC = () => {
     if (window.confirm(`Are you sure you want to delete "${name}"? Staff members assigned to this speciality may lose their primary mapping.`)) {
       try {
         await deleteSpeciality(id);
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        console.warn("Failed deleting", err?.message || err);
         alert('Failed to delete speciality.');
       }
     }
@@ -74,8 +74,8 @@ export const ProductionRoleSpecialitiesModule: React.FC = () => {
   const handleToggleActive = async (id: string, currentActive: boolean) => {
     try {
       await deactivateSpeciality(id, !currentActive);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.warn("Failed toggling", err?.message || err);
       alert('Failed to toggle status.');
     }
   };

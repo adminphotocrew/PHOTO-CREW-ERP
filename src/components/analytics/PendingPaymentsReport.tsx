@@ -763,7 +763,7 @@ export const PendingPaymentsReport: React.FC = () => {
                           setPaymentNotes('');
                           setShowPaymentModal(true);
                         }}
-                        className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 text-emerald-400 rounded transition font-bold text-[10px] uppercase tracking-wider whitespace-nowrap"
+                        className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/20 text-emerald-400 rounded transition font-bold text-[10px] uppercase tracking-wider "
                       >
                         Update
                       </button>

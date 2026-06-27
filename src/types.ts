@@ -31,7 +31,7 @@ export type Department = 'Sales' | 'Operations' | 'Production' | 'Editor' | 'Dis
 
 export const DEPARTMENT_STAGES: Record<Department, CurrentStage[]> = {
   Sales: ['New Lead', 'Contacted', 'Follow Up', 'Follow-up', 'Quotation Sent', 'Negotiation', 'Order Confirmed', 'Lost Lead'],
-  Operations: ['Operations Assigned', 'Event Scheduled', 'Event Completed'],
+  Operations: ['Operations Assigned', 'Staff Assigned', 'Event Scheduled', 'Event Completed'],
   Production: ['Raw Footage Received'],
   Editor: ['Editing Started', 'Customer Review', 'Revision Required', 'Approved'],
   Dispatch: ['Delivered', 'Payment Pending', 'Closed']
@@ -134,6 +134,7 @@ export interface Lead {
   production_role?: string;
   delivery_target_date?: string;
   current_status?: string;
+  current_stage?: 'Sales' | 'Operations' | 'Production' | 'Completed';
   whatsapp_number?: string;
   address?: string;
   city?: string;
@@ -333,6 +334,17 @@ export interface StaffAssignment {
   assignment_date: string;
   assignment_status: 'Assigned' | 'Completed' | 'Cancelled';
   whatsapp_sent_status?: string;
+  updated_by?: string;
+}
+
+export interface LeadStaffAssignmentHistory {
+  id?: string;
+  lead_id: string;
+  order_id?: string;
+  assigned_role: string;
+  assigned_staff: string;
+  assigned_by?: string;
+  assigned_at: string;
 }
 
 export interface Notification {

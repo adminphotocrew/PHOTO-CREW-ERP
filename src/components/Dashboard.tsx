@@ -398,7 +398,7 @@ export const Dashboard: React.FC = () => {
                             {cust.totalOrders} {cust.totalOrders >= 2 ? 'RETENTION' : 'SINGLE'}
                           </span>
                         </td>
-                        <td className="p-3 text-[10px] text-zinc-400 max-w-[220px] truncate">
+                        <td className="p-3 text-[10px] text-zinc-400 max-w-[220px] break-words">
                           {cust.previousPackages.join(', ') || 'N/A (Awaiting Order)'}
                         </td>
                         <td className="p-3 text-right pr-4 font-mono font-black text-emerald-400 text-[13px]">
@@ -520,7 +520,7 @@ export const Dashboard: React.FC = () => {
               return (
                 <div key={ps.label} className="bg-zinc-950/80 border border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-zinc-800 hover:shadow-lg transition-all duration-200 relative group">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[9.5px] font-extrabold text-zinc-450 uppercase tracking-wider font-mono truncate max-w-[80px]">
+                    <span className="text-[9.5px] font-extrabold text-zinc-450 uppercase tracking-wider font-mono break-words max-w-[80px]">
                       {ps.label}
                     </span>
                     <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold ${ps.bgBadge}`}>
@@ -731,7 +731,7 @@ export const Dashboard: React.FC = () => {
                 <th className="p-3.5 pl-5">Audit ID</th>
                 <th className="p-3.5">Creative Operative</th>
                 <th className="p-3.5">Division Access</th>
-                <th className="p-3.5 whitespace-nowrap">Action Conducted</th>
+                <th className="p-3.5 ">Action Conducted</th>
                 <th className="p-3.5">Division Code</th>
                 <th className="p-3.5">Reference key</th>
                 <th className="p-3.5 text-right pr-5">Timestamp</th>

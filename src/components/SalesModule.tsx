@@ -6,6 +6,7 @@ import {
   Plus, Edit, CheckSquare, Search, Filter, Ban, X, Phone, Mail, MapPin, Calendar, DollarSign, Clock, Users, ArrowRight, ChevronDown, Check, Package, Trash2
 } from 'lucide-react';
 import { Lead, CurrentStage, LeadPackage, EVENT_TYPES } from '../types';
+import { StatusText } from './ui/StatusText';
 import { CameraLensStatsCard, CameraLensTheme } from './CameraLensStatsCard';
 import { formatINR, formatIndianPhoneNumber, validateIndianMobile, formatTime12Hour, getCustomers, triggerAutoScrollAndFocus } from '../utils';
 import { SalesCalendar } from './SalesCalendar';
@@ -36,115 +37,41 @@ const generateQuotationPDF = (
   const headerBgColor = [18, 18, 22];  // Luxury Carbon Black
   const goldColor = [212, 175, 55];   // #D4AF37 Classic Gold
 
-  // Helper routine to draw headers on every page
-  const drawPageHeader = (pageDoc: typeof doc) => {
-    // 1. BRAND HEADER (Black + Gold Premium Theme)
-    pageDoc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
-    pageDoc.rect(0, 0, 210, 42, 'F'); // 42mm tall header
-
-    // Bottom gold ribbon border
-    pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.rect(0, 41, 210, 1.2, 'F');
-
-    // Draw Logo
-    let logoY = 10;
-    let hasLogo = false;
-    if (logoBase64 && logoBase64.startsWith('data:image')) {
-      try {
-        pageDoc.addImage(logoBase64, 'PNG', 15, logoY, 22, 22);
-        hasLogo = true;
-      } catch (e) {
-        console.warn('Failed to add logo image to PDF, drawing fallback badge:', e);
-      }
-    }
-
-    if (!hasLogo) {
-      pageDoc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
-      pageDoc.setLineWidth(0.6);
-      pageDoc.setFillColor(18, 18, 22);
-      pageDoc.circle(26, logoY + 11, 8, 'FD');
-      pageDoc.setFont('helvetica', 'bold');
-      pageDoc.setFontSize(10);
-      pageDoc.setTextColor(255, 255, 255);
-      pageDoc.text('P', 24.5, logoY + 14.5);
-    }
-
-    // Photocrew Pictures Branding
-    pageDoc.setFont('helvetica', 'bold');
-    pageDoc.setFontSize(15);
-    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.text('PHOTOCREW PICTURES', 105, 19, { align: 'center' });
-
-    pageDoc.setFont('helvetica', 'normal');
-    pageDoc.setFontSize(7.5);
-    pageDoc.setTextColor(185, 185, 185);
-    pageDoc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 105, 24, { align: 'center' });
-
-    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.setFontSize(6.5);
-    pageDoc.text('★ ★ ★ ★ ★', 105, 29, { align: 'center' });
-
-    // Right-aligned Contact Info
-    pageDoc.setTextColor(245, 245, 245);
-    pageDoc.setFont('helvetica', 'normal');
-    pageDoc.setFontSize(7.5);
-    pageDoc.text('www.photocrewpictures.com', 195, 17, { align: 'right' });
-    pageDoc.text('info@photocrewpictures.com', 195, 22, { align: 'right' });
-    pageDoc.text('+91 9060144016', 195, 27, { align: 'right' });
+  // Dynamic layout configuration options (Default vs Compact to optimize page count and avoid sparse pages)
+  const defaultConfig = {
+    secSpacing: 6,
+    rowPadding: 2.5,
+    rowTextHeight: 4.2,
+    termsSpacing: 3.8,
+    tableSpacing: 5,
+    pricingCardHeight: 25.5,
+    paymentCardHeight: 20,
+    boxPadding: 16,
+    textPadding: 4.2,
+    notesPadding: 4.2
   };
 
-  // Helper routine to draw footers on every page
-  const drawPageFooter = (pageDoc: typeof doc, pageNum: number, totalPages: number) => {
-    let footerY = 260;
-    
-    pageDoc.setDrawColor(226, 232, 240);
-    pageDoc.setLineWidth(0.3);
-    pageDoc.line(15, footerY, 195, footerY);
-
-    pageDoc.setFont('helvetica', 'bold');
-    pageDoc.setFontSize(8.5);
-    pageDoc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    pageDoc.text('PHOTOCREW PICTURES', 15, footerY + 5);
-    
-    pageDoc.setFont('helvetica', 'normal');
-    pageDoc.setFontSize(7.5);
-    pageDoc.setTextColor(100, 116, 139);
-    pageDoc.text('Website : https://www.photocrewpictures.com/  |  Email: info@photocrewpictures.com  |  Phone: +91 9060144016', 15, footerY + 9);
-
-    pageDoc.setFont('helvetica', 'bold');
-    pageDoc.setFontSize(8);
-    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]); // Gold primary accent
-    pageDoc.text('Thank You For Choosing Photocrew Pictures', 15, footerY + 14);
-
-    // Authorised Signatory right aligned
-    pageDoc.setFont('helvetica', 'normal');
-    pageDoc.setFontSize(7.5);
-    pageDoc.setTextColor(100, 116, 139);
-    pageDoc.text('For Photocrew Pictures', 150, footerY + 5);
-    pageDoc.setFont('helvetica', 'bold');
-    pageDoc.setFontSize(8);
-    pageDoc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    pageDoc.text('Authorized Signatory', 150, footerY + 12);
-
-    // Add page numbering if multiple pages
-    if (totalPages > 1) {
-      pageDoc.setFont('helvetica', 'normal');
-      pageDoc.setFontSize(7);
-      pageDoc.setTextColor(148, 163, 184);
-      pageDoc.text(`Page ${pageNum} of ${totalPages}`, 195, footerY + 14, { align: 'right' });
-    }
-
-    // Bottom Accent ribbon
-    pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.rect(0, 292, 210, 5, 'F');
+  const compactConfig = {
+    secSpacing: 4,
+    rowPadding: 1.5,
+    rowTextHeight: 3.8,
+    termsSpacing: 3.2,
+    tableSpacing: 3,
+    pricingCardHeight: 21,
+    paymentCardHeight: 16,
+    boxPadding: 12,
+    textPadding: 3.6,
+    notesPadding: 3.6
   };
 
-  const createNewPage = () => {
-    doc.addPage();
-    return 52; // Content starts at 52mm on subsequent pages (leaving space for header)
-  };
+  // Pre-split fields to calculate wrap height accurately
+  const wrapCustName = doc.splitTextToSize(lead.customer_name || 'N/A', 50);
+  const wrapEmail = doc.splitTextToSize(lead.email || 'N/A', 50);
+  const displayEventType = lead.event_type === 'Other' ? (lead.custom_event_name || lead.custom_event_type || 'Other') : (lead.event_type || 'N/A');
+  const wrapEventType = doc.splitTextToSize(displayEventType, 50);
+  const wrapLocation = doc.splitTextToSize(lead.event_location || 'N/A', 50);
 
-  // Resolve dynamic services from input parameter. Fall back to standard defaults if empty
+  // Resolve dynamic services
   let services = [...quoteServices];
   if (!services || services.length === 0) {
     const baseSum = activePkgs.reduce((sum, p) => sum + Number(p.package_cost || p.price || 0), 0);
@@ -183,215 +110,10 @@ const generateQuotationPDF = (
     }
   }
 
-  // 2. CUSTOMER DETAILS & LOGISTICS
-  let clientY = 49;
-
-  // Split text and calculate required heights
-  const wrapCustName = doc.splitTextToSize(lead.customer_name || 'N/A', 50);
-  const wrapEmail = doc.splitTextToSize(lead.email || 'N/A', 50);
-  const displayEventType = lead.event_type === 'Other' ? (lead.custom_event_name || lead.custom_event_type || 'Other') : (lead.event_type || 'N/A');
-  const wrapEventType = doc.splitTextToSize(displayEventType, 50);
-  const wrapLocation = doc.splitTextToSize(lead.event_location || 'N/A', 50);
-
-  let formattedEvDate = 'N/A';
-  if (lead.event_date) {
-    try {
-      const parts = lead.event_date.split('-');
-      if (parts.length === 3) {
-        const localDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        formattedEvDate = localDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-      } else {
-        formattedEvDate = new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-      }
-    } catch(e) {}
-  }
-  const quoteDateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-
-  let leftColYOffset = 0;
-  let rightColYOffset = 0;
-
-  leftColYOffset += (wrapCustName.length * 4.2);
-  leftColYOffset += 4.2; // Mobile Number
-  leftColYOffset += (wrapEmail.length * 4.2);
-  leftColYOffset += 4.2; // Quotation No
-
-  rightColYOffset += (wrapEventType.length * 4.2);
-  rightColYOffset += 4.2; // Event Date
-  rightColYOffset += (wrapLocation.length * 4.2);
-  rightColYOffset += 4.2; // Quotation Date
-
-  const boxHeight = Math.max(leftColYOffset, rightColYOffset) + 16;
-
-  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]);
-  doc.roundedRect(15, clientY, 180, boxHeight, 1.5, 1.5, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.25);
-  doc.roundedRect(15, clientY, 180, boxHeight, 1.5, 1.5, 'D');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.text('CUSTOMER DETAILS', 20, clientY + 6);
-  
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.text('EVENT LOGISTICS', 110, clientY + 6);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-
-  let curLeftY = clientY + 11.5;
-  doc.text('Customer Name  :', 20, curLeftY);
-  wrapCustName.forEach((line: string, i: number) => {
-    doc.text(line, 45, curLeftY + (i * 4.2));
-  });
-  curLeftY += (wrapCustName.length * 4.2);
-
-  doc.text('Mobile Number  :', 20, curLeftY);
-  doc.text(lead.mobile || 'N/A', 45, curLeftY);
-  curLeftY += 4.2;
-
-  doc.text('Email Address  :', 20, curLeftY);
-  wrapEmail.forEach((line: string, i: number) => {
-    doc.text(line, 45, curLeftY + (i * 4.2));
-  });
-  curLeftY += (wrapEmail.length * 4.2);
-
-  doc.text('Quotation No   :', 20, curLeftY);
-  doc.text(quoteNum, 45, curLeftY);
-
-
-  let curRightY = clientY + 11.5;
-  doc.text('Event Type      :', 110, curRightY);
-  wrapEventType.forEach((line: string, i: number) => {
-    doc.text(line, 135, curRightY + (i * 4.2));
-  });
-  curRightY += (wrapEventType.length * 4.2);
-
-  doc.text('Event Date      :', 110, curRightY);
-  doc.text(formattedEvDate, 135, curRightY);
-  curRightY += 4.2;
-
-  doc.text('Event Location  :', 110, curRightY);
-  wrapLocation.forEach((line: string, i: number) => {
-    doc.text(line, 135, curRightY + (i * 4.2));
-  });
-  curRightY += (wrapLocation.length * 4.2);
-
-  doc.text('Quotation Date  :', 110, curRightY);
-  doc.text(quoteDateStr, 135, curRightY);
-
-  let currentY = clientY + boxHeight + 6;
-
-  // Helper routine to render tables
-  const drawTable = (title: string, items: { id: string; name: string; qty: number; price: number; isAdditional?: boolean }[]) => {
-    if (currentY + 22 > 250) {
-      currentY = createNewPage();
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    doc.text(title, 15, currentY);
-    currentY += 4;
-
-    // Header bar background color
-    doc.setFillColor(30, 41, 59); // Slate-800
-    doc.rect(15, currentY, 180, 7.5, 'F');
-
-    // Header labels
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text('SERVICE / ITEM SPECIFICATIONS', 19, currentY + 4.8);
-    doc.text('QTY', 125, currentY + 4.8, { align: 'center' });
-    doc.text('AMOUNT (\u20B9)', 191, currentY + 4.8, { align: 'right' }); // Using unicode for ₹
-
-    currentY += 7.5;
-
-    // Outer borders
-    doc.setDrawColor(203, 213, 225); 
-    doc.setLineWidth(0.2);
-
-    if (items.length === 0) {
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text('No specified deliverables or customized service items.', 19, currentY + 5);
-      doc.line(15, currentY, 15, currentY + 8);
-      doc.line(195, currentY, 195, currentY + 8);
-      doc.line(15, currentY + 8, 195, currentY + 8);
-      currentY += 8;
-      return;
-    }
-
-    items.forEach((item, index) => {
-      const wrappedName = doc.splitTextToSize(item.name || '', 95);
-      const rowHeight = Math.max(7.5, wrappedName.length * 4.2 + 2.5);
-
-      if (currentY + rowHeight > 250) {
-        doc.line(15, currentY, 195, currentY);
-        currentY = createNewPage();
-
-        doc.setFillColor(30, 41, 59);
-        doc.rect(15, currentY, 180, 7.5, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(255, 255, 255);
-        doc.text('SERVICE / ITEM SPECIFICATIONS (CONTINUED)', 19, currentY + 4.8);
-        doc.text('QTY', 125, currentY + 4.8, { align: 'center' });
-        doc.text('AMOUNT (\u20B9)', 191, currentY + 4.8, { align: 'right' });
-        currentY += 7.5;
-      }
-
-      // Alternating row background stripes
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 250, 252);
-        doc.rect(15, currentY, 180, rowHeight, 'F');
-      }
-
-      // Side bounding and cell dividers
-      doc.line(15, currentY, 15, currentY + rowHeight);
-      doc.line(195, currentY, 195, currentY + rowHeight);
-      doc.line(115, currentY, 115, currentY + rowHeight);
-      doc.line(135, currentY, 135, currentY + rowHeight);
-
-      // Render cells text
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(51, 65, 85);
-
-      wrappedName.forEach((line: string, i: number) => {
-        doc.text(line, 19, currentY + 4.3 + (i * 4.2));
-      });
-
-      doc.text(String(item.qty || 1), 125, currentY + (rowHeight / 2) + 1.1, { align: 'center' });
-
-      const itemAmt = Number(item.qty || 1) * Number(item.price || 0);
-      const isBundledBase = !item.isAdditional && item.price === 0;
-      const amtStr = isBundledBase ? 'Bundled' : itemAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      doc.text(amtStr, 191, currentY + (rowHeight / 2) + 1.1, { align: 'right' });
-
-      doc.line(15, currentY + rowHeight, 195, currentY + rowHeight);
-      currentY += rowHeight;
-    });
-
-    currentY += 5; // space under table
-  };
-
-  // 3. BASE PACKAGE SPECIFICATIONS TABLE
   const baseServices = services.filter(s => !s.isAdditional);
-  drawTable('CHOSEN PACKAGE SPECIFICATIONS (BASE INCLUSIONS)', baseServices);
-
-  // 4. ADDITIONAL SERVICES TABLE (If any)
   const additionalServices = services.filter(s => s.isAdditional);
-  if (additionalServices.length > 0) {
-    drawTable('ADDITIONAL SPECIFICATIONS & SERVICE ADD-ONS', additionalServices);
-  }
 
-  // Draw Detailed Deliverables & Inclusions if available
+  // Prep Deliverables
   const allInclusions: { package: string; item: string }[] = [];
   const allDeliverables: { package: string; item: string }[] = [];
 
@@ -399,7 +121,6 @@ const generateQuotationPDF = (
     const pkgId = pkg.package_id || pkg.id || 'default';
     const pkgName = pkg.package_name || pkg.name || 'Base Package';
 
-    // Inclusions
     if (editableInclusions && editableInclusions[pkgId] && editableInclusions[pkgId].length > 0) {
       editableInclusions[pkgId].forEach((inc) => {
         allInclusions.push({ package: pkgName, item: inc });
@@ -413,7 +134,6 @@ const generateQuotationPDF = (
       });
     }
 
-    // Deliverables
     if (editableDeliverables && editableDeliverables[pkgId] && editableDeliverables[pkgId].length > 0) {
       editableDeliverables[pkgId].forEach((del) => {
         allDeliverables.push({ package: pkgName, item: del });
@@ -428,271 +148,9 @@ const generateQuotationPDF = (
     }
   });
 
-  const drawDeliverablesTable = (title: string, list: { package: string; item: string }[]) => {
-    if (list.length === 0) return;
-
-    if (currentY + 22 > 250) {
-      currentY = createNewPage();
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    doc.text(title, 15, currentY);
-    currentY += 4;
-
-    // Header bar background
-    doc.setFillColor(30, 41, 59); // Slate-800
-    doc.rect(15, currentY, 180, 7.5, 'F');
-
-    // Header labels
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text('PACKAGE / CATEGORY', 19, currentY + 4.8);
-    doc.text('INCLUSION / DELIVERABLE DETAIL', 69, currentY + 4.8);
-
-    currentY += 7.5;
-
-    // Outer borders
-    doc.setDrawColor(203, 213, 225); 
-    doc.setLineWidth(0.2);
-
-    list.forEach((item, index) => {
-      const wrappedPkg = doc.splitTextToSize(item.package || '', 45);
-      const wrappedDetail = doc.splitTextToSize(item.item || '', 120);
-      const rowHeight = Math.max(7.5, Math.max(wrappedPkg.length, wrappedDetail.length) * 4.2 + 2.5);
-
-      if (currentY + rowHeight > 250) {
-        doc.line(15, currentY, 195, currentY);
-        currentY = createNewPage();
-
-        doc.setFillColor(30, 41, 59);
-        doc.rect(15, currentY, 180, 7.5, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(255, 255, 255);
-        doc.text('PACKAGE / CATEGORY (CONTINUED)', 19, currentY + 4.8);
-        doc.text('INCLUSION / DELIVERABLE DETAIL', 69, currentY + 4.8);
-        currentY += 7.5;
-      }
-
-      // Alternating row background stripes
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 250, 252);
-        doc.rect(15, currentY, 180, rowHeight, 'F');
-      }
-
-      // Side bounding and cell dividers
-      doc.line(15, currentY, 15, currentY + rowHeight);
-      doc.line(195, currentY, 195, currentY + rowHeight);
-      doc.line(65, currentY, 65, currentY + rowHeight);
-
-      // Render cells text
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.2);
-      doc.setTextColor(51, 65, 85);
-
-      wrappedPkg.forEach((line: string, i: number) => {
-        doc.text(line, 19, currentY + 4.3 + (i * 4.2));
-      });
-
-      wrappedDetail.forEach((line: string, i: number) => {
-        doc.text(line, 69, currentY + 4.3 + (i * 4.2));
-      });
-
-      doc.line(15, currentY + rowHeight, 195, currentY + rowHeight);
-      currentY += rowHeight;
-    });
-
-    currentY += 5; // space under table
-  };
-
-  // Render Detailed Deliverables Table in PDF
   const combinedList = [...allInclusions, ...allDeliverables];
-  if (combinedList.length > 0) {
-    drawDeliverablesTable('PACKAGE INCLUSIONS & DELIVERABLES DETAILED LIST', combinedList);
-  }
-
-  // 5. PRICING SUMMARY CARD
-  if (currentY + 36 > 250) {
-    currentY = createNewPage();
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.text('PRICING SUMMARY & ESTIMATES', 15, currentY);
-  currentY += 4.5;
-
-  doc.setFillColor(248, 250, 252);
-  doc.rect(15, currentY, 180, 25.5, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.2);
-  doc.rect(15, currentY, 180, 25.5, 'D');
-
-  doc.line(15, currentY + 6.3, 195, currentY + 6.3);
-  doc.line(15, currentY + 12.6, 195, currentY + 12.6);
-  doc.line(15, currentY + 18.9, 195, currentY + 18.9);
-  doc.line(115, currentY, 115, currentY + 25.5);
-
-  const baseSumVal = baseServices.reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
-  const addlSumVal = additionalServices.reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
-  const discountVal = discountValue;
-  const finalAmountSum = Math.max(0, baseSumVal + addlSumVal - discountVal);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  
-  doc.text('Package Base Cost', 19, currentY + 4.3);
-  doc.text('Additional Services & Add-ons', 19, currentY + 10.6);
-  doc.text('Quotation Discount (Applied)', 19, currentY + 16.9);
-  
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 23, 42);
-  doc.text('FINAL ESTIMATED COMMERCIAL AMOUNT', 19, currentY + 23.2);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
-  doc.text(baseSumVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + 4.3, { align: 'right' });
-  doc.text(addlSumVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + 10.6, { align: 'right' });
-  doc.text('- ' + discountVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + 16.9, { align: 'right' });
-
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
-  doc.text(finalAmountSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + 23.2, { align: 'right' });
-
-  currentY += 31;
-
-  // 6. PAYMENT DETAILS CARD
-  if (currentY + 26 > 250) {
-    currentY = createNewPage();
-  }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.text('PAYMENT DETAILS', 15, currentY);
-  currentY += 4.5;
-  
-  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]);
-  doc.roundedRect(15, currentY, 180, 20, 1.5, 1.5, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.25);
-  doc.roundedRect(15, currentY, 180, 20, 1.5, 1.5, 'D');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  
-  // Column 1
-  doc.text('Name        :', 20, currentY + 6);
-  doc.text('Bank        :', 20, currentY + 10.5);
-  doc.text('Account No  :', 20, currentY + 15);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PHOTOCREW PICTURES', 40, currentY + 6);
-  doc.text('HDFC BANK', 40, currentY + 10.5);
-  doc.text('50200103134840', 40, currentY + 15);
-  
-  // Column 2
-  doc.setFont('helvetica', 'normal');
-  doc.text('IFSC Code   :', 110, currentY + 6);
-  doc.text('Branch      :', 110, currentY + 10.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('HDFC0000312', 135, currentY + 6);
-  doc.text('VijayNagar, Bangalore', 135, currentY + 10.5);
-  
-  currentY += 26;
-
-  // 7. REMARKS (CUSTOMER & INTERNAL)
   const custRemarks = lead.remarks_raw || lead.remarks || '';
-  const teamRemarks = lead.notes || ''; // private team notes
-  
-  if (custRemarks || teamRemarks) {
-    if (currentY + 25 > 250) {
-      currentY = createNewPage();
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    doc.text('NOTES & SPECIAL INSTRUCTIONS', 15, currentY);
-    currentY += 4.5;
-
-    let wrappedCust: string[] = [];
-    let wrappedTeam: string[] = [];
-    let boxHeight = 4; // padding
-
-    if (custRemarks) {
-      wrappedCust = doc.splitTextToSize(`Customer Notes: ${custRemarks}`, 170);
-      boxHeight += wrappedCust.length * 4.2;
-    }
-    if (teamRemarks) {
-      wrappedTeam = doc.splitTextToSize(`Internal Team Notes: ${teamRemarks}`, 170);
-      boxHeight += wrappedTeam.length * 4.2 + (custRemarks ? 4 : 0);
-    }
-    boxHeight += 2; // bottom padding
-
-    if (currentY + boxHeight > 250) {
-      currentY = createNewPage();
-    }
-
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'D');
-
-    // Left border indicator (indigo)
-    doc.setFillColor(79, 70, 229);
-    doc.rect(15, currentY, 1.5, boxHeight, 'F');
-
-    let textOffset = currentY + 5;
-    if (custRemarks) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
-      doc.setTextColor(71, 85, 105);
-      doc.text('CUSTOMER CONVERSATION SCOPE:', 19, textOffset);
-      textOffset += 4.5;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      wrappedCust.forEach(line => {
-        const cleanLine = line.replace(/^Customer Notes:\s*/, '');
-        doc.text(cleanLine, 19, textOffset);
-        textOffset += 4.2;
-      });
-    }
-
-    if (teamRemarks) {
-      if (custRemarks) textOffset += 2;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
-      doc.setTextColor(71, 85, 105);
-      doc.text('INTERNAL PRIVATE CRM NOTES:', 19, textOffset);
-      textOffset += 4.5;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      wrappedTeam.forEach(line => {
-        const cleanLine = line.replace(/^Internal Team Notes:\s*/, '');
-        doc.text(cleanLine, 19, textOffset);
-        textOffset += 4.2;
-      });
-    }
-
-    currentY += boxHeight + 4.5;
-  }
-
-  // 8. TERMS AND CONDITIONS
-  if (currentY + 22 > 250) {
-    currentY = createNewPage();
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-  doc.text('TERMS & CONDITIONS', 15, currentY);
-  currentY += 4.5;
+  const teamRemarks = lead.notes || ''; 
 
   const defaultTerms = [
     'Payments are non-refundable.',
@@ -708,23 +166,765 @@ const generateQuotationPDF = (
     ? termsText.split('\n').map(t => t.trim()).filter(Boolean)
     : defaultTerms;
 
+  // Layout simulation routine
+  const simulate = (cfg: typeof defaultConfig) => {
+    let simY = 49;
+    let simPageCount = 1;
+
+    let simLeftY = 0;
+    simLeftY += (wrapCustName.length * cfg.textPadding);
+    simLeftY += cfg.textPadding;
+    simLeftY += (wrapEmail.length * cfg.textPadding);
+    simLeftY += cfg.textPadding;
+
+    let simRightY = 0;
+    simRightY += (wrapEventType.length * cfg.textPadding);
+    simRightY += cfg.textPadding;
+    simRightY += (wrapLocation.length * cfg.textPadding);
+    simRightY += cfg.textPadding;
+
+    const simBoxHeight = Math.max(simLeftY, simRightY) + cfg.boxPadding;
+    simY += simBoxHeight + cfg.secSpacing;
+
+    const getTableSimHeight = (items: any[]) => {
+      let h = 4 + 7.5; 
+      items.forEach((item) => {
+        const wrappedName = doc.splitTextToSize(item.name || '', 95);
+        h += Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
+      });
+      return h;
+    };
+
+    if (baseServices.length > 0) {
+      const tableH = getTableSimHeight(baseServices);
+      if (simY + tableH > 250 && tableH <= (250 - 52)) {
+        simY = 52;
+        simPageCount++;
+      } else {
+        let currentTableY = simY + 4 + 7.5;
+        baseServices.forEach((item) => {
+          const wrappedName = doc.splitTextToSize(item.name || '', 95);
+          const rowH = Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
+          if (currentTableY + rowH > 250) {
+            currentTableY = 52 + 7.5;
+            simPageCount++;
+          }
+          currentTableY += rowH;
+        });
+        simY = currentTableY;
+      }
+      simY += cfg.tableSpacing;
+    }
+
+    if (additionalServices.length > 0) {
+      const tableH = getTableSimHeight(additionalServices);
+      if (simY + tableH > 250 && tableH <= (250 - 52)) {
+        simY = 52;
+        simPageCount++;
+      } else {
+        let currentTableY = simY + 4 + 7.5;
+        additionalServices.forEach((item) => {
+          const wrappedName = doc.splitTextToSize(item.name || '', 95);
+          const rowH = Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
+          if (currentTableY + rowH > 250) {
+            currentTableY = 52 + 7.5;
+            simPageCount++;
+          }
+          currentTableY += rowH;
+        });
+        simY = currentTableY;
+      }
+      simY += cfg.tableSpacing;
+    }
+
+    if (combinedList.length > 0) {
+      let tableH = 4 + 7.5;
+      combinedList.forEach((item) => {
+        const wrappedPkg = doc.splitTextToSize(item.package || '', 45);
+        const wrappedDetail = doc.splitTextToSize(item.item || '', 120);
+        tableH += Math.max(7.5, Math.max(wrappedPkg.length, wrappedDetail.length) * cfg.rowTextHeight + cfg.rowPadding);
+      });
+
+      if (simY + tableH > 250 && tableH <= (250 - 52)) {
+        simY = 52;
+        simPageCount++;
+      } else {
+        let currentTableY = simY + 4 + 7.5;
+        combinedList.forEach((item) => {
+          const wrappedPkg = doc.splitTextToSize(item.package || '', 45);
+          const wrappedDetail = doc.splitTextToSize(item.item || '', 120);
+          const rowH = Math.max(7.5, Math.max(wrappedPkg.length, wrappedDetail.length) * cfg.rowTextHeight + cfg.rowPadding);
+          if (currentTableY + rowH > 250) {
+            currentTableY = 52 + 7.5;
+            simPageCount++;
+          }
+          currentTableY += rowH;
+        });
+        simY = currentTableY;
+      }
+      simY += cfg.tableSpacing;
+    }
+
+    const pricingH = 4.5 + cfg.pricingCardHeight;
+    if (simY + pricingH > 250) {
+      simY = 52;
+      simPageCount++;
+    }
+    simY += pricingH + cfg.secSpacing;
+
+    const paymentH = 4.5 + cfg.paymentCardHeight;
+    if (simY + paymentH > 250) {
+      simY = 52;
+      simPageCount++;
+    }
+    simY += paymentH + cfg.secSpacing;
+
+    if (custRemarks || teamRemarks) {
+      let simBoxH = 4;
+      if (custRemarks) {
+        const wrappedCustSim = doc.splitTextToSize(custRemarks, 170);
+        simBoxH += 4.5 + (wrappedCustSim.length * cfg.notesPadding);
+      }
+      if (teamRemarks) {
+        const wrappedTeamSim = doc.splitTextToSize(teamRemarks, 170);
+        simBoxH += 4.5 + (wrappedTeamSim.length * cfg.notesPadding) + (custRemarks ? 4 : 0);
+      }
+      simBoxH += 2;
+
+      const remarksH = 4.5 + simBoxH;
+      if (simY + remarksH > 250) {
+        simY = 52;
+        simPageCount++;
+      }
+      simY += remarksH + cfg.secSpacing;
+    }
+
+    const termsH = 4.5;
+    if (simY + termsH > 250) {
+      simY = 52;
+      simPageCount++;
+    }
+    simY += termsH;
+
+    termsToRender.forEach((term, idx) => {
+      const isNumbered = /^\d+\.\s/.test(term);
+      const prefix = isNumbered ? '' : `${idx + 1}. `;
+      const wrapped = doc.splitTextToSize(`${prefix}${term}`, 180);
+      const termH = wrapped.length * cfg.termsSpacing;
+      if (simY + termH > 250) {
+        simY = 52;
+        simPageCount++;
+      }
+      simY += termH;
+    });
+
+    return { pageCount: simPageCount, lastPageY: simY };
+  };
+
+  // Run simulations to select the most appropriate page-budget configuration
+  const defaultRes = simulate(defaultConfig);
+  let cfg = defaultConfig;
+
+  if (defaultRes.pageCount > 1) {
+    const compactRes = simulate(compactConfig);
+    if (compactRes.pageCount < defaultRes.pageCount) {
+      cfg = compactConfig;
+    } else if (compactRes.pageCount === defaultRes.pageCount && compactRes.lastPageY < defaultRes.lastPageY) {
+      if (defaultRes.pageCount === 2 && defaultRes.lastPageY < 80) {
+        cfg = compactConfig;
+      }
+    }
+  }
+
+  // Header drawing function
+  const drawPageHeader = (pageDoc: typeof doc) => {
+    pageDoc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
+    pageDoc.rect(0, 0, 210, 42, 'F'); 
+
+    pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+    pageDoc.rect(0, 41, 210, 1.2, 'F');
+
+    let logoY = 10;
+    let hasLogo = false;
+    if (logoBase64 && logoBase64.startsWith('data:image')) {
+      try {
+        pageDoc.addImage(logoBase64, 'PNG', 15, logoY, 22, 22);
+        hasLogo = true;
+      } catch (e) {
+        console.warn('Failed to add logo image to PDF, drawing fallback badge:', e);
+      }
+    }
+
+    if (!hasLogo) {
+      pageDoc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
+      pageDoc.setLineWidth(0.6);
+      pageDoc.setFillColor(18, 18, 22);
+      pageDoc.circle(26, logoY + 11, 8, 'FD');
+      pageDoc.setFont('helvetica', 'bold');
+      pageDoc.setFontSize(10);
+      pageDoc.setTextColor(255, 255, 255);
+      pageDoc.text('P', 24.5, logoY + 14.5, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    }
+
+    pageDoc.setFont('helvetica', 'bold');
+    pageDoc.setFontSize(15);
+    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+    pageDoc.text('PHOTOCREW PICTURES', 105, 19, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    pageDoc.setFont('helvetica', 'normal');
+    pageDoc.setFontSize(7.5);
+    pageDoc.setTextColor(185, 185, 185);
+    pageDoc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 105, 24, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+    pageDoc.setFontSize(6.5);
+    pageDoc.text('★ ★ ★ ★ ★', 105, 29, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    pageDoc.setTextColor(245, 245, 245);
+    pageDoc.setFont('helvetica', 'normal');
+    pageDoc.setFontSize(7.5);
+    pageDoc.text('www.photocrewpictures.com', 195, 17, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.text('info@photocrewpictures.com', 195, 22, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.text('+91 9060144016', 195, 27, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  };
+
+  // Footer drawing function
+  const drawPageFooter = (pageDoc: typeof doc, pageNum: number, totalPages: number) => {
+    let footerY = 260;
+    
+    pageDoc.setDrawColor(226, 232, 240);
+    pageDoc.setLineWidth(0.3);
+    pageDoc.line(15, footerY, 195, footerY);
+
+    pageDoc.setFont('helvetica', 'bold');
+    pageDoc.setFontSize(8.5);
+    pageDoc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    pageDoc.text('PHOTOCREW PICTURES', 15, footerY + 5, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    
+    pageDoc.setFont('helvetica', 'normal');
+    pageDoc.setFontSize(7.5);
+    pageDoc.setTextColor(100, 116, 139);
+    pageDoc.text('Website : https://www.photocrewpictures.com/  |  Email: info@photocrewpictures.com  |  Phone: +91 9060144016', 15, footerY + 9, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    pageDoc.setFont('helvetica', 'bold');
+    pageDoc.setFontSize(8);
+    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]); 
+    pageDoc.text('Thank You For Choosing Photocrew Pictures', 15, footerY + 14, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    pageDoc.setFont('helvetica', 'normal');
+    pageDoc.setFontSize(7.5);
+    pageDoc.setTextColor(100, 116, 139);
+    pageDoc.text('For Photocrew Pictures', 150, footerY + 5, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.setFont('helvetica', 'bold');
+    pageDoc.setFontSize(8);
+    pageDoc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    pageDoc.text('Authorized Signatory', 150, footerY + 12, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    if (totalPages > 1) {
+      pageDoc.setFont('helvetica', 'normal');
+      pageDoc.setFontSize(7);
+      pageDoc.setTextColor(148, 163, 184);
+      pageDoc.text(`Page ${pageNum} of ${totalPages}`, 195, footerY + 14, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    }
+
+    pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+    pageDoc.rect(0, 292, 210, 5, 'F');
+  };
+
+  const createNewPage = () => {
+    doc.addPage();
+    return 52; 
+  };
+
+  // 1. Render Customer Logistics Card
+  let clientY = 49;
+
+  let leftColYOffset = 0;
+  let rightColYOffset = 0;
+
+  leftColYOffset += (wrapCustName.length * cfg.textPadding);
+  leftColYOffset += cfg.textPadding; 
+  leftColYOffset += (wrapEmail.length * cfg.textPadding);
+  leftColYOffset += cfg.textPadding; 
+
+  rightColYOffset += (wrapEventType.length * cfg.textPadding);
+  rightColYOffset += cfg.textPadding; 
+  rightColYOffset += (wrapLocation.length * cfg.textPadding);
+  rightColYOffset += cfg.textPadding; 
+
+  const boxHeight = Math.max(leftColYOffset, rightColYOffset) + cfg.boxPadding;
+
+  let formattedEvDate = 'N/A';
+  if (lead.event_date) {
+    try {
+      const parts = lead.event_date.split('-');
+      if (parts.length === 3) {
+        const localDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        formattedEvDate = localDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      } else {
+        formattedEvDate = new Date(lead.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+    } catch(e) {}
+  }
+  const quoteDateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]);
+  doc.roundedRect(15, clientY, 180, boxHeight, 1.5, 1.5, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(15, clientY, 180, boxHeight, 1.5, 1.5, 'D');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('CUSTOMER DETAILS', 20, clientY + 6, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('EVENT LOGISTICS', 110, clientY + 6, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+
+  let curLeftY = clientY + 11.5;
+  doc.text('Customer Name  :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  wrapCustName.forEach((line: string, i: number) => {
+    doc.text(line, 45, curLeftY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  });
+  curLeftY += (wrapCustName.length * cfg.textPadding);
+
+  doc.text('Mobile Number  :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text(lead.mobile || 'N/A', 45, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  curLeftY += cfg.textPadding;
+
+  doc.text('Email Address  :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  wrapEmail.forEach((line: string, i: number) => {
+    doc.text(line, 45, curLeftY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  });
+  curLeftY += (wrapEmail.length * cfg.textPadding);
+
+  doc.text('Quotation No   :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text(quoteNum, 45, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+  let curRightY = clientY + 11.5;
+  doc.text('Event Type      :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  wrapEventType.forEach((line: string, i: number) => {
+    doc.text(line, 135, curRightY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  });
+  curRightY += (wrapEventType.length * cfg.textPadding);
+
+  doc.text('Event Date      :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text(formattedEvDate, 135, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  curRightY += cfg.textPadding;
+
+  doc.text('Event Location  :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  wrapLocation.forEach((line: string, i: number) => {
+    doc.text(line, 135, curRightY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  });
+  curRightY += (wrapLocation.length * cfg.textPadding);
+
+  doc.text('Quotation Date  :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text(quoteDateStr, 135, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+  let currentY = clientY + boxHeight + cfg.secSpacing;
+
+  // Helper routine to render tables with autowrapping, dynamic heights, and smart page breaks
+  const drawTable = (title: string, items: { id: string; name: string; qty: number; price: number; isAdditional?: boolean }[]) => {
+    let tableH = 4 + 7.5; 
+    items.forEach((item) => {
+      const wrappedName = doc.splitTextToSize(item.name || '', 95);
+      tableH += Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
+    });
+
+    if (currentY + tableH > 250 && tableH <= (250 - 52)) {
+      currentY = createNewPage();
+    }
+
+    if (currentY + 4 > 250) {
+      currentY = createNewPage();
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.text(title, 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    currentY += 4;
+
+    if (currentY + 7.5 > 250) {
+      currentY = createNewPage();
+    }
+    doc.setFillColor(30, 41, 59); // Slate-800
+    doc.rect(15, currentY, 180, 7.5, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('SERVICE / ITEM SPECIFICATIONS', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text('QTY', 125, currentY + 4.8, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text('AMOUNT (\u20B9)', 191, currentY + 4.8, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    currentY += 7.5;
+
+    doc.setDrawColor(203, 213, 225); 
+    doc.setLineWidth(0.2);
+
+    if (items.length === 0) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('No specified deliverables or customized service items.', 19, currentY + 5, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      doc.line(15, currentY, 15, currentY + 8);
+      doc.line(195, currentY, 195, currentY + 8);
+      doc.line(15, currentY + 8, 195, currentY + 8);
+      currentY += 8;
+      return;
+    }
+
+    items.forEach((item, index) => {
+      const wrappedName = doc.splitTextToSize(item.name || '', 95);
+      const rowHeight = Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
+
+      if (currentY + rowHeight > 250) {
+        doc.line(15, currentY, 195, currentY);
+        currentY = createNewPage();
+
+        doc.setFillColor(30, 41, 59);
+        doc.rect(15, currentY, 180, 7.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text('SERVICE / ITEM SPECIFICATIONS (CONTINUED)', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        doc.text('QTY', 125, currentY + 4.8, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        doc.text('AMOUNT (\u20B9)', 191, currentY + 4.8, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        currentY += 7.5;
+      }
+
+      if (index % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(15, currentY, 180, rowHeight, 'F');
+      }
+
+      doc.line(15, currentY, 15, currentY + rowHeight);
+      doc.line(195, currentY, 195, currentY + rowHeight);
+      doc.line(115, currentY, 115, currentY + rowHeight);
+      doc.line(135, currentY, 135, currentY + rowHeight);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85);
+
+      wrappedName.forEach((line: string, i: number) => {
+        doc.text(line, 19, currentY + 4.3 + (i * cfg.rowTextHeight), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      });
+
+      doc.text(String(item.qty || 1), 125, currentY + (rowHeight / 2) + 1.1, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+      const itemAmt = Number(item.qty || 1) * Number(item.price || 0);
+      const isBundledBase = !item.isAdditional && item.price === 0;
+      const amtStr = isBundledBase ? 'Bundled' : itemAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      doc.text(amtStr, 191, currentY + (rowHeight / 2) + 1.1, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+      doc.line(15, currentY + rowHeight, 195, currentY + rowHeight);
+      currentY += rowHeight;
+    });
+
+    currentY += cfg.tableSpacing; 
+  };
+
+  const drawDeliverablesTable = (title: string, list: { package: string; item: string }[]) => {
+    if (list.length === 0) return;
+
+    let tableH = 4 + 7.5; 
+    list.forEach((item) => {
+      const wrappedPkg = doc.splitTextToSize(item.package || '', 45);
+      const wrappedDetail = doc.splitTextToSize(item.item || '', 120);
+      tableH += Math.max(7.5, Math.max(wrappedPkg.length, wrappedDetail.length) * cfg.rowTextHeight + cfg.rowPadding);
+    });
+
+    if (currentY + tableH > 250 && tableH <= (250 - 52)) {
+      currentY = createNewPage();
+    }
+
+    if (currentY + 4 > 250) {
+      currentY = createNewPage();
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+    doc.text(title, 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    currentY += 4;
+
+    if (currentY + 7.5 > 250) {
+      currentY = createNewPage();
+    }
+    doc.setFillColor(30, 41, 59); // Slate-800
+    doc.rect(15, currentY, 180, 7.5, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('PACKAGE / CATEGORY', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text('INCLUSION / DELIVERABLE DETAIL', 69, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    currentY += 7.5;
+
+    doc.setDrawColor(203, 213, 225); 
+    doc.setLineWidth(0.2);
+
+    list.forEach((item, index) => {
+      const wrappedPkg = doc.splitTextToSize(item.package || '', 45);
+      const wrappedDetail = doc.splitTextToSize(item.item || '', 120);
+      const rowHeight = Math.max(7.5, Math.max(wrappedPkg.length, wrappedDetail.length) * cfg.rowTextHeight + cfg.rowPadding);
+
+      if (currentY + rowHeight > 250) {
+        doc.line(15, currentY, 195, currentY);
+        currentY = createNewPage();
+
+        doc.setFillColor(30, 41, 59);
+        doc.rect(15, currentY, 180, 7.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text('PACKAGE / CATEGORY (CONTINUED)', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        doc.text('INCLUSION / DELIVERABLE DETAIL', 69, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        currentY += 7.5;
+      }
+
+      if (index % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(15, currentY, 180, rowHeight, 'F');
+      }
+
+      doc.line(15, currentY, 15, currentY + rowHeight);
+      doc.line(195, currentY, 195, currentY + rowHeight);
+      doc.line(65, currentY, 65, currentY + rowHeight);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.2);
+      doc.setTextColor(51, 65, 85);
+
+      wrappedPkg.forEach((line: string, i: number) => {
+        doc.text(line, 19, currentY + 4.3 + (i * cfg.rowTextHeight), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      });
+
+      wrappedDetail.forEach((line: string, i: number) => {
+        doc.text(line, 69, currentY + 4.3 + (i * cfg.rowTextHeight), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      });
+
+      doc.line(15, currentY + rowHeight, 195, currentY + rowHeight);
+      currentY += rowHeight;
+    });
+
+    currentY += cfg.tableSpacing; 
+  };
+
+  // 2. Chosen base inclusions table
+  if (baseServices.length > 0) {
+    drawTable('CHOSEN PACKAGE SPECIFICATIONS (BASE INCLUSIONS)', baseServices);
+  }
+
+  // 3. Additional services table
+  if (additionalServices.length > 0) {
+    drawTable('ADDITIONAL SPECIFICATIONS & SERVICE ADD-ONS', additionalServices);
+  }
+
+  // 4. Inclusions & Deliverables table
+  if (combinedList.length > 0) {
+    drawDeliverablesTable('PACKAGE INCLUSIONS & DELIVERABLES DETAILED LIST', combinedList);
+  }
+
+  // 5. PRICING SUMMARY CARD
+  const pricingCardTotalH = 4.5 + cfg.pricingCardHeight;
+  if (currentY + pricingCardTotalH > 250) {
+    currentY = createNewPage();
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('PRICING SUMMARY & ESTIMATES', 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  currentY += 4.5;
+
+  doc.setFillColor(248, 250, 252);
+  doc.rect(15, currentY, 180, cfg.pricingCardHeight, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.2);
+  doc.rect(15, currentY, 180, cfg.pricingCardHeight, 'D');
+
+  const pricingRowH = cfg.pricingCardHeight / 4;
+  doc.line(15, currentY + pricingRowH, 195, currentY + pricingRowH);
+  doc.line(15, currentY + (pricingRowH * 2), 195, currentY + (pricingRowH * 2));
+  doc.line(15, currentY + (pricingRowH * 3), 195, currentY + (pricingRowH * 3));
+  doc.line(115, currentY, 115, currentY + cfg.pricingCardHeight);
+
+  const baseSumVal = baseServices.reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+  const addlSumVal = additionalServices.reduce((sum, s) => sum + (Number(s.qty) * Number(s.price)), 0);
+  const finalAmountSum = Math.max(0, baseSumVal + addlSumVal - discountValue);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+  
+  doc.text('Package Base Cost', 19, currentY + pricingRowH - 2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('Additional Services & Add-ons', 19, currentY + (pricingRowH * 2) - 2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('Quotation Discount (Applied)', 19, currentY + (pricingRowH * 3) - 2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('FINAL ESTIMATED COMMERCIAL AMOUNT', 19, currentY + (pricingRowH * 4) - 2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(baseSumVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + pricingRowH - 2, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text(addlSumVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + (pricingRowH * 2) - 2, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('- ' + discountValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + (pricingRowH * 3) - 2, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+  doc.text(finalAmountSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + (pricingRowH * 4) - 2, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+  currentY += cfg.pricingCardHeight + cfg.secSpacing;
+
+  // 6. PAYMENT DETAILS CARD
+  const paymentCardTotalH = 4.5 + cfg.paymentCardHeight;
+  if (currentY + paymentCardTotalH > 250) {
+    currentY = createNewPage();
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('PAYMENT DETAILS', 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  currentY += 4.5;
+  
+  doc.setFillColor(bgLightGrid[0], bgLightGrid[1], bgLightGrid[2]);
+  doc.roundedRect(15, currentY, 180, cfg.paymentCardHeight, 1.5, 1.5, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(15, currentY, 180, cfg.paymentCardHeight, 1.5, 1.5, 'D');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+  
+  const paymentY1 = currentY + (cfg.paymentCardHeight * 0.3);
+  const paymentY2 = currentY + (cfg.paymentCardHeight * 0.52);
+  const paymentY3 = currentY + (cfg.paymentCardHeight * 0.75);
+
+  doc.text('Name        :', 20, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('Bank        :', 20, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('Account No  :', 20, paymentY3, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PHOTOCREW PICTURES', 40, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('HDFC BANK', 40, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('50200103134840', 40, paymentY3, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text('IFSC Code   :', 110, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('Branch      :', 110, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.setFont('helvetica', 'bold');
+  doc.text('HDFC0000312', 135, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  doc.text('VijayNagar, Bangalore', 135, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  
+  currentY += cfg.paymentCardHeight + cfg.secSpacing;
+
+    if (custRemarks || teamRemarks) {
+      let wrappedCust: string[] = [];
+      let wrappedTeam: string[] = [];
+      let boxHeight = 4; 
+
+      if (custRemarks) {
+        wrappedCust = doc.splitTextToSize(custRemarks, 170);
+        boxHeight += 4.5 + (wrappedCust.length * cfg.notesPadding);
+      }
+      if (teamRemarks) {
+        wrappedTeam = doc.splitTextToSize(teamRemarks, 170);
+        boxHeight += 4.5 + (wrappedTeam.length * cfg.notesPadding) + (custRemarks ? 4 : 0);
+      }
+      boxHeight += 2; 
+
+      const remarksTotalH = 4.5 + boxHeight;
+      if (currentY + remarksTotalH > 250) {
+        currentY = createNewPage();
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text('NOTES & SPECIAL INSTRUCTIONS', 15, currentY, { maxWidth: 180, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      currentY += 4.5;
+
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'D');
+
+      doc.setFillColor(79, 70, 229);
+      doc.rect(15, currentY, 1.5, boxHeight, 'F');
+
+      let textOffset = currentY + 5;
+      if (custRemarks) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.2);
+        doc.setTextColor(71, 85, 105);
+        doc.text('CUSTOMER CONVERSATION SCOPE:', 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        textOffset += 4.5;
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        wrappedCust.forEach(line => {
+          doc.text(line, 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+          textOffset += cfg.notesPadding;
+        });
+      }
+
+      if (teamRemarks) {
+        if (custRemarks) textOffset += 2;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.2);
+        doc.setTextColor(71, 85, 105);
+        doc.text('INTERNAL PRIVATE CRM NOTES:', 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        textOffset += 4.5;
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        wrappedTeam.forEach(line => {
+          doc.text(line, 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+          textOffset += cfg.notesPadding;
+        });
+      }
+
+      currentY += boxHeight + cfg.secSpacing;
+    }
+
+  // 8. TERMS AND CONDITIONS
+  if (currentY + 4.5 > 250) {
+    currentY = createNewPage();
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+  doc.text('TERMS & CONDITIONS', 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  currentY += 4.5;
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
 
-  const lineSpacing = 3.8;
-
   termsToRender.forEach((term, idx) => {
-    // Determine if it already has a number prefix. If it starts with digit + dot, don't add idx.
     const isNumbered = /^\d+\.\s/.test(term);
     const prefix = isNumbered ? '' : `${idx + 1}. `;
     const wrapped = doc.splitTextToSize(`${prefix}${term}`, 180);
+    const termHeight = wrapped.length * cfg.termsSpacing;
+
+    if (currentY + termHeight > 250) {
+      currentY = createNewPage();
+    }
+
     wrapped.forEach((line: string) => {
-      if (currentY + lineSpacing > 250) {
-        currentY = createNewPage();
-      }
-      doc.text(line, 15, currentY);
-      currentY += lineSpacing;
+      doc.text(line, 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      currentY += cfg.termsSpacing;
     });
   });
 
@@ -807,46 +1007,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     deleteLead,
     deleteOrder,
     statusHistory,
-    getLeadCurrentStatus
+    getLeadCurrentStatus,
+    getLeadCurrentStage
   } = useRole();
 
   const [logoBase64, setLogoBase64] = useState<string>('');
 
   React.useEffect(() => {
     const preloadLogo = async () => {
-      try {
-        const response = await fetch('https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png');
-        if (response.ok) {
-          const blob = await response.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (typeof reader.result === 'string') {
-              setLogoBase64(reader.result);
-            }
-          };
-          reader.readAsDataURL(blob);
-        }
-      } catch (err) {
-        // Fall back to loader with canvas
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            try {
-              const dataUrl = canvas.toDataURL('image/png');
-              setLogoBase64(dataUrl);
-            } catch (e) {
-              console.warn('Canvas toDataURL failed:', e);
-            }
-          }
-        };
-        img.src = 'https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png';
-      }
+      // Avoid fetching external images to prevent "Failed to fetch" CORS/Network errors.
+      // Use a generated base64 placeholder or local image path.
+      setLogoBase64(''); 
     };
     preloadLogo();
   }, []);
@@ -2304,7 +2475,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 Package Base Price (₹)
               </label>
               <div className="w-full bg-slate-950/60 border border-slate-850/50 rounded-lg py-2 px-3 text-xs text-slate-400 font-mono flex items-center justify-between">
-                <span className="truncate max-w-[200px]">{pkgNames}</span>
+                <span className="break-words max-w-[200px]">{pkgNames}</span>
                 <span className="font-bold text-slate-200">₹{basePkgSum.toLocaleString('en-IN')}</span>
               </div>
             </div>
@@ -2695,7 +2866,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setSelectedLead(null);
       }
     } catch (err: any) {
-      console.error(err);
+      console.warn("Save failed:", err?.message || err);
       const errMsg = err.message || String(err);
       let displayedMsg = errMsg;
       if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
@@ -3568,7 +3739,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               )}
               <div className="flex items-center gap-2.5 text-slate-350">
                 <Mail className="w-4 h-4 text-slate-505 flex-shrink-0" />
-                <span className="text-slate-200 truncate">{selectedLead.email}</span>
+                <span className="text-slate-200 break-words">{selectedLead.email}</span>
               </div>
               <div className="flex items-center gap-2.5 text-slate-350">
                 <MapPin className="w-4 h-4 text-slate-505 flex-shrink-0" />
@@ -3937,12 +4108,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                           )}
                         </div>
                         
-                        <h4 className="text-xs font-black text-slate-100 mt-2 font-sans truncate">
+                        <h4 className="text-xs font-black text-slate-100 mt-2 font-sans break-words">
                           {cust.customer_name}
                         </h4>
                         
                         <div className="text-[10px] text-slate-400 font-mono mt-1 space-y-0.5">
-                          <div className="truncate">{cust.email}</div>
+                          <div className="break-words">{cust.email}</div>
                           <div>{formatIndianPhoneNumber(cust.mobile)}</div>
                         </div>
 
@@ -4727,7 +4898,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                               </span>
                             </div>
                             <h5 className="text-xs font-bold text-slate-100 leading-tight">{pkg.package_name}</h5>
-                            <p className="text-[11px] text-slate-400 truncate leading-snug">
+                            <p className="text-[11px] text-slate-400 break-words leading-snug">
                               {pkg.deliverables || 'No custom deliverables specified'}
                             </p>
                           </div>
@@ -5368,7 +5539,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                                         <div className={`w-3.5 h-3.5 flex items-center justify-center rounded border transition-all duration-150 shrink-0 ${isChecked ? 'bg-emerald-500 border-emerald-600' : 'border-slate-600'}`}>
                                           {isChecked && <Check className="w-2.5 h-2.5 text-white stroke-[3.5px]" />}
                                         </div>
-                                        <span className="font-medium truncate">{highlightText(pkg.name, pkgSearchQuery)}</span>
+                                        <span className="font-medium break-words">{highlightText(pkg.name, pkgSearchQuery)}</span>
                                       </div>
                                       <span className="font-mono text-[10px] opacity-85 pl-2.5 shrink-0 text-emerald-400">₹{pkg.cost.toLocaleString('en-IN')}</span>
                                     </button>
@@ -6007,20 +6178,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                   {filteredLeads.length > 0 ? (
                     filteredLeads.map((lead) => {
                       const leadStatus = getLeadCurrentStatus(lead);
-                      const isActiveInSales = ['New Lead', 'Follow Up', 'Quotation Sent', 'Negotiation'].includes(leadStatus);
+                      const currentStage = getLeadCurrentStage(lead);
+                      const isActiveInSales = currentStage === 'Sales';
                       const linkedOrder = orders.find((o) => o.lead_id === lead.lead_id);
                       const paymentRecord = linkedOrder ? payments.find((p) => p.order_id === linkedOrder.order_id) : null;
                       const paymentLabel = paymentRecord ? paymentRecord.payment_status : 'N/A';
-
-                      // Determine high-level stage
-                      let stageLabel = 'Sales';
-                      if (['Order Confirmed', 'New Order Received', 'Operations Assigned', 'Event Scheduled', 'Staff Assigned', 'Event Completed', 'Operations Stage'].includes(leadStatus)) {
-                        stageLabel = 'Operations';
-                      } else if (['Raw Footage Received', 'Editor Assigned', 'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Client Review Sent', 'Revision Required', 'Revision In Progress', 'Final Approval', 'Production Stage', 'Approved'].includes(leadStatus)) {
-                        stageLabel = 'Production';
-                      } else if (['Delivered', 'Closed'].includes(leadStatus)) {
-                        stageLabel = 'Closed / Delivered';
-                      }
 
                       return (
                         <tr 
@@ -6047,25 +6209,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                           </td>
                           <td className="p-3.5">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight ${
-                              stageLabel === 'Sales' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                              stageLabel === 'Operations' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' :
-                              stageLabel === 'Production' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                              currentStage === 'Sales' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                              currentStage === 'Operations' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' :
+                              currentStage === 'Production' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
                               'bg-zinc-800 text-zinc-400 border border-zinc-700'
                             }`}>
-                              {stageLabel}
+                              {currentStage}
                             </span>
                           </td>
                           <td className="p-3.5">
-                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold tracking-tight uppercase border ${
-                              leadStatus === 'New Lead' ? 'bg-indigo-555/15 text-indigo-400 border-indigo-505/20' :
-                              leadStatus === 'Follow Up' ? 'bg-emerald-555/15 text-emerald-400 border-emerald-505/20' :
-                              leadStatus === 'Quotation Sent' ? 'bg-amber-555/15 text-amber-400 border-amber-505/20' :
-                              leadStatus === 'Negotiation' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
-                              leadStatus === 'Order Confirmed' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-450/40 font-black' :
-                              'bg-zinc-900 text-zinc-400 border-zinc-800'
-                            }`}>
-                              {leadStatus}
-                            </span>
+                            <StatusText status={leadStatus} />
                           </td>
                           <td className="p-3.5">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${

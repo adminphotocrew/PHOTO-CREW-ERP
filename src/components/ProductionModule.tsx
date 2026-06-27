@@ -14,6 +14,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { ProjectDetailModal } from './ProjectDetailModal';
 import { formatINR, triggerAutoScrollAndFocus } from '../utils';
 import { AppLogo } from './AppLogo';
+import { StatusText } from './ui/StatusText';
 import { ProductionCalendar } from './ProductionCalendar';
 import { StaffManagementModule } from './StaffManagementModule';
 import { NotificationsModule } from './NotificationsModule';
@@ -246,6 +247,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({ activeSubTab
     updateEditorAssignmentStatus,
     deleteEditorAssignment,
     leads: leadsData,
+    getLeadCurrentStatus,
     logs,
     addStaff,
     updateStaff,
@@ -1764,7 +1766,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                   href={rf.server_path}
                                   target="_blank"
                                   referrerPolicy="no-referrer"
-                                  className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[200px] truncate"
+                                  className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[200px] break-words"
                                   title={rf.server_path}
                                 >
                                   <span>🔗</span> Open Drive Link
@@ -1774,9 +1776,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               )}
                             </td>
                             <td className="p-3">
-                              <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[9px] font-extrabold uppercase">
-                                {prodStatus}
-                              </span>
+                              <StatusText status={prodStatus} />
                             </td>
                             <td className="p-3 text-right pr-4">
                               {rf && (
@@ -1895,7 +1895,8 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
                       const priority = getProductionPriority(prod);
                       const status = prod.editing_status || 'Pending';
-                      const displayStatus = getProductionStatus(prod);
+                      const lead = leadsData?.find(l => l.lead_id === order.lead_id);
+                      const displayStatus = lead ? getLeadCurrentStatus(lead) : getProductionStatus(prod);
                       const daysRem = calculateDaysRemaining(prod.target_delivery_date || prod.expected_delivery_date);
 
                       // Payments calculations
@@ -1987,7 +1988,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 href={rf.server_path}
                                 target="_blank"
                                 referrerPolicy="no-referrer"
-                                className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[150px] truncate"
+                                className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[150px] break-words"
                                 title={rf.server_path}
                               >
                                 <span>🔗</span> Open Drive
@@ -2006,9 +2007,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
                           {/* Current Status */}
                           <td className="p-4">
-                            <span className={`inline-flex px-2.5 py-0.5 rounded text-[10px] font-mono font-bold border ${displayStatusColor}`}>
-                              {displayStatus}
-                            </span>
+                            <StatusText status={displayStatus} />
                           </td>
 
                           {/* Target Delivery Date */}
@@ -2463,7 +2462,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                 {member.address && (
                                   <>
                                     <span>•</span>
-                                    <span className="flex items-center gap-0.5 max-w-[120px] truncate">
+                                    <span className="flex items-center gap-0.5 max-w-[120px] break-words">
                                       <MapPin className="w-2.5 h-2.5" /> {member.address}
                                     </span>
                                   </>
@@ -2489,7 +2488,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Mail className="w-3 h-3 text-zinc-550" />
-                              <span className="text-[10px] text-zinc-550 truncate max-w-[140px] font-mono">{member.email}</span>
+                              <span className="text-[10px] text-zinc-550 break-words max-w-[140px] font-mono">{member.email}</span>
                             </div>
                           </div>
                         </td>
@@ -3750,7 +3749,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             </div>
                             <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-1.5">
                               <span className="font-mono font-bold text-zinc-400 bg-zinc-900 px-1 py-0.2 rounded border border-zinc-850">{assign.production_id}</span>
-                              <span className="truncate max-w-[120px]">{projectClient}</span>
+                              <span className="break-words max-w-[120px]">{projectClient}</span>
                             </div>
                           </td>
 
@@ -6492,13 +6491,11 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                               <td className="py-3 px-3 font-bold text-amber-500 text-[11px]">
                                 {proj.production_id || proj.tracking_id || 'N/A'}
                               </td>
-                              <td className="py-3 px-3 font-sans text-xs text-zinc-250 truncate max-w-[200px]">
+                              <td className="py-3 px-3 font-sans text-xs text-zinc-250 break-words max-w-[200px]">
                                 {clientName}
                               </td>
                               <td className="py-3 px-3 text-[11px]">
-                                <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-850 text-zinc-350 rounded">
-                                  {proj.editing_status || 'Raw Footage Received'}
-                                </span>
+                                <StatusText status={proj.editing_status || 'Raw Footage Received'} />
                               </td>
                               <td className="py-3 px-3">
                                 <span className={`px-2 py-0.5 rounded text-[10px] ${
@@ -6601,7 +6598,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       </div>
                       <div className="bg-zinc-950 border border-zinc-900 p-3 rounded-xl space-y-1.5">
                         <span className="text-[9px] text-zinc-550 uppercase font-bold block">Email Address</span>
-                        <span className="text-zinc-200 truncate block">{viewingStaffMember.email}</span>
+                        <span className="text-zinc-200 break-words block">{viewingStaffMember.email}</span>
                       </div>
                       <div className="bg-zinc-950 border border-zinc-900 p-3 rounded-xl space-y-1.5">
                         <span className="text-[9px] text-zinc-550 uppercase font-bold block">Joining Date</span>
@@ -6610,7 +6607,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                       {viewingStaffMember.address && (
                         <div className="bg-zinc-950 border border-zinc-900 p-3 rounded-xl space-y-1.5">
                           <span className="text-[9px] text-zinc-550 uppercase font-bold block">Base Location / Address</span>
-                          <span className="text-zinc-200 block text-[11px] truncate">{viewingStaffMember.address}</span>
+                          <span className="text-zinc-200 block text-[11px] break-words">{viewingStaffMember.address}</span>
                         </div>
                       )}
                     </div>
@@ -6667,9 +6664,7 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                                     ID: {proj.production_id || proj.tracking_id} | Deadline: {proj.expected_delivery_date || proj.target_delivery_date || 'TBD'}
                                   </div>
                                 </div>
-                                <span className="px-2 py-0.5 bg-[#0e0f14] border border-zinc-800 text-[10px] text-zinc-400 rounded">
-                                  {proj.editing_status}
-                                </span>
+                                <StatusText status={proj.editing_status} />
                               </div>
                             );
                           })

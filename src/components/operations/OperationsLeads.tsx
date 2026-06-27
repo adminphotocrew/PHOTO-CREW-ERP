@@ -4,6 +4,7 @@ import {
   Users, Briefcase, Camera, Video, Compass, Clock, Clipboard, FileCheck, CheckCircle, Eye, Search, Calendar, MapPin
 } from 'lucide-react';
 import { Order, CurrentStage, Staff, Equipment } from '../../types';
+import { StatusText } from '../ui/StatusText';
 import { ProjectDetailModal } from '../ProjectDetailModal';
 import { CameraLensStatsCard, CameraLensTheme } from '../CameraLensStatsCard';
 import { convertTimeToDbFormat, triggerAutoScrollAndFocus } from '../../utils';
@@ -29,10 +30,15 @@ export const OperationsLeads: React.FC = () => {
     isDepartmentAllowedToEdit,
     leads,
     leadPackages,
-    updateEquipment
+    leadStaffAssignmentHistory,
+    updateEquipment,
+    refreshData,
+    getLeadCurrentStatus
   } = useRole();
 
-
+  useEffect(() => {
+    refreshData();
+  }, []);
 
   // Anchor date June 15, 2026
   const systemToday = new Date();
@@ -433,6 +439,9 @@ export const OperationsLeads: React.FC = () => {
       setIsSaving(true);
       // First save the multi-staff role assignments to Supabase & Context state!
       await saveStaffAssignments(assigningOrderId, activeAssignments);
+      
+      // Update data so that UI reflects new crew directly from lead_staff_assignment_history
+      refreshData();
 
       // Update equipment status in real-time
       if (equipment && updateEquipment) {
@@ -469,8 +478,8 @@ export const OperationsLeads: React.FC = () => {
       
       const matchedOrder = orders.find(o => o.order_id === assigningOrderId);
       
-      // Force status to Event Scheduled as requested
-      const targetStage: CurrentStage = 'Event Scheduled';
+      // Set status to Staff Assigned as requested
+      const targetStage: CurrentStage = 'Staff Assigned';
 
       console.log("Saving assignment for order:", assigningOrderId, {
         photographer,
@@ -484,10 +493,10 @@ export const OperationsLeads: React.FC = () => {
 
       // Assign operations includes event_status and raw footage link if updated
       await assignOperations(assigningOrderId, {
-        photographer_assigned: photographer || assignForm.photographer_assigned || 'Ramesh Kumar',
-        videographer_assigned: videographer || assignForm.videographer_assigned || 'Rahul Verma',
-        drone_operator_assigned: droneOp || assignForm.drone_operator_assigned,
-        assistant_assigned: assistant || assignForm.assistant_assigned,
+        photographer_assigned: photographer || assignForm.photographer_assigned || '',
+        videographer_assigned: videographer || assignForm.videographer_assigned || '',
+        drone_operator_assigned: droneOp || assignForm.drone_operator_assigned || '',
+        assistant_assigned: assistant || assignForm.assistant_assigned || '',
         equipment_kit: assignForm.equipment_kit,
         reporting_time: convertTimeToDbFormat(assignForm.reporting_time),
         remarks: assignForm.remarks,
@@ -964,25 +973,28 @@ export const OperationsLeads: React.FC = () => {
                 const op = getOpDetails(ord.order_id);
                 const orderAssignments = staffAssignments ? staffAssignments.filter(sa => sa.order_id === ord.order_id) : [];
 
-                // Filter out any "Unassigned", "None", or empty strings to get the actual assigned staff
-                const cleanCrewNames = [
-                  op?.photographer_assigned,
-                  op?.videographer_assigned,
-                  op?.drone_operator_assigned,
-                  op?.assistant_assigned,
-                  ...orderAssignments.map(a => a.staff_name)
-                ]
-                  .map(name => name?.trim())
-                  .filter((name): name is string => {
-                    if (!name) return false;
-                    const lower = name.toLowerCase();
-                    return lower !== 'unassigned' && lower !== 'none' && lower !== 'not assigned' && lower !== '';
-                  });
+                // 1. Get current lead_id or order_id
+                let assignmentsHistory = leadStaffAssignmentHistory ? leadStaffAssignmentHistory.filter(h => h.lead_id === ord.lead_id) : [];
+                if (assignmentsHistory.length === 0) {
+                  assignmentsHistory = leadStaffAssignmentHistory ? leadStaffAssignmentHistory.filter(h => h.order_id === ord.order_id) : [];
+                }
 
-                // De-duplicate the clean crew name array
-                const crewNames = Array.from(new Set(cleanCrewNames));
+                // 2. Load latest assignment for each role
+                const latestAssignmentsMap = new Map<string, string>();
+                const sortedAssignments = [...assignmentsHistory].sort((a, b) => new Date(a.assigned_at).getTime() - new Date(b.assigned_at).getTime());
+                
+                sortedAssignments.forEach(h => {
+                  if (h.assigned_staff && h.assigned_staff.trim() && h.assigned_staff.toLowerCase() !== 'unassigned' && h.assigned_staff.toLowerCase() !== 'none') {
+                    latestAssignmentsMap.set(h.assigned_role, h.assigned_staff.trim());
+                  } else {
+                    latestAssignmentsMap.delete(h.assigned_role);
+                  }
+                });
 
-                const currentStage = ord.current_stage || 'Order Confirmed';
+                const crewNames = Array.from(latestAssignmentsMap.entries()).map(([role, name]) => `${name} (${role})`);
+
+                const lead = leads.find(l => l.lead_id === ord.lead_id);
+                const currentStage = lead ? getLeadCurrentStatus(lead) : (ord.current_stage || 'Order Confirmed');
 
                 return (
                   <tr key={ord.order_id} className="hover:bg-zinc-900/20 transition-all">
@@ -997,7 +1009,7 @@ export const OperationsLeads: React.FC = () => {
                       {op?.equipment_kit && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {op.equipment_kit.split(',').map((kit: string, idx: number) => (
-                            <span key={idx} className="bg-amber-400/10 text-amber-400 px-1.5 py-0.5 rounded text-[9.5px] font-mono border border-amber-400/10 whitespace-nowrap" title="Assigned Gear">
+                            <span key={idx} className="bg-amber-400/10 text-amber-400 px-1.5 py-0.5 rounded text-[9.5px] font-mono border border-amber-400/10 " title="Assigned Gear">
                               ⚙️ {kit.trim()}
                             </span>
                           ))}
@@ -1018,11 +1030,11 @@ export const OperationsLeads: React.FC = () => {
                     <td className="p-4 font-mono text-zinc-300">
                       {op?.reporting_time || <span className="text-zinc-600 italic">—</span>}
                     </td>
-                    <td className="p-4 text-[11px] text-zinc-350 max-w-[220px]">
+                    <td className="p-4 text-[11px] text-zinc-350 min-w-[200px]">
                       {crewNames.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-col gap-1.5">
                           {crewNames.map((member, idx) => (
-                            <span key={idx} className="bg-zinc-850 text-zinc-250 px-1.5 py-0.5 rounded border border-zinc-800 text-[10px] font-mono shrink-0">
+                            <span key={idx} className="bg-zinc-850 text-zinc-250 px-1.5 py-1 rounded border border-zinc-800 text-[10px] font-mono break-words whitespace-normal leading-tight">
                               {member}
                             </span>
                           ))}
@@ -1032,16 +1044,7 @@ export const OperationsLeads: React.FC = () => {
                       )}
                     </td>
                     <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-extrabold uppercase border ${
-                        currentStage === 'Order Confirmed' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                        currentStage === 'Operations Assigned' ? 'bg-sky-500/10 text-sky-450 border-sky-500/20' :
-                        currentStage === 'Event Scheduled' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        currentStage === 'Event Completed' ? 'bg-rose-500/10 text-rose-455 border-rose-500/20' :
-                        currentStage === 'Raw Footage Received' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                        'bg-zinc-800 text-zinc-400 border-zinc-700'
-                      }`}>
-                        {currentStage}
-                      </span>
+                      <StatusText status={currentStage} />
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1.5 flex-wrap">
@@ -1055,7 +1058,7 @@ export const OperationsLeads: React.FC = () => {
                         </button>
 
                         {/* Update Status */}
-                        {canEdit && (currentStage === 'Event Scheduled' || currentStage === 'Event Completed') && (
+                        {canEdit && (
                           <select
                             value=""
                             disabled={isSaving}
@@ -1066,16 +1069,6 @@ export const OperationsLeads: React.FC = () => {
                                 try {
                                   setIsSaving(true);
                                   await markEventCompleted(ord.order_id, '');
-                                  alert("Status Updated Successfully");
-                                } catch (error) {
-                                  alert(`Failed to update status: ${error}`);
-                                } finally {
-                                  setIsSaving(false);
-                                }
-                              } else if (newStatus === 'Event Cancelled') {
-                                try {
-                                  setIsSaving(true);
-                                  await updateOrderStage(ord.order_id, 'Event Cancelled' as any);
                                   alert("Status Updated Successfully");
                                 } catch (error) {
                                   alert(`Failed to update status: ${error}`);
@@ -1103,18 +1096,26 @@ export const OperationsLeads: React.FC = () => {
                                   };
                                 });
                                 setFootageHandoverStates(initialHandovers);
+                              } else {
+                                try {
+                                  setIsSaving(true);
+                                  await updateOrderStage(ord.order_id, newStatus as any);
+                                  alert("Status Updated Successfully");
+                                } catch (error: any) {
+                                  alert(`Failed to update status: ${error.message}`);
+                                } finally {
+                                  setIsSaving(false);
+                                }
                               }
                             }}
                             className="px-2 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-mono font-bold cursor-pointer transition-all uppercase"
                           >
-                            <option value="">▼ UPDATE</option>
-                            {currentStage === 'Event Scheduled' && <>
-                              <option value="Event Completed">Event Completed</option>
-                              <option value="Event Cancelled">Event Cancelled</option>
-                            </>}
-                            {currentStage === 'Event Completed' && (
-                              <option value="Raw Footage Received">Raw Footage Received</option>
-                            )}
+                            <option value="">▼ UPDATE STATUS</option>
+                            <option value="Operations Assigned">Operations Assigned</option>
+                            <option value="Staff Assigned">Staff Assigned</option>
+                            <option value="Event Scheduled">Event Scheduled</option>
+                            <option value="Event Completed">Event Completed</option>
+                            <option value="Raw Footage Received">Raw Footage Received</option>
                           </select>
                         )}
 
@@ -2248,7 +2249,7 @@ Please report on time and update status through the portal.`;
                   <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
                     {(Object.entries(footageHandoverStates) as [string, any][]).map(([kitName, details]) => (
                       <div key={kitName} className="bg-zinc-955 p-2.5 rounded-xl border border-zinc-900 space-y-2">
-                        <div className="font-sans font-bold text-zinc-300 text-[11px] truncate flex items-center justify-between">
+                        <div className="font-sans font-bold text-zinc-300 text-[11px] break-words flex items-center justify-between">
                           <span>🛠️ {kitName}</span>
                           <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
                             details.return_status === 'Returned' ? 'bg-emerald-500/10 text-emerald-400' :

@@ -450,5 +450,29 @@ option, select option {
   }
 }
 
+/* Responsive Table Wrapping Rules */
+table {
+  table-layout: auto !important;
+  width: 100% !important;
+}
+
+table th, table td {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  vertical-align: top;
+}
+
+table th *, table td * {
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+}
+
+.overflow-x-auto {
+  max-width: 100%;
+}
+
 
 

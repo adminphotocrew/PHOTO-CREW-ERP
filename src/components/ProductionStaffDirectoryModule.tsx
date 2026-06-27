@@ -122,8 +122,8 @@ export const ProductionStaffDirectoryModule: React.FC = () => {
       }
       setIsFormOpen(false);
       setEditingStaff(null);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.warn("Failed saving staff", err?.message || err);
       alert('An error occurred while saving the staff member.');
     }
   };
@@ -137,8 +137,8 @@ export const ProductionStaffDirectoryModule: React.FC = () => {
         if (viewingStaff?.staff_id === member.staff_id) {
           setViewingStaff(null);
         }
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        console.warn("Failed deleting staff", err?.message || err);
         alert('An error occurred during staff deletion.');
       }
     }
