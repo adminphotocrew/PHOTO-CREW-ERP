@@ -74,8 +74,10 @@ export const PendingPaymentsReport: React.FC = () => {
       
       const finalPackageAmount = order ? order.quotation_amount : lead.budget;
       const advanceReceived = order ? order.advance_received : 0;
-      const remainingAmount = order ? (payment ? payment.balance_due : order.balance_amount) : finalPackageAmount;
-      const rawPaymentStatus = order ? (payment ? payment.payment_status : (advanceReceived > 0 ? 'Partially Paid' : 'Pending')) : 'Pending';
+      
+      // Use payments table for balance if available, otherwise fallback to order balance
+      const remainingAmount = payment ? payment.balance_due : (order ? order.balance_amount : finalPackageAmount - advanceReceived);
+      const rawPaymentStatus = payment ? payment.payment_status : (advanceReceived > 0 ? 'Partially Paid' : 'Pending');
       
       // Standardize status labels
       let paymentStatus: 'Pending' | 'Partial' | 'Fully Paid' = 'Pending';
@@ -86,6 +88,19 @@ export const PendingPaymentsReport: React.FC = () => {
       }
 
       const isOverdue = lead.event_date && lead.event_date < TODAY_STR;
+      
+      // Get the semantic stage of the lead
+      // We'll use the logic directly here or via context if available
+      const status = lead.current_status || lead.status || 'New Lead';
+      const salesStatuses = ['New Lead', 'Contacted', 'Follow Up', 'Follow-up', 'Quotation Sent', 'Negotiation', 'Lost Lead', 'Cancelled', 'Lost'];
+      const opsStatuses = ['Order Confirmed', 'Operations Assigned', 'Staff Assigned', 'Event Scheduled', 'Event Completed', 'New Order Received'];
+      const prodStatuses = ['Raw Footage Received', 'Editor Assigned', 'Editing Started', 'Editing In Progress', 'Internal QC Review', 'Client Review Sent', 'Internal Review', 'Client Review', 'Revision Required', 'Revision In Progress', 'Revision', 'Final Approval', 'Ready for Delivery'];
+      const completedStatuses = ['Delivered', 'Completed', 'Closed', 'Project Closed', 'Project Delivered'];
+
+      let currentStage: 'Sales' | 'Operations' | 'Production' | 'Completed' = 'Sales';
+      if (completedStatuses.includes(status)) currentStage = 'Completed';
+      else if (prodStatuses.includes(status)) currentStage = 'Production';
+      else if (opsStatuses.includes(status)) currentStage = 'Operations';
 
       return {
         lead,
@@ -101,12 +116,28 @@ export const PendingPaymentsReport: React.FC = () => {
         remainingAmount,
         paymentStatus,
         isOverdue,
-        currentProjectStatus: lead.status,
+        currentProjectStatus: status,
+        currentStage,
         lastUpdatedDate: lead.updated_at || lead.created_date,
       };
     }).filter(rec => {
-      // Filter out completed payments completely
-      return rec.remainingAmount > 0 && rec.paymentStatus !== 'Fully Paid';
+      // REQUIREMENT: Only display customers whose order has already been confirmed or in post-sales stages
+      // Exclude leads still in the Sales process
+      const isConfirmedOrder = rec.order && (rec.order.order_status === 'Confirmed' || rec.order.status === 'Confirmed');
+      const isPostSalesStage = ['Operations', 'Production', 'Completed'].includes(rec.currentStage);
+      
+      if (!isConfirmedOrder && !isPostSalesStage) return false;
+
+      // Double check exclusions
+      const explicitExclusions = ['New Lead', 'Contacted', 'Follow-up', 'Follow Up', 'Quotation Sent', 'Negotiation', 'Lost', 'Cancelled', 'Lost Lead'];
+      if (explicitExclusions.includes(rec.currentProjectStatus)) return false;
+
+      // REQUIREMENT: Only show if balance_due > 0 OR payment_status = 'Pending'
+      // Automatically remove if balance_due = 0 AND payment_status = 'Fully Paid'
+      const hasBalance = rec.remainingAmount > 0;
+      const isPending = rec.paymentStatus === 'Pending' || rec.paymentStatus === 'Partial';
+      
+      return hasBalance || isPending;
     });
   }, [leads, orders, payments]);
 

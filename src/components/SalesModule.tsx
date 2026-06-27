@@ -1187,36 +1187,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   // Group active packages directly loaded from Supabase!
   const categoriesList = React.useMemo(() => {
     const rawCats = Array.from(new Set((packages || []).map((p) => p.category)));
-    const defaults = [
-      'Wedding',
-      'Engagement',
-      'House Warming',
-      'Maternity',
-      'Baby Shower',
-      'Birthday',
-      'Naming Ceremony',
-      'Anniversary',
-      'Pre-Wedding',
-      'Interior Shoot',
-      'Product Shoot',
-      'Car/Bike Shoot',
-      'Wedding Packages',
-      'Premium Wedding Packages',
-      'House Warming Packages',
-      'Engagement Packages',
-      'Anniversary Packages',
-      'Naming Ceremony Packages',
-      'Maternity Shoot Packages',
-      'Baby Shower Packages',
-      'Baby Shoot Packages',
-      'Car / Bike Shoot Packages',
-      'Pre-Wedding Packages',
-      'Interior Shoot',
-      'Product Photography'
-    ];
-    defaults.forEach(c => {
-      if (!rawCats.includes(c)) rawCats.push(c);
-    });
     return rawCats.sort();
   }, [packages]);
 
@@ -1304,15 +1274,15 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   
   // Custom states for configuring quick reorder
   const [reorderForm, setReorderForm] = useState({
-    event_type: 'Pre Weddings',
+    event_type: '',
     custom_event_name: '',
     custom_event_type: '',
     event_date: '',
     event_time: '12:00',
     event_location: '',
-    package_name: 'Premium Pre Weddings Special Pack',
-    quotation_amount: 45000,
-    advance_received: 15000,
+    package_name: '',
+    quotation_amount: 0,
+    advance_received: 0,
   });
 
   // Customer Profiles sub-tab states
@@ -5093,7 +5063,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                                       package_name: pkg.package_name,
                                       category: pkg.category,
                                       price: pkg.price,
-                                      status: pkg.status,
+                                      status: pkg.status as 'Active' | 'Inactive',
                                       deliverables: pkg.deliverables || '',
                                       team_members: pkg.team_members || '',
                                       seasonal_offer: pkg.seasonal_offer || '',
@@ -5103,12 +5073,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                                       package_includes: pkg.package_includes || ''
                                     });
                                     setCustomCategory('');
-                                    setIsAddFormOpen(false);
+                                    setIsAddFormOpen(true);
                                   }}
-                                  className="py-1 px-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] uppercase font-mono tracking-tight font-bold border border-slate-800 hover:border-slate-700 rounded transition-all cursor-pointer text-center"
+                                  className="col-span-2 py-1 px-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] uppercase font-mono tracking-tight font-bold border border-slate-800 hover:border-slate-700 rounded transition-all cursor-pointer text-center"
                                   title="Edit package details"
                                 >
-                                  Edit
+                                  Edit Details
                                 </button>
                                 <button
                                   type="button"
@@ -5123,19 +5093,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                                   }`}
                                   title={pkg.status === 'Active' ? "Deactivate Package" : "Activate Package"}
                                 >
-                                  {pkg.status === 'Active' ? 'Deact' : 'Act'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (confirm(`Remove package "${pkg.package_name}"?`)) {
-                                      await deletePackage(pkg.package_id);
-                                    }
-                                  }}
-                                  className="py-1 px-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-455 text-[10px] uppercase font-mono tracking-tight font-bold border border-rose-500/10 hover:border-rose-500/25 rounded transition-all cursor-pointer text-center"
-                                  title="Delete package"
-                                >
-                                  Del
+                                  {pkg.status === 'Active' ? 'Deactivate' : 'Activate'}
                                 </button>
                               </div>
                             )}
@@ -6977,7 +6935,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             }`}
                           >
                             <option value="">── Choose configuration package ──</option>
-                            {packages.map((pkg) => (
+                            {packages.filter(p => p.status === 'Active').map((pkg) => (
                               <option key={pkg.package_id} value={pkg.package_id}>
                                 {pkg.package_name} (₹{Number(pkg.price).toLocaleString('en-IN')})
                               </option>

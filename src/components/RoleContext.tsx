@@ -2579,7 +2579,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { table: 'quotations', key: 'quotation_id', setter: setQuotations },
       { table: 'lead_status_history', key: 'id', setter: setStatusHistory },
       { table: 'lead_staff_assignment_history', key: 'id', setter: setLeadStaffAssignmentHistory },
-      { table: 'lead_equipment_history', key: 'id', setter: setLeadEquipmentHistory }
+      { table: 'lead_equipment_history', key: 'id', setter: setLeadEquipmentHistory },
+      { table: 'packages', key: 'package_id', setter: setPackages }
     ].map(({ table, key, setter }) => {
       return supabaseClient
         .channel(`rt-${table}`)
@@ -4892,6 +4893,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePackage = async (packageId: string, updates: Partial<Package>) => {
+    // Optimistic state update
     setPackages((prev) => {
       const next = prev.map((p) => p.package_id === packageId ? { ...p, ...updates } : p);
       localStorage.setItem('erp_packages', JSON.stringify(next));
@@ -4900,29 +4902,17 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     try {
       if (supabaseClient) {
-        await supabaseClient.from('packages').update(updates).eq('package_id', packageId);
-        // fetchFromDb().catch(console.error); // Disabled to prevent full reload
+        const { error } = await supabaseClient.from('packages').update(updates).eq('package_id', packageId);
+        if (error) throw error;
       }
     } catch (err) {
-      console.warn('Fallback to local: could not update package in Supabase:', err);
+      console.warn('Could not update package in Supabase:', err);
     }
   };
 
   const deletePackage = async (packageId: string) => {
-    setPackages((prev) => {
-      const next = prev.filter((p) => p.package_id !== packageId);
-      localStorage.setItem('erp_packages', JSON.stringify(next));
-      return next;
-    });
-    
-    try {
-      if (supabaseClient) {
-        await supabaseClient.from('packages').delete().eq('package_id', packageId);
-        // fetchFromDb().catch(console.error); // Disabled to prevent full reload
-      }
-    } catch (err) {
-      console.warn('Fallback to local: could not delete package in Supabase:', err);
-    }
+    // In this ERP, we don't delete packages anymore, we deactivate them.
+    return updatePackage(packageId, { status: 'Inactive' });
   };
 
   const addNotification = async (payload: Omit<Notification, 'notification_id' | 'created_at' | 'read_status'> & { notification_id?: string; read_status?: boolean }) => {
