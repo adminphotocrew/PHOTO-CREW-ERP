@@ -56,8 +56,8 @@ export const LoginScreen: React.FC = () => {
     setRealtimeTest('untested');
     setDiagnosticFailMsg('');
 
-    const url = (import.meta as any).env.VITE_SUPABASE_URL || 'https://plrtavqnsbqopvqtwezb.supabase.co';
-    const anonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Qdmf44q1ASJboY1_AZoOVQ_YfYrWvcB';
+    const url = import.meta.env.VITE_SUPABASE_URL || 'https://plrtavqnsbqopvqtwezb.supabase.co';
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Qdmf44q1ASJboY1_AZoOVQ_YfYrWvcB';
 
     try {
       const supabase = createClient(url, anonKey, {
@@ -611,15 +611,15 @@ export const LoginScreen: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3.5 gap-y-2 text-[10px] font-mono">
                 <div className="flex items-center justify-between p-2 bg-zinc-950 rounded-xl border border-zinc-900">
                   <span className="text-zinc-550">Supabase URL</span>
-                  <span className="text-zinc-350 break-words max-w-[120px]" title={(import.meta as any).env?.VITE_SUPABASE_URL}>
-                    {(import.meta as any).env?.VITE_SUPABASE_URL ? `${(import.meta as any).env.VITE_SUPABASE_URL.substring(0, 12)}...${(import.meta as any).env.VITE_SUPABASE_URL.substring((import.meta as any).env.VITE_SUPABASE_URL.length - 8)}` : 'Not Configured'}
+                  <span className="text-zinc-350 break-words max-w-[120px]" title={import.meta.env.VITE_SUPABASE_URL}>
+                    {import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL.substring(0, 12)}...${import.meta.env.VITE_SUPABASE_URL.substring(import.meta.env.VITE_SUPABASE_URL.length - 8)}` : 'Not Configured'}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between p-2 bg-zinc-950 rounded-xl border border-zinc-900">
                   <span className="text-zinc-550">Anon Key</span>
                   <span className="text-zinc-350" title="Public Anonymous Key">
-                    {(import.meta as any).env?.VITE_SUPABASE_ANON_KEY ? `${(import.meta as any).env.VITE_SUPABASE_ANON_KEY.substring(0, 6)}...${(import.meta as any).env.VITE_SUPABASE_ANON_KEY.substring((import.meta as any).env.VITE_SUPABASE_ANON_KEY.length - 4)}` : 'Not Configured'}
+                    {import.meta.env.VITE_SUPABASE_ANON_KEY ? `${import.meta.env.VITE_SUPABASE_ANON_KEY.substring(0, 6)}...${import.meta.env.VITE_SUPABASE_ANON_KEY.substring(import.meta.env.VITE_SUPABASE_ANON_KEY.length - 4)}` : 'Not Configured'}
                   </span>
                 </div>
 

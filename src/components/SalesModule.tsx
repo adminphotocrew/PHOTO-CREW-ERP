@@ -37,6 +37,20 @@ const generateQuotationPDF = (
   const headerBgColor = [18, 18, 22];  // Luxury Carbon Black
   const goldColor = [212, 175, 55];   // #D4AF37 Classic Gold
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+      return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Dynamic layout configuration options (Default vs Compact to optimize page count and avoid sparse pages)
   const defaultConfig = {
     secSpacing: 6,
@@ -45,7 +59,7 @@ const generateQuotationPDF = (
     termsSpacing: 3.8,
     tableSpacing: 5,
     pricingCardHeight: 25.5,
-    paymentCardHeight: 20,
+    paymentCardHeight: 29,
     boxPadding: 16,
     textPadding: 4.2,
     notesPadding: 4.2
@@ -58,7 +72,7 @@ const generateQuotationPDF = (
     termsSpacing: 3.2,
     tableSpacing: 3,
     pricingCardHeight: 21,
-    paymentCardHeight: 16,
+    paymentCardHeight: 24,
     boxPadding: 12,
     textPadding: 3.6,
     notesPadding: 3.6
@@ -307,10 +321,9 @@ const generateQuotationPDF = (
     simY += termsH;
 
     termsToRender.forEach((term, idx) => {
-      const isNumbered = /^\d+\.\s/.test(term);
-      const prefix = isNumbered ? '' : `${idx + 1}. `;
-      const wrapped = doc.splitTextToSize(`${prefix}${term}`, 180);
-      const termH = wrapped.length * cfg.termsSpacing;
+      const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '');
+      const wrapped = doc.splitTextToSize(cleanTerm, 174);
+      const termH = (wrapped.length * cfg.termsSpacing) + 2;
       if (simY + termH > 250) {
         simY = 52;
         simPageCount++;
@@ -338,17 +351,19 @@ const generateQuotationPDF = (
 
   // Header drawing function
   const drawPageHeader = (pageDoc: typeof doc) => {
+    // Premium Dark Carbon Header Bar
     pageDoc.setFillColor(headerBgColor[0], headerBgColor[1], headerBgColor[2]);
     pageDoc.rect(0, 0, 210, 42, 'F'); 
 
+    // Gold Accent Line separating header from content
     pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
     pageDoc.rect(0, 41, 210, 1.2, 'F');
 
-    let logoY = 10;
+    let logoY = 8;
     let hasLogo = false;
     if (logoBase64 && logoBase64.startsWith('data:image')) {
       try {
-        pageDoc.addImage(logoBase64, 'PNG', 15, logoY, 22, 22);
+        pageDoc.addImage(logoBase64, 'PNG', 15, logoY, 18, 18);
         hasLogo = true;
       } catch (e) {
         console.warn('Failed to add logo image to PDF, drawing fallback badge:', e);
@@ -359,33 +374,52 @@ const generateQuotationPDF = (
       pageDoc.setDrawColor(goldColor[0], goldColor[1], goldColor[2]);
       pageDoc.setLineWidth(0.6);
       pageDoc.setFillColor(18, 18, 22);
-      pageDoc.circle(26, logoY + 11, 8, 'FD');
+      pageDoc.circle(24, logoY + 9, 9, 'FD');
       pageDoc.setFont('helvetica', 'bold');
-      pageDoc.setFontSize(10);
+      pageDoc.setFontSize(11);
       pageDoc.setTextColor(255, 255, 255);
-      pageDoc.text('P', 24.5, logoY + 14.5, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      pageDoc.text('P', 22.2, logoY + 12.2);
     }
 
+    // Left block: Company Branding & Location Info
     pageDoc.setFont('helvetica', 'bold');
-    pageDoc.setFontSize(15);
+    pageDoc.setFontSize(13.5);
     pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.text('PHOTOCREW PICTURES', 105, 19, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.text('PHOTOCREW PICTURES', 38, logoY + 3);
 
     pageDoc.setFont('helvetica', 'normal');
-    pageDoc.setFontSize(7.5);
+    pageDoc.setFontSize(7);
     pageDoc.setTextColor(185, 185, 185);
-    pageDoc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 105, 24, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 38, logoY + 7.5);
+    
+    pageDoc.setFontSize(7);
+    pageDoc.setTextColor(150, 150, 150);
+    pageDoc.text('No. 45, 1st Floor, 80 Feet Road, VijayNagar, Bangalore - 560040', 38, logoY + 12);
+    pageDoc.text('GSTIN: 29AAFCP5894N1ZN (Registered Karnataka)', 38, logoY + 16.5);
 
-    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.setFontSize(6.5);
-    pageDoc.text('★ ★ ★ ★ ★', 105, 29, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-
-    pageDoc.setTextColor(245, 245, 245);
+    // Right block: Studio Contact Info
     pageDoc.setFont('helvetica', 'normal');
     pageDoc.setFontSize(7.5);
-    pageDoc.text('www.photocrewpictures.com', 195, 17, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    pageDoc.text('info@photocrewpictures.com', 195, 22, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    pageDoc.text('+91 9060144016', 195, 27, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.setTextColor(230, 230, 230);
+    pageDoc.text('www.photocrewpictures.com', 195, logoY + 4, { align: 'right' });
+    pageDoc.text('info@photocrewpictures.com', 195, logoY + 8.5, { align: 'right' });
+    pageDoc.text('+91 9060144016', 195, logoY + 13, { align: 'right' });
+
+    // Header Meta Row: Quote Number, Quote Date, and Validity Date
+    pageDoc.setFillColor(28, 28, 35);
+    pageDoc.rect(15, 30, 180, 7.5, 'F');
+    
+    pageDoc.setFont('helvetica', 'bold');
+    pageDoc.setFontSize(8);
+    pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
+    pageDoc.text('QUOTATION DOCUMENT', 19, 35);
+
+    pageDoc.setFont('helvetica', 'normal');
+    pageDoc.setFontSize(7.5);
+    pageDoc.setTextColor(240, 240, 240);
+    pageDoc.text(`No: ${quoteNum}`, 90, 35);
+    pageDoc.text(`Date: ${formatDate(lead.quotation_date || new Date().toISOString().split('T')[0])}`, 130, 35);
+    pageDoc.text(`Validity: 15 Days`, 168, 35);
   };
 
   // Footer drawing function
@@ -414,11 +448,11 @@ const generateQuotationPDF = (
     pageDoc.setFont('helvetica', 'normal');
     pageDoc.setFontSize(7.5);
     pageDoc.setTextColor(100, 116, 139);
-    pageDoc.text('For Photocrew Pictures', 150, footerY + 5, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.text('For Photocrew Pictures', 195, footerY + 5, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
     pageDoc.setFont('helvetica', 'bold');
     pageDoc.setFontSize(8);
     pageDoc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-    pageDoc.text('Authorized Signatory', 150, footerY + 12, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    pageDoc.text('Authorized Signatory', 195, footerY + 12, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
 
     if (totalPages > 1) {
       pageDoc.setFont('helvetica', 'normal');
@@ -489,44 +523,48 @@ const generateQuotationPDF = (
   doc.setTextColor(71, 85, 105);
 
   let curLeftY = clientY + 11.5;
-  doc.text('Customer Name  :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  wrapCustName.forEach((line: string, i: number) => {
-    doc.text(line, 45, curLeftY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  const leftLabels = [
+    { label: 'Customer Name', val: wrapCustName, isWrapped: true },
+    { label: 'Mobile Number', val: lead.mobile || 'N/A' },
+    { label: 'Email Address', val: wrapEmail, isWrapped: true },
+    { label: 'Quotation No',  val: quoteNum }
+  ];
+
+  leftLabels.forEach((item) => {
+    doc.text(item.label, 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text(':', 41, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    if (item.isWrapped && Array.isArray(item.val)) {
+      item.val.forEach((line: string, i: number) => {
+        doc.text(line, 43, curLeftY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      });
+      curLeftY += (item.val.length * cfg.textPadding);
+    } else {
+      doc.text(String(item.val), 43, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      curLeftY += cfg.textPadding;
+    }
   });
-  curLeftY += (wrapCustName.length * cfg.textPadding);
-
-  doc.text('Mobile Number  :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text(lead.mobile || 'N/A', 45, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  curLeftY += cfg.textPadding;
-
-  doc.text('Email Address  :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  wrapEmail.forEach((line: string, i: number) => {
-    doc.text(line, 45, curLeftY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  });
-  curLeftY += (wrapEmail.length * cfg.textPadding);
-
-  doc.text('Quotation No   :', 20, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text(quoteNum, 45, curLeftY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
 
   let curRightY = clientY + 11.5;
-  doc.text('Event Type      :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  wrapEventType.forEach((line: string, i: number) => {
-    doc.text(line, 135, curRightY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  const rightLabels = [
+    { label: 'Event Type',     val: wrapEventType, isWrapped: true },
+    { label: 'Event Date',     val: formattedEvDate },
+    { label: 'Event Location', val: wrapLocation, isWrapped: true },
+    { label: 'Quotation Date', val: quoteDateStr }
+  ];
+
+  rightLabels.forEach((item) => {
+    doc.text(item.label, 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text(':', 131, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    if (item.isWrapped && Array.isArray(item.val)) {
+      item.val.forEach((line: string, i: number) => {
+        doc.text(line, 133, curRightY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      });
+      curRightY += (item.val.length * cfg.textPadding);
+    } else {
+      doc.text(String(item.val), 133, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      curRightY += cfg.textPadding;
+    }
   });
-  curRightY += (wrapEventType.length * cfg.textPadding);
-
-  doc.text('Event Date      :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text(formattedEvDate, 135, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  curRightY += cfg.textPadding;
-
-  doc.text('Event Location  :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  wrapLocation.forEach((line: string, i: number) => {
-    doc.text(line, 135, curRightY + (i * cfg.textPadding), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  });
-  curRightY += (wrapLocation.length * cfg.textPadding);
-
-  doc.text('Quotation Date  :', 110, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text(quoteDateStr, 135, curRightY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
 
   let currentY = clientY + boxHeight + cfg.secSpacing;
 
@@ -803,28 +841,29 @@ const generateQuotationPDF = (
   doc.setLineWidth(0.25);
   doc.roundedRect(15, currentY, 180, cfg.paymentCardHeight, 1.5, 1.5, 'D');
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  
-  const paymentY1 = currentY + (cfg.paymentCardHeight * 0.3);
-  const paymentY2 = currentY + (cfg.paymentCardHeight * 0.52);
-  const paymentY3 = currentY + (cfg.paymentCardHeight * 0.75);
+  const bankDetails = [
+    { label: 'Account Name', val: 'PHOTOCREW PICTURES' },
+    { label: 'Bank Name',    val: 'HDFC BANK' },
+    { label: 'Account No.',  val: '50200103134840' },
+    { label: 'IFSC Code',    val: 'HDFC0000312' },
+    { label: 'Branch',       val: 'Vijayanagar, Bangalore' }
+  ];
 
-  doc.text('Name        :', 20, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text('Bank        :', 20, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text('Account No  :', 20, paymentY3, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PHOTOCREW PICTURES', 40, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text('HDFC BANK', 40, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text('50200103134840', 40, paymentY3, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text('IFSC Code   :', 110, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text('Branch      :', 110, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.setFont('helvetica', 'bold');
-  doc.text('HDFC0000312', 135, paymentY1, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-  doc.text('VijayNagar, Bangalore', 135, paymentY2, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  bankDetails.forEach((item, idx) => {
+    const startOffset = cfg.paymentCardHeight === 29 ? 5.5 : 4.5;
+    const rowSpacing = cfg.paymentCardHeight === 29 ? 4.5 : 3.6;
+    const itemY = currentY + startOffset + (idx * rowSpacing);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(item.label, 20, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text(':', 44, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(item.val, 47, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  });
   
   currentY += cfg.paymentCardHeight + cfg.secSpacing;
 
@@ -913,19 +952,26 @@ const generateQuotationPDF = (
   doc.setTextColor(100, 116, 139);
 
   termsToRender.forEach((term, idx) => {
-    const isNumbered = /^\d+\.\s/.test(term);
-    const prefix = isNumbered ? '' : `${idx + 1}. `;
-    const wrapped = doc.splitTextToSize(`${prefix}${term}`, 180);
-    const termHeight = wrapped.length * cfg.termsSpacing;
+    const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '');
+    const prefix = `${idx + 1}. `;
+    const wrapped = doc.splitTextToSize(cleanTerm, 174);
+    const termHeight = (wrapped.length * cfg.termsSpacing) + 2;
 
     if (currentY + termHeight > 250) {
       currentY = createNewPage();
     }
 
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(prefix, 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    
+    doc.setFont('helvetica', 'normal');
     wrapped.forEach((line: string) => {
-      doc.text(line, 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+      doc.text(line, 21, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
       currentY += cfg.termsSpacing;
     });
+    currentY += 2; // Extra space between items
   });
 
   // Apply Brand Headers and Footers to ALL pages
@@ -1015,9 +1061,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   React.useEffect(() => {
     const preloadLogo = async () => {
-      // Avoid fetching external images to prevent "Failed to fetch" CORS/Network errors.
-      // Use a generated base64 placeholder or local image path.
-      setLogoBase64(''); 
+      try {
+        const response = await fetch('/app-icon-v3.png');
+        if (response.ok) {
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setLogoBase64(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        }
+      } catch (e) {
+        console.warn('Failed to pre-load logo image:', e);
+      }
     };
     preloadLogo();
   }, []);
@@ -1183,6 +1239,24 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   });
   const [customCategory, setCustomCategory] = useState('');
   const [isComparingPkgs, setIsComparingPkgs] = useState(false);
+  const [dbCategoryError, setDbCategoryError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const checkCategoryColumn = async () => {
+      if (!supabaseClient) return;
+      try {
+        const { error } = await supabaseClient.from('packages').select('category').limit(0);
+        if (error && (error.code === '42703' || error.message?.toLowerCase().includes('column') || error.message?.toLowerCase().includes('does not exist'))) {
+          setDbCategoryError(
+            `❌ Database Schema Alert: The 'category' column is missing from the 'packages' table in Supabase. Although the app is safely resolving categories using automated description serialization, categories are not stored as a dedicated column at the database level.`
+          );
+        }
+      } catch (e) {
+        console.warn('Failed to check category column:', e);
+      }
+    };
+    checkCategoryColumn();
+  }, [packages]);
 
   // Group active packages directly loaded from Supabase!
   const categoriesList = React.useMemo(() => {
@@ -1304,7 +1378,34 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   const [otherSource, setOtherSource] = useState('');
 
   // Screen 2 Form State (Wizard support)
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<{
+    customer_name: string;
+    mobile: string;
+    alternate_mobile: string;
+    email: string;
+    lead_source: string;
+    event_type: string;
+    custom_event_name: string;
+    shoot_type: string;
+    event_date: string;
+    event_time: string;
+    event_location: string;
+    budget: number | '';
+    remarks: string;
+    whatsapp_number: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+    client_residence_address: string;
+    desired_event_shoot_type: string;
+    Select_Package_Option: string;
+    total_pax: number | '';
+    reference_source: string;
+    lead_value: number | '';
+    lead_score: number | '';
+    booking_status: string;
+  }>({
     customer_name: '',
     mobile: '',
     alternate_mobile: '',
@@ -1316,7 +1417,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     event_date: '',
     event_time: '',
     event_location: '',
-    budget: 0,
+    budget: '',
     remarks: '',
     whatsapp_number: '',
     address: '',
@@ -1325,11 +1426,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     pincode: '',
     client_residence_address: '',
     desired_event_shoot_type: '',
-    total_pax: 0,
+    Select_Package_Option: '',
+    total_pax: '',
     reference_source: '',
-    lead_value: 0,
-    lead_score: 0,
-    booking_status: 'Pending',
+    lead_value: '',
+    lead_score: '',
+    booking_status: '',
   });
 
   const [wizardStep, setWizardStep] = useState(1);
@@ -1344,13 +1446,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   const [reportingTime, setReportingTime] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
-  const [salesStatus, setSalesStatus] = useState('New Lead');
+  const [salesStatus, setSalesStatus] = useState<string>('');
 
   // Order Confirmed Additional mandatory fields
   const [confirmedEventDate, setConfirmedEventDate] = useState('');
   const [confirmedEventTime, setConfirmedEventTime] = useState('');
-  const [finalPackageAmount, setFinalPackageAmount] = useState<number>(0);
-  const [advanceReceived, setAdvanceReceived] = useState<number>(0);
+  const [finalPackageAmount, setFinalPackageAmount] = useState<number | ''>('');
+  const [advanceReceived, setAdvanceReceived] = useState<number | ''>('');
 
   const resetForm = () => {
     setCreateForm({
@@ -1365,7 +1467,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       event_date: '',
       event_time: '',
       event_location: '',
-      budget: 0,
+      budget: '',
       remarks: '',
       whatsapp_number: '',
       address: '',
@@ -1374,15 +1476,15 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       pincode: '',
       client_residence_address: '',
       desired_event_shoot_type: '',
-      total_pax: 0,
+      total_pax: '',
       reference_source: '',
-      lead_value: 0,
-      lead_score: 0,
-      booking_status: 'Pending',
+      lead_value: '',
+      lead_score: '',
+      booking_status: '',
     });
     setOtherSource('');
     setSelectedPkgIds([]);
-    setLeadDiscount(0);
+    setLeadDiscount('');
     setIsPkgDropdownOpen(false);
     
     // Reset wizard fields
@@ -1394,11 +1496,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     setReportingTime('');
     setInternalNotes('');
     setFollowUpDate('');
-    setSalesStatus('New Lead');
+    setSalesStatus('');
     setConfirmedEventDate('');
     setConfirmedEventTime('');
-    setFinalPackageAmount(0);
-    setAdvanceReceived(0);
+    setFinalPackageAmount('');
+    setAdvanceReceived('');
+    setQuoteDiscount('');
+    setQuoteAdditional('');
+
+    // Clear cached quote services
+    localStorage.removeItem('erp_quote_services_create');
   };
 
   // Action hook to reset state, auto-scroll and auto-focus when transitioning to 'create' tab
@@ -1518,9 +1625,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   // Confirm Order Form State
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmForm, setConfirmForm] = useState({
-    package_name: 'Luxury Cinematic Bundle',
-    quotation_amount: 3500,
-    advance_received: 1000,
+    package_name: '',
+    quotation_amount: 0,
+    advance_received: 0,
     event_date: '',
     event_time: '',
     payment_mode: 'UPI',
@@ -1544,8 +1651,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   // Customizable inclusions, deliverables, discount, and additional charges states
   const [editableInclusions, setEditableInclusions] = useState<Record<string, string[]>>({});
   const [editableDeliverables, setEditableDeliverables] = useState<Record<string, string[]>>({});
-  const [quoteDiscount, setQuoteDiscount] = useState<number>(0);
-  const [quoteAdditional, setQuoteAdditional] = useState<number>(0);
+  const [quoteDiscount, setQuoteDiscount] = useState<number | ''>('');
+  const [quoteAdditional, setQuoteAdditional] = useState<number | ''>('');
 
   const [quoteServices, setQuoteServices] = useState<{ id: string; name: string; qty: number; price: number; isAdditional?: boolean }[]>([]);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
@@ -1598,25 +1705,78 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       return;
     }
 
+    const activePkgs = getSelectedPkgsInfo(crmWizardStep === 4);
+    const activePkgIds = activePkgs.map(lp => lp.package_id).filter(Boolean);
+
+    // Build expected list of base deliverables from active packages directly from packages table
+    const expectedBaseDeliverables: { pkgId: string; name: string }[] = [];
+    activePkgs.forEach((lp) => {
+      const pkgKey = lp.package_id || 'default';
+      const pObj = (packages || []).find(p => p.package_id === lp.package_id);
+      const incStr = pObj?.team_members || '';
+      const delStr = pObj?.deliverables || '';
+
+      const inclusionsList = incStr
+        ? incStr.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const deliverablesList = delStr
+        ? delStr.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+
+      const combined = [...inclusionsList, ...deliverablesList];
+      if (combined.length === 0) {
+        const defaultItems = [
+          '2 Photographers',
+          '1 Cinematographer',
+          'Drone Coverage',
+          'LED Wall',
+          'Album (40 Sheets)',
+          'Teaser Video',
+          'Highlight Video',
+          'Full Event Coverage'
+        ];
+        defaultItems.forEach(name => {
+          expectedBaseDeliverables.push({ pkgId: pkgKey, name });
+        });
+      } else {
+        combined.forEach(name => {
+          expectedBaseDeliverables.push({ pkgId: pkgKey, name });
+        });
+      }
+    });
+
     const leadId = crmWizardStep === 4 ? (selectedLead?.lead_id || 'edit') : (createdLeadId || 'create');
     const storageKey = `erp_quote_services_${leadId}`;
     const cached = localStorage.getItem(storageKey);
+    let cacheIsValid = false;
+
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
         if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-          setQuoteServices(parsed);
-          return;
+          const cachedBaseServices = parsed.filter(s => !s.isAdditional && s.id.startsWith('base_'));
+          
+          if (cachedBaseServices.length === expectedBaseDeliverables.length) {
+            const allMatched = expectedBaseDeliverables.every((expected) => {
+              return cachedBaseServices.some(s => {
+                const parts = s.id.split('_');
+                const pkgIdPart = parts[1];
+                return pkgIdPart === expected.pkgId && s.name === expected.name;
+              });
+            });
+            if (allMatched) {
+              cacheIsValid = true;
+              setQuoteServices(parsed);
+              return;
+            }
+          }
         }
       } catch (e) {
         console.warn("Failed to parse cached quote services", e);
       }
     }
 
-    // Fallback: auto-initialize if not locally cached
-    const activePkgs = getSelectedPkgsInfo(crmWizardStep === 4);
-    
-    // Auto-calculate base proportions
+    // Fallback/Rebuild: auto-initialize directly using data from packages table
     const initialServices: { id: string; name: string; qty: number; price: number; isAdditional: boolean }[] = [];
     activePkgs.forEach((lp) => {
       const pkgKey = lp.package_id || 'default';
@@ -1675,7 +1835,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     });
 
     setQuoteServices(initialServices);
-  }, [wizardStep, crmWizardStep, selectedLead, createdLeadId]);
+  }, [wizardStep, crmWizardStep, selectedLead, createdLeadId, packages, wizardLeadData.selected_package_id, selectedPkgIds]);
 
   // Save services to local storage whenever they change
   React.useEffect(() => {
@@ -1891,7 +2051,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         client_residence_address: wizardLeadData.client_residence_address,
         desired_event_shoot_type: wizardLeadData.desired_event_shoot_type,
         deliverables_description: wizardLeadData.deliverables,
-        notes_special_customizations: wizardLeadData.notes
+        notes_special_customizations: wizardLeadData.notes,
+        Select_Package_Option: wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id || selectedLead?.Select_Package_Option || ''
       };
     } else {
       return {
@@ -1899,8 +2060,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         lead_id: createdLeadId || 'DRAFT-LEAD',
         deliverables_description: selectedPkgs.map(p => pkgDeliverables[p.id] || p.deliverables || 'N/A').join('\n'),
         notes_special_customizations: selectedPkgs.map(p => pkgNotes[p.id] || '').join('\n'),
+        Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
       };
     }
+  };
+
+  const validateLeadForQuotation = (leadObj: any, activePkgs: any[]) => {
+    const missing: string[] = [];
+    if (!leadObj.customer_name?.trim()) missing.push('Customer Name');
+    if (!leadObj.mobile?.trim()) missing.push('Mobile Number');
+    if (!leadObj.email?.trim()) missing.push('Email Address');
+    if (!leadObj.client_residence_address?.trim() && !leadObj.address?.trim()) missing.push('Client Residence Address');
+    if (!leadObj.city?.trim()) missing.push('City');
+    if (!leadObj.state?.trim()) missing.push('State');
+    if (!leadObj.pincode?.trim()) missing.push('Pincode');
+    if (!leadObj.event_type?.trim()) missing.push('Event Type');
+    if (!leadObj.desired_event_shoot_type?.trim() && !leadObj.shoot_type?.trim()) missing.push('Desired Event Shoot Type');
+    if (!leadObj.event_date?.trim()) missing.push('Event Date');
+    if (!leadObj.event_location?.trim() && !leadObj.location?.trim()) missing.push('Event Location');
+    if (activePkgs.length === 0) missing.push('At least one selected package');
+    return missing;
   };
 
   const handleGenerateQuote = async (isEdit: boolean) => {
@@ -1908,6 +2087,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     try {
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
+
+      const missingFields = validateLeadForQuotation(leadObj, activePkgs);
+      if (missingFields.length > 0) {
+        showToastMsg(`Quotation Incomplete! Please enter the following fields: ${missingFields.join(', ')}`, "error");
+        setIsSaving(false);
+        return;
+      }
+
       const basePkgSum = dynamicBaseSum;
       const finalAmt = dynamicFinalAmt;
       const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1967,7 +2154,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           state: leadObj.state,
           pincode: leadObj.pincode,
           desired_event_shoot_type: leadObj.desired_event_shoot_type || leadObj.shoot_type,
-          remarks: getRemarksPayload(wizardLeadData.remarks, wizardLeadData.notes || '', wizardLeadData.next_follow_up_date, wizardLeadData.whatsapp_number, wizardLeadData.address, wizardLeadData.city)
+          remarks: getRemarksPayload(wizardLeadData.remarks, wizardLeadData.notes || '', wizardLeadData.next_follow_up_date, wizardLeadData.whatsapp_number, wizardLeadData.address, wizardLeadData.city),
+          Select_Package_Option: leadObj.Select_Package_Option || ''
         });
       } else {
         setCreateForm(prev => ({
@@ -1988,7 +2176,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           state: leadObj.state,
           pincode: leadObj.pincode,
           desired_event_shoot_type: leadObj.desired_event_shoot_type || leadObj.shoot_type,
-          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city)
+          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city),
+          Select_Package_Option: leadObj.Select_Package_Option || ''
         });
       }
 
@@ -2005,6 +2194,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     try {
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
+
+      const missingFields = validateLeadForQuotation(leadObj, activePkgs);
+      if (missingFields.length > 0) {
+        showToastMsg(`Quotation Incomplete! Please enter the following fields: ${missingFields.join(', ')}`, "error");
+        return;
+      }
+
       const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       
       const doc = generateQuotationPDF(
@@ -2033,6 +2229,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     try {
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
+
+      const missingFields = validateLeadForQuotation(leadObj, activePkgs);
+      if (missingFields.length > 0) {
+        showToastMsg(`Quotation Incomplete! Please enter the following fields: ${missingFields.join(', ')}`, "error");
+        return;
+      }
+
       const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       
       const doc = generateQuotationPDF(
@@ -2118,9 +2321,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     const pkgNames = activePkgs.map(p => p.package_name).join(' + ') || 'Selected Package';
 
     const budgetValue = isEdit ? wizardLeadData.budget : createForm.budget;
-    const setBudget = (val: number) => {
+    const setBudget = (val: number | '') => {
       if (isEdit) {
-        setWizardLeadData(prev => ({ ...prev, budget: val }));
+        setWizardLeadData(prev => ({ ...prev, budget: val === '' ? 0 : val }));
       } else {
         setCreateForm(prev => ({ ...prev, budget: val }));
       }
@@ -2154,18 +2357,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     };
 
     const leadValue = isEdit ? wizardLeadData.lead_value : createForm.lead_value;
-    const setLeadValue = (val: number) => {
+    const setLeadValue = (val: number | '') => {
       if (isEdit) {
-        setWizardLeadData(prev => ({ ...prev, lead_value: val }));
+        setWizardLeadData(prev => ({ ...prev, lead_value: val === '' ? 0 : val }));
       } else {
         setCreateForm(prev => ({ ...prev, lead_value: val }));
       }
     };
 
     const leadScore = isEdit ? wizardLeadData.lead_score : createForm.lead_score;
-    const setLeadScore = (val: number) => {
+    const setLeadScore = (val: number | '') => {
       if (isEdit) {
-        setWizardLeadData(prev => ({ ...prev, lead_score: val }));
+        setWizardLeadData(prev => ({ ...prev, lead_score: val === '' ? 0 : val }));
       } else {
         setCreateForm(prev => ({ ...prev, lead_score: val }));
       }
@@ -2187,8 +2390,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 id={isEdit ? "wizard_edit_step4_first_field" : "wizard_create_step4_first_field"}
                 type="number"
                 required
-                value={budgetValue || ''}
-                onChange={(e) => setBudget(Number(e.target.value))}
+                value={budgetValue === 0 ? '' : budgetValue}
+                onChange={(e) => setBudget(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="E.g., 50000"
                 className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
               />
@@ -2199,8 +2402,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               </label>
               <input
                 type="number"
-                value={leadValue || ''}
-                onChange={(e) => setLeadValue(Number(e.target.value))}
+                value={leadValue === 0 ? '' : leadValue}
+                onChange={(e) => setLeadValue(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="E.g., 75000"
                 className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-amber-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
               />
@@ -2213,8 +2416,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 type="number"
                 min="0"
                 max="100"
-                value={leadScore || ''}
-                onChange={(e) => setLeadScore(Number(e.target.value))}
+                value={leadScore === 0 ? '' : leadScore}
+                onChange={(e) => setLeadScore(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="E.g., 85"
                 className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-2 px-3 text-xs text-emerald-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/20 font-mono transition-all"
               />
@@ -2727,6 +2930,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       setQuoteAdditional(latestQuote.additional_services_cost || 0);
     }
 
+    const matchedPkgId = latestQuote?.package_id || primaryLP?.package_id || lead.Select_Package_Option || '';
+    const matchedPkg = (packages || []).find(p => p.package_id === matchedPkgId);
+
     setWizardLeadData({
       customer_name: lead.customer_name || '',
       mobile: lead.mobile || '',
@@ -2738,6 +2944,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       pincode: latestQuote?.pincode || lead.pincode || '',
       client_residence_address: latestQuote?.client_residence_address || lead.client_residence_address || '',
       desired_event_shoot_type: latestQuote?.desired_event_shoot_type || lead.desired_event_shoot_type || '',
+      Select_Package_Option: lead.Select_Package_Option || latestQuote?.Select_Package_Option || primaryLP?.package_id || '',
       // Step 2
       event_type: lead.event_type || '',
       custom_event_name: lead.custom_event_name || '',
@@ -2751,8 +2958,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       selected_package_id: latestQuote?.package_id || primaryLP?.package_id || '',
       package_cost: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : 0),
       package_price: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : 0),
-      deliverables: latestQuote?.deliverables_description || primaryLP?.deliverables_description || primaryLP?.package_name || '',
-      deliverables_description: latestQuote?.deliverables_description || primaryLP?.deliverables_description || '',
+      deliverables: latestQuote?.deliverables_description || primaryLP?.deliverables_description || matchedPkg?.deliverables || '',
+      deliverables_description: latestQuote?.deliverables_description || primaryLP?.deliverables_description || matchedPkg?.deliverables || '',
       notes_special_customizations: latestQuote?.notes_special_customizations || primaryLP?.notes_special_customizations || '',
       notes: lead.remarks || '',
       // Step 4
@@ -2803,6 +3010,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       setWizardLeadData((prev) => ({
         ...prev,
         selected_package_id: packageId,
+        Select_Package_Option: packageId,
         package_cost: Number(pkg.price),
         deliverables: pkg.deliverables || '',
         notes: pkg.seasonal_offer ? `Seasonal Offer: ${pkg.seasonal_offer}` : prev.notes,
@@ -2813,6 +3021,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       setWizardLeadData((prev) => ({
         ...prev,
         selected_package_id: '',
+        Select_Package_Option: '',
       }));
     }
   };
@@ -2850,6 +3059,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           lead_source: wizardLeadData.lead_source,
           total_pax: wizardLeadData.total_pax,
           reference_source: wizardLeadData.reference_source,
+          Select_Package_Option: wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id || ''
         });
         showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 2) {
@@ -2874,6 +3084,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           lead_source: wizardLeadData.lead_source,
           shoot_type: wizardLeadData.shoot_type,
           desired_event_shoot_type: wizardLeadData.desired_event_shoot_type,
+          client_residence_address: wizardLeadData.client_residence_address,
+          city: wizardLeadData.city,
+          state: wizardLeadData.state,
+          pincode: wizardLeadData.pincode,
+          Select_Package_Option: wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id || ''
         });
         showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 3) {
@@ -2902,7 +3117,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           package_price: Number(wizardLeadData.package_cost),
           deliverables_description: wizardLeadData.deliverables,
           notes_special_customizations: wizardLeadData.notes,
-          remarks: wizardLeadData.notes
+          remarks: wizardLeadData.notes,
+          Select_Package_Option: wizardLeadData.selected_package_id,
+          client_residence_address: wizardLeadData.client_residence_address,
+          city: wizardLeadData.city,
+          state: wizardLeadData.state,
+          pincode: wizardLeadData.pincode
         });
         showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 4) {
@@ -2911,6 +3131,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           remarks: wizardLeadData.remarks,
           lead_value: wizardLeadData.lead_value,
           lead_score: wizardLeadData.lead_score,
+          client_residence_address: wizardLeadData.client_residence_address,
+          city: wizardLeadData.city,
+          state: wizardLeadData.state,
+          pincode: wizardLeadData.pincode,
+          Select_Package_Option: wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id || ''
         });
         showToastMsg("CRM Updated Successfully.", "success");
       } else if (step === 5) {
@@ -3058,9 +3283,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       event_date: '',
       event_time: '12:00',
       event_location: '',
-      package_name: 'Premium Pre Weddings Special Pack',
-      quotation_amount: 45000,
-      advance_received: 15000,
+      package_name: '',
+      quotation_amount: 0,
+      advance_received: 0,
     });
     setActiveTab('list');
   };
@@ -3256,17 +3481,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             client_residence_address: createForm.client_residence_address,
             shoot_type: createForm.shoot_type,
             desired_event_shoot_type: createForm.desired_event_shoot_type,
-            total_pax: createForm.total_pax,
+            total_pax: createForm.total_pax !== '' ? Number(createForm.total_pax) : undefined,
             reference_source: createForm.reference_source,
-            lead_value: createForm.lead_value,
-            lead_score: createForm.lead_score,
-            booking_status: createForm.booking_status,
+            lead_value: createForm.lead_value !== '' ? Number(createForm.lead_value) : undefined,
+            lead_score: createForm.lead_score !== '' ? Number(createForm.lead_score) : undefined,
+            booking_status: createForm.booking_status || undefined,
             event_type: createForm.event_type || 'Other',
             event_date: createForm.event_date || new Date().toISOString().split('T')[0],
             event_time: createForm.event_time || '12:00',
             event_location: createForm.event_location || 'TBD',
             budget: Number(createForm.budget) || 0,
-            remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
+            remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
+            Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
           });
           setCreatedLeadId(newId);
           console.log(`Created lead with ID: ${newId}`);
@@ -3284,12 +3510,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             pincode: createForm.pincode,
             client_residence_address: createForm.client_residence_address,
             desired_event_shoot_type: createForm.desired_event_shoot_type,
-            total_pax: createForm.total_pax,
+            total_pax: createForm.total_pax !== '' ? Number(createForm.total_pax) : undefined,
             reference_source: createForm.reference_source,
-            lead_value: createForm.lead_value,
-            lead_score: createForm.lead_score,
-            booking_status: createForm.booking_status,
-            remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
+            lead_value: createForm.lead_value !== '' ? Number(createForm.lead_value) : undefined,
+            lead_score: createForm.lead_score !== '' ? Number(createForm.lead_score) : undefined,
+            booking_status: createForm.booking_status || undefined,
+            remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
+            Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
           });
         }
         setWizardStep(2);
@@ -3362,7 +3589,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           state: createForm.state,
           pincode: createForm.pincode,
           client_residence_address: createForm.client_residence_address,
-          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
+          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
+          Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
         });
         setWizardStep(3);
         showToastMsg("Event details saved successfully.", "success");
@@ -3412,11 +3640,20 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           package_price: finalTotal,
           deliverables_description: selectedPkgs.map(p => pkgDeliverables[p.id] || p.deliverables || 'N/A').join('\n'),
           notes_special_customizations: selectedPkgs.map(p => pkgNotes[p.id] || '').join('\n'),
-          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
+          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
+          Select_Package_Option: selectedPkgIds[0] || '',
+          client_residence_address: createForm.client_residence_address,
+          city: createForm.city,
+          state: createForm.state,
+          pincode: createForm.pincode
         });
 
         // Sync local states
-        setCreateForm(prev => ({ ...prev, budget: finalTotal }));
+        setCreateForm(prev => ({ 
+          ...prev, 
+          budget: finalTotal,
+          Select_Package_Option: selectedPkgIds[0] || ''
+        }));
         setFinalPackageAmount(finalTotal);
 
         setWizardStep(4);
@@ -3445,7 +3682,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setIsSaving(true);
         await updateLead(createdLeadId!, {
           budget: Number(createForm.budget),
-          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
+          remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
+          client_residence_address: createForm.client_residence_address,
+          city: createForm.city,
+          state: createForm.state,
+          pincode: createForm.pincode,
+          Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
         });
         setWizardStep(5);
         showToastMsg("Proposed budget and remarks saved successfully.", "success");
@@ -3470,6 +3712,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   const handleStatusSave = async () => {
     if (isSaving) return;
+    if (!salesStatus) {
+      showToastMsg("Please select a CRM Sales Funnel Pipeline Stage before saving.", "error");
+      return;
+    }
     try {
       setIsSaving(true);
       await updateLead(createdLeadId!, {
@@ -3485,7 +3731,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         state: createForm.state,
         pincode: createForm.pincode,
         desired_event_shoot_type: createForm.desired_event_shoot_type,
-        remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address)
+        remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
+        Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
       });
       alert("Lead Saved Successfully.");
       resetForm();
@@ -3909,6 +4156,27 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               <div>
                 <span className="text-slate-500 block">Current Budget</span>
                 <strong className="text-amber-400 font-extrabold font-mono">{formatINR(selectedLead.budget)}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 block">City / State</span>
+                <strong className="text-slate-200 font-medium">{selectedLead.city || 'N/A'} / {selectedLead.state || 'N/A'}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Pincode</span>
+                <strong className="text-slate-200 font-medium">{selectedLead.pincode || 'N/A'}</strong>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-500 block">Residence Address</span>
+                <strong className="text-slate-200 font-medium block break-words">{selectedLead.client_residence_address || 'N/A'}</strong>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-500 block">Package Option</span>
+                <strong className="text-slate-200 font-medium block break-words">
+                  {(() => {
+                    const pkg = packages.find(p => p.package_id === selectedLead.Select_Package_Option);
+                    return pkg ? `${pkg.package_name} (${selectedLead.Select_Package_Option})` : (selectedLead.Select_Package_Option || 'Not selected');
+                  })()}
+                </strong>
               </div>
             </div>
 
@@ -4692,6 +4960,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
               )}
             </div>
 
+            {dbCategoryError && (
+              <div id="db_category_error_banner" className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4 text-xs text-amber-400 font-medium space-y-1">
+                <span className="font-bold flex items-center gap-1">⚠️ Database Schema Notice</span>
+                <p>{dbCategoryError}</p>
+              </div>
+            )}
+
             {/* In-place Add / Edit Package Modal */}
             {(isAddFormOpen || editingPackage) && (
               <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-3 md:p-5 overflow-y-auto animate-fade-in text-left text-xs bg-black/70">
@@ -4763,38 +5038,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                       </select>
                     </div>
 
-                    {/* Row 3: Event Type | Package Duration */}
-                    <div className={(!EVENT_TYPES.includes(pkgForm.event_type) && pkgForm.event_type !== '') || pkgForm.event_type === 'Other' ? "space-y-2" : ""}>
-                      <label className="block text-slate-400 font-semibold mb-1">Event Type</label>
-                      <select
-                        value={EVENT_TYPES.includes(pkgForm.event_type) ? pkgForm.event_type : (pkgForm.event_type ? 'Other' : '')}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPkgForm({ ...pkgForm, event_type: val });
-                        }}
-                        className="w-full bg-slate-950 border border-slate-855 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans cursor-pointer font-bold"
-                      >
-                        <option value="">Select Event Type</option>
-                        {EVENT_TYPES.map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
-                      </select>
-                      {(!EVENT_TYPES.includes(pkgForm.event_type) || pkgForm.event_type === 'Other') && pkgForm.event_type !== '' && (
-                        <div className="animate-fade-in-down mt-1.5">
-                          <label className="block text-[10px] font-mono font-bold text-amber-500 mb-1">
-                            Custom Event Type *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Specify custom event type"
-                            value={pkgForm.event_type === 'Other' ? '' : pkgForm.event_type}
-                            onChange={(e) => setPkgForm({ ...pkgForm, event_type: e.target.value })}
-                            className="w-full bg-slate-950 border border-amber-500/50 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-amber-500 font-sans text-white"
-                          />
-                        </div>
-                      )}
-                    </div>
+                    {/* Row 3: Package Duration */}
 
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Package Duration</label>
@@ -5578,7 +5822,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                     >
                       <span className="font-medium">
                         {selectedPkgIds.length === 0
-                          ? 'Select Packages...'
+                          ? 'Select Package...'
                           : `${selectedPkgIds.length} Packages Selected (Total: ₹${finalTotal.toLocaleString('en-IN')})`}
                       </span>
                       <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isPkgDropdownOpen ? 'rotate-180' : ''}`} />
@@ -6932,11 +7176,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         <div>
                           <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Select Package Option *</label>
                           <select
-                            value={wizardLeadData.selected_package_id || ''}
+                            value={wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id || ''}
                             disabled={isLeadLocked}
                             onChange={(e) => handlePackageChange(e.target.value)}
                             className={`w-full bg-slate-950 border focus:outline-none rounded-xl py-2.5 px-4 text-xs cursor-pointer ${
-                              !wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === ''
+                              !(wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id) || (wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id).trim() === ''
                                 ? 'border-rose-500/40 focus:border-rose-500 text-rose-200'
                                 : 'border-slate-800 focus:border-indigo-500 text-white'
                             }`}
@@ -6969,6 +7213,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                                   <span className="text-slate-500 block uppercase font-bold text-[9px] font-mono">Staff & Team Members</span>
                                   <span className="text-slate-300 font-medium">{pData.team_members || 'N/A'}</span>
                                 </div>
+                                {pData.deliverables && (
+                                  <div className="sm:col-span-2 border-t border-indigo-500/10 pt-3">
+                                    <span className="text-slate-500 block uppercase font-bold text-[9px] font-mono mb-1.5">Package Base Deliverables Included</span>
+                                    <div className="flex flex-wrap gap-2">
+                                      {pData.deliverables.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean).map((del, i) => (
+                                        <span key={i} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg px-2 py-1 text-[11px] font-medium flex items-center gap-1">
+                                          <span>✨</span> {del}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );

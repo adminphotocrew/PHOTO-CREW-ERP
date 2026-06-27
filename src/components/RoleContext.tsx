@@ -299,482 +299,121 @@ const INITIAL_PACKAGES: Package[] = [
     deliverables: '1 Traditional Photographer, 1 Traditional Videographer, Standard Album, Full HD Output Video',
     team_members: '2 Crew Members',
     seasonal_offer: 'Complimentary Wedding Teaser (1 min)'
-  },
-  { 
-    package_id: 'PKG_WED_02', 
-    package_name: 'Wedding - Silver', 
-    category: 'Wedding Packages', 
-    price: 99999, 
-    status: 'Active',
-    deliverables: '1 Cinematic Photographer, 1 Traditional Photographer, 1 Traditional Videographer, Standard Album + Video',
-    team_members: '3 Crew Members',
-    seasonal_offer: '5% off off-season bookings'
-  },
-  { 
-    package_id: 'PKG_WED_03', 
-    package_name: 'Wedding - Gold', 
-    category: 'Wedding Packages', 
-    price: 119999, 
-    status: 'Active',
-    deliverables: '1 Cinematic Photographer, 1 Candid Photographer, 1 Cinematic Videographer, 1 Premium Album',
-    team_members: '3 Crew Members',
-    seasonal_offer: 'Free Drone Add-On for outdoor shoot'
-  },
-  { 
-    package_id: 'PKG_WED_04', 
-    package_name: 'Wedding - Diamond', 
-    category: 'Wedding Packages', 
-    price: 149999, 
-    status: 'Active',
-    deliverables: '2 Candid Photographers, 2 Cinematic Videographers, 1 Premium Album, 1 Luxury Gift Album',
-    team_members: '4 Crew Members + Drone',
-    seasonal_offer: 'Free Drone Coverage & Instant Canvas Print'
-  },
-  { 
-    package_id: 'PKG_WED_05', 
-    package_name: 'Wedding - Platinum', 
-    category: 'Wedding Packages', 
-    price: 169999, 
-    status: 'Active',
-    deliverables: '2 Candid Photographers, 2 Cinematic Videographers, 1 Crane operator, 2 Luxury Albums, Reels Package',
-    team_members: '5 Crew Members + Drone + HelpDesk',
-    seasonal_offer: 'Free Pre-Wedding Shoot (8 Hours)'
-  },
-
-  // Premium Wedding Packages
-  { 
-    package_id: 'PKG_PWED_01', 
-    package_name: 'Premium Wedding - Bronze', 
-    category: 'Premium Wedding Packages', 
-    price: 99999, 
-    status: 'Active',
-    deliverables: 'Senior Photographers, Ultra HD Cinematic Video, 1 Premium Album',
-    team_members: '3 Crew Members',
-    seasonal_offer: 'Free Pre-Wedding Consultation'
-  },
-  { 
-    package_id: 'PKG_PWED_02', 
-    package_name: 'Premium Wedding - Silver', 
-    category: 'Premium Wedding Packages', 
-    price: 124999, 
-    status: 'Active',
-    deliverables: 'Senior Candid Photographers, Pro Cinematic Videographers, Reels, 2 Albums',
-    team_members: '4 Crew Members + Assistant',
-    seasonal_offer: 'Complimentary Wedding Teaser & Reel Edit'
-  },
-  { 
-    package_id: 'PKG_PWED_03', 
-    package_name: 'Premium Wedding - Gold', 
-    category: 'Premium Wedding Packages', 
-    price: 144999, 
-    status: 'Active',
-    deliverables: 'Senior Team: Candid & Traditional, Dual Cinematic Videography, Drone, 2 Luxury Leather Albums',
-    team_members: '4 Crew Members + Senior Director',
-    seasonal_offer: 'Free Drone & LED Wall Display (5 Hours)'
-  },
-  { 
-    package_id: 'PKG_PWED_04', 
-    package_name: 'Premium Wedding - Diamond', 
-    category: 'Premium Wedding Packages', 
-    price: 164999, 
-    status: 'Active',
-    deliverables: 'Full Post-Production Crew, 3 Photographers, 2 Cinematic Video Operators, Reels + VIP Albums',
-    team_members: '5 Core Crew Members + Drone',
-    seasonal_offer: 'Free 15-inch Desktop Digital Frame'
-  },
-  { 
-    package_id: 'PKG_PWED_05', 
-    package_name: 'Premium Wedding - Platinum', 
-    category: 'Premium Wedding Packages', 
-    price: 189999, 
-    status: 'Active',
-    deliverables: 'Elite Post-Production, Cinematic Feature (30 min), 3 Luxury Glass Albums, Live Web Stream (HD)',
-    team_members: '6 Elite Professionals + Dual Drones',
-    seasonal_offer: 'Free Pre-wedding (2 Days) Resort coverage'
-  },
-
-  // House Warming Packages
-  { 
-    package_id: 'PKG_HOU_01', 
-    package_name: 'House Warming - Package 1', 
-    category: 'House Warming Packages', 
-    price: 34999, 
-    status: 'Active',
-    deliverables: 'Traditional Photographer, Standard Event Album, Full Event Video Master Edit',
-    team_members: '2 Crew Members',
-    seasonal_offer: 'Free customized Home-Entry Calendar'
-  },
-  { 
-    package_id: 'PKG_HOU_02', 
-    package_name: 'House Warming - Package 2', 
-    category: 'House Warming Packages', 
-    price: 44999, 
-    status: 'Active',
-    deliverables: 'Candid & Traditional Photographer, Hardcover Album, Cinematic Highlights Video',
-    team_members: '2 Crew Members + Assistant',
-    seasonal_offer: 'Complimentary Framed Family Portrait'
-  },
-  { 
-    package_id: 'PKG_HOU_03', 
-    package_name: 'House Warming - Package 3', 
-    category: 'House Warming Packages', 
-    price: 59999, 
-    status: 'Active',
-    deliverables: '2 Photographers (Candid + Traditional), Cinematic Videographer, Drone, 1 Premium Album',
-    team_members: '3 Crew Members + Drone',
-    seasonal_offer: 'Free Aerial Drone shots of Home Exterior'
-  },
-  { 
-    package_id: 'PKG_HOU_04', 
-    package_name: 'House Warming - Package 4', 
-    category: 'House Warming Packages', 
-    price: 69999, 
-    status: 'Active',
-    deliverables: 'Premium post-production, Reels pkg, 2 High-Gloss Albums, Cinematic Storybook Video',
-    team_members: '4 Professional Crew + Dual Drones',
-    seasonal_offer: 'Free Interior Shoot worth ₹6,000'
-  },
-
-  // Engagement Packages
-  { 
-    package_id: 'PKG_ENG_01', 
-    package_name: 'Engagement - Package 1', 
-    category: 'Engagement Packages', 
-    price: 19999, 
-    status: 'Active',
-    deliverables: '1 Traditional Photographer, 1 Standard Soft-Bound Album, Full HD Digital Photos',
-    team_members: '1 Professional Photographer',
-    seasonal_offer: '10% discount if clubbed with Wedding package'
-  },
-  { 
-    package_id: 'PKG_ENG_02', 
-    package_name: 'Engagement - Package 2', 
-    category: 'Engagement Packages', 
-    price: 24999, 
-    status: 'Active',
-    deliverables: '1 Traditional Photographer, 1 Traditional Videographer, 1 Standard Album + Edited Video',
-    team_members: '2 Crew Members',
-    seasonal_offer: 'Free 1-min Instagram Reel teaser'
-  },
-  { 
-    package_id: 'PKG_ENG_03', 
-    package_name: 'Engagement - Package 3', 
-    category: 'Engagement Packages', 
-    price: 29999, 
-    status: 'Active',
-    deliverables: '1 Candid Photographer, 1 Traditional Videographer , Premium Album, Cinematic Video Highlights',
-    team_members: '2 Crew Members + Assistant',
-    seasonal_offer: 'Free Ring Exchange Portrait canvas'
-  },
-  { 
-    package_id: 'PKG_ENG_04', 
-    package_name: 'Engagement - Package 4', 
-    category: 'Engagement Packages', 
-    price: 34999, 
-    status: 'Active',
-    deliverables: 'Candid & Traditional Photographers, Cine Videographer, 1 Premium Album, Extended Cinematic Clip',
-    team_members: '3 Professional Crew',
-    seasonal_offer: 'Free Save-the-Date video postcard'
-  },
-
-  // Anniversary Packages
-  { 
-    package_id: 'PKG_ANN_01', 
-    package_name: 'Anniversary - Package 1', 
-    category: 'Anniversary Packages', 
-    price: 19999, 
-    status: 'Active',
-    deliverables: '1 Traditional Photographer, Complete digital gallery release, 1 Desktop Glass Photo-Stand',
-    team_members: '1 Photographer',
-    seasonal_offer: 'Complimentary Couple Canvas'
-  },
-  { 
-    package_id: 'PKG_ANN_02', 
-    package_name: 'Anniversary - Package 2', 
-    category: 'Anniversary Packages', 
-    price: 24999, 
-    status: 'Active',
-    deliverables: 'Traditional Photographer, Standard videography edit, Standard hardcover photobook',
-    team_members: '2 Crew Members',
-    seasonal_offer: 'Free custom wishes message edit'
-  },
-  { 
-    package_id: 'PKG_ANN_03', 
-    package_name: 'Anniversary - Package 3', 
-    category: 'Anniversary Packages', 
-    price: 29999, 
-    status: 'Active',
-    deliverables: 'Candid and Traditional coverage, Premium Album, High definition story-montage video',
-    team_members: '2 Crew Members + editor consultation',
-    seasonal_offer: 'Free historic wedding-photo color restoration'
-  },
-  { 
-    package_id: 'PKG_ANN_04', 
-    package_name: 'Anniversary - Package 4', 
-    category: 'Anniversary Packages', 
-    price: 34999, 
-    status: 'Active',
-    deliverables: 'Premium Dual-lens focus coverage, High-speed cinematic videography, Luxury Glass photobook, Reels pack',
-    team_members: '3 Professional Crew',
-    seasonal_offer: 'Free aerial drone couple sequence'
-  },
-
-  // Naming Ceremony Packages
-  { 
-    package_id: 'PKG_NAM_01', 
-    package_name: 'Naming Ceremony - Package 1', 
-    category: 'Naming Ceremony Packages', 
-    price: 19999, 
-    status: 'Active',
-    deliverables: '1 Traditional Baby Photographer, standard photo edits, softback photo catalog',
-    team_members: '1 Photographer',
-    seasonal_offer: 'Free customized Baby Wishes Poster'
-  },
-  { 
-    package_id: 'PKG_NAM_02', 
-    package_name: 'Naming Ceremony - Package 2', 
-    category: 'Naming Ceremony Packages', 
-    price: 24999, 
-    status: 'Active',
-    deliverables: 'Traditional Photographer, Traditional HD Videography, Hardback photobook, video files',
-    team_members: '2 Crew Members',
-    seasonal_offer: 'Complimentary Baby Intro Card design'
-  },
-  { 
-    package_id: 'PKG_NAM_03', 
-    package_name: 'Naming Ceremony - Package 3', 
-    category: 'Naming Ceremony Packages', 
-    price: 29999, 
-    status: 'Active',
-    deliverables: 'Candid baby specialist photographer, Traditional photographer, Cinematic HD video, Premium album',
-    team_members: '2 Professional Baby Directors',
-    seasonal_offer: 'Free Baby Milestone video reel'
-  },
-  { 
-    package_id: 'PKG_NAM_04', 
-    package_name: 'Naming Ceremony - Package 4', 
-    category: 'Naming Ceremony Packages', 
-    price: 34999, 
-    status: 'Active',
-    deliverables: 'Candid Baby expert, Traditional capture, cinematic video, Reels layout, 2 Premium albums',
-    team_members: '3 Creative Experts',
-    seasonal_offer: 'Free Cradle visual decoration portraits'
-  },
-
-  // Maternity Shoot Packages
-  { 
-    package_id: 'PKG_MAT_01', 
-    package_name: 'Maternity Shoot - Package 1', 
-    category: 'Maternity Shoot Packages', 
-    price: 12999, 
-    status: 'Active',
-    deliverables: '1 Special Female Candid Photographer, Indoor Studio Session, 20 high-end retouched prints',
-    team_members: '1 Special Director',
-    seasonal_offer: '1 Soft-bound Mom-to-Be journal'
-  },
-  { 
-    package_id: 'PKG_MAT_02', 
-    package_name: 'Maternity Shoot - Package 2', 
-    category: 'Maternity Shoot Packages', 
-    price: 22999, 
-    status: 'Active',
-    deliverables: 'Indoor + Outdoor scenic setups, standard album, cinematic concept video (2 min)',
-    team_members: '1 Photographer + 1 Assistant',
-    seasonal_offer: 'Free custom gown/dress selection guide'
-  },
-  { 
-    package_id: 'PKG_MAT_03', 
-    package_name: 'Maternity Shoot - Package 3', 
-    category: 'Maternity Shoot Packages', 
-    price: 32999, 
-    status: 'Active',
-    deliverables: 'Elite Studio session, scenic mountain/garden outdoor, 1 Premium Album, Storybook cinematic video',
-    team_members: '2 Photographers + prop setup assistant',
-    seasonal_offer: 'Free Hair & Makeup artist support'
-  },
-  { 
-    package_id: 'PKG_MAT_04', 
-    package_name: 'Maternity Shoot - Package 4', 
-    category: 'Maternity Shoot Packages', 
-    price: 42999, 
-    status: 'Active',
-    deliverables: 'Home setup studio lights, multiple outdoor locations, Reels pack, Glass Luxury album, full-reel video master',
-    team_members: '3 Crew + Stylist + Assistant',
-    seasonal_offer: 'Free Baby Shower Package 1 discount (20%)'
-  },
-
-  // Baby Shower Packages
-  { 
-    package_id: 'PKG_BSH_01', 
-    package_name: 'Baby Shower - Package 1', 
-    category: 'Baby Shower Packages', 
-    price: 19999, 
-    status: 'Active',
-    deliverables: 'Candid Photographer, digital prints gallery, desktop standee',
-    team_members: '1 Photographer',
-    seasonal_offer: 'Complimentary welcome plaque poster'
-  },
-  { 
-    package_id: 'PKG_BSH_02', 
-    package_name: 'Baby Shower - Package 2', 
-    category: 'Baby Shower Packages', 
-    price: 24999, 
-    status: 'Active',
-    deliverables: 'Candid Photographer, traditional video coordinator, standard hardcover photobook',
-    team_members: '2 Crew Members',
-    seasonal_offer: 'Free baby wishes video montage'
-  },
-  { 
-    package_id: 'PKG_BSH_03', 
-    package_name: 'Baby Shower - Package 3', 
-    category: 'Baby Shower Packages', 
-    price: 29999, 
-    status: 'Active',
-    deliverables: 'Dual camera setup, cinematic highlight reels, premium custom leather album',
-    team_members: '2 Crew + edit coordinator',
-    seasonal_offer: 'Free Baby Shower customized photobooth prop set'
-  },
-  { 
-    package_id: 'PKG_BSH_04', 
-    package_name: 'Baby Shower - Package 4', 
-    category: 'Baby Shower Packages', 
-    price: 34999, 
-    status: 'Active',
-    deliverables: 'Elite Candid team, cinematic movie edit, 3 digital Instagram reels, 2 Premium Glossy albums',
-    team_members: '3 Creative Crew + Assistant',
-    seasonal_offer: 'Complimentary instant Polaroid prints table (25 prints)'
-  },
-
-  // Baby Shoot Packages
-  { 
-    package_id: 'PKG_BS_01', 
-    package_name: 'Baby Shoot - Package 1', 
-    category: 'Baby Shoot Packages', 
-    price: 12999, 
-    status: 'Active',
-    deliverables: '1 Kid Specialist Photographer, standard props, 15 retouched digital images',
-    team_members: '1 Baby Specialist',
-    seasonal_offer: 'Complimentary Kid Photo Key-chain'
-  },
-  { 
-    package_id: 'PKG_BS_02', 
-    package_name: 'Baby Shoot - Package 2', 
-    category: 'Baby Shoot Packages', 
-    price: 22999, 
-    status: 'Active',
-    deliverables: '2 Theme setups, prop selection, 1 Softbound custom Babybook, HD Video teaser (1 min)',
-    team_members: '1 Photographer + Baby handler assistant',
-    seasonal_offer: 'Free custom baby name-wooden plaque'
-  },
-  { 
-    package_id: 'PKG_BS_03', 
-    package_name: 'Baby Shoot - Package 3', 
-    category: 'Baby Shoot Packages', 
-    price: 32999, 
-    status: 'Active',
-    deliverables: '3 Theme setups, props and baby costumes included, 1 Premium Album, Baby Cinematic Story',
-    team_members: '2 Baby Photographers + Handler',
-    seasonal_offer: 'Free Baby Handprint & Footprint resin kit'
-  },
-  { 
-    package_id: 'PKG_BS_04', 
-    package_name: 'Baby Shoot - Package 4', 
-    category: 'Baby Shoot Packages', 
-    price: 42999, 
-    status: 'Active',
-    deliverables: 'Unlimited theme setups, out of studio outdoor shoot, Baby Reels package, Glass luxury album, complete digital release plus video',
-    team_members: '3 Creative baby experts + Baby wrangler',
-    seasonal_offer: 'Complimentary first birthday shoot discount (30%)'
-  },
-
-  // Car / Bike Shoot Packages
-  { 
-    package_id: 'PKG_AUT_01', 
-    package_name: 'Car / Bike Shoot - Package 1', 
-    category: 'Car / Bike Shoot Packages', 
-    price: 4000, 
-    status: 'Active',
-    deliverables: 'High dynamic range digital portraits (10 retouched), professional grade studio edits',
-    team_members: '1 Automotive Photographer',
-    seasonal_offer: 'Complimentary Instagram Wallpaper'
-  },
-  { 
-    package_id: 'PKG_AUT_02', 
-    package_name: 'Car / Bike Shoot - Package 2', 
-    category: 'Car / Bike Shoot Packages', 
-    price: 8000, 
-    status: 'Active',
-    deliverables: 'Rig shots, tracking/rolling sequences, cinematic video edit (1 min, 4K)',
-    team_members: '1 Photographer + Rig Tech',
-    seasonal_offer: 'Free exhaust sound design capture'
-  },
-  { 
-    package_id: 'PKG_AUT_03', 
-    package_name: 'Car / Bike Shoot - Package 3', 
-    category: 'Car / Bike Shoot Packages', 
-    price: 12000, 
-    status: 'Active',
-    deliverables: 'Rolling shots, dramatic studio lights session, 4K Drone high speed tracking, Reels edit, high-resolution canvas print',
-    team_members: '2 Crew + active Drone pilot',
-    seasonal_offer: 'Free dynamic FPV drone clip'
-  },
-
-  // Pre-Wedding Packages
-  { 
-    package_id: 'PKG_PRE_01', 
-    package_name: 'Pre-Wedding Shoot (8 Hours)', 
-    category: 'Pre-Wedding Packages', 
-    price: 24999, 
-    status: 'Active',
-    deliverables: 'Outdoor location shoot (8 hrs), Cinematic Couple Teaser (2 mins), 1 Premium Pre-wedding photobook',
-    team_members: '2 Crew Members',
-    seasonal_offer: 'Free custom Save-the-Date video postcard'
-  },
-  { 
-    package_id: 'PKG_PRE_02', 
-    package_name: 'Pre-Wedding Shoot (2 Days)', 
-    category: 'Pre-Wedding Packages', 
-    price: 49999, 
-    status: 'Active',
-    deliverables: 'Resort/multi-city 2 Days coverage, Aerial drone capture, Extended story video, Reels collection, Elite Wedding book',
-    team_members: '3 Crew + dedicated Drone pilot',
-    seasonal_offer: 'Free Resort entry photography permissions coordination'
-  },
-
-  // Interior Shoot
-  { 
-    package_id: 'PKG_INT_01', 
-    package_name: 'Interior Shoot', 
-    category: 'Interior Shoot', 
-    price: 6000, 
-    status: 'Active',
-    deliverables: 'Wide-angle architecture shots, color corrected high density visual photos (15 digital assets)',
-    team_members: '1 Interior architect photographer',
-    seasonal_offer: 'Free dynamic video walk-through (30 sec)'
-  },
-
-  // Product Photography
-  { 
-    package_id: 'PKG_PROD_01', 
-    package_name: 'Product Photography - Photo Only', 
-    category: 'Product Photography', 
-    price: 2500, 
-    status: 'Active',
-    deliverables: 'Photo Only: ₹500 per product, Minimum 5 products base rate included',
-    team_members: '1 Studio table top photographer',
-    seasonal_offer: 'Free white background isolation edits'
-  },
-  { 
-    package_id: 'PKG_PROD_02', 
-    package_name: 'Product Photography - Video', 
-    category: 'Product Photography', 
-    price: 12500, 
-    status: 'Active',
-    deliverables: 'Product Video: ₹2,500 per product video, Minimum 5 product videos base rate included',
-    team_members: '1 Studio product cine master',
-    seasonal_offer: 'Free custom royalty-free commercial background score'
   }
 ];
+
+export const mapDbRecordToPackage = (record: any): Package => {
+  let category = 'Wedding Packages'; // Default fallback
+  let deliverables = record.description || '';
+  let team_members = '';
+  let seasonal_offer = '';
+  let terms_conditions = '';
+  let event_type = '';
+  let duration = '';
+  let package_includes = '';
+
+  if (record.description && record.description.trim().startsWith('{') && record.description.trim().endsWith('}')) {
+    try {
+      const parsed = JSON.parse(record.description);
+      category = parsed.category || category;
+      deliverables = parsed.deliverables || '';
+      team_members = parsed.team_members || '';
+      seasonal_offer = parsed.seasonal_offer || '';
+      terms_conditions = parsed.terms_conditions || '';
+      event_type = parsed.event_type || '';
+      duration = parsed.duration || '';
+      package_includes = parsed.package_includes || '';
+    } catch (e) {
+      console.warn('Failed to parse JSON description for package:', record.package_id);
+    }
+  }
+
+  return {
+    package_id: record.package_id,
+    package_name: record.name || '',
+    category,
+    price: record.price || 0,
+    status: record.status || 'Active',
+    deliverables,
+    team_members,
+    seasonal_offer,
+    terms_conditions,
+    event_type,
+    duration,
+    package_includes,
+    created_at: record.created_at
+  };
+};
+
+export const validatePackagesDatabase = async (operation: 'SELECT' | 'INSERT' | 'UPDATE', payload?: any) => {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not initialized.');
+  }
+
+  // 1. Verify if the table exists
+  const { error: tableError } = await supabaseClient.from('packages').select('package_id').limit(0);
+  if (tableError) {
+    if (tableError.code === '42P01' || tableError.message?.toLowerCase().includes('relation "packages" does not exist')) {
+      const errorMsg = `❌ Database Error\n\nTable: packages\n\nReason: The table does not exist.\n\nSuggested Fix: Create the **packages** table in Supabase.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+  }
+
+  // 2. Verify if every required column exists
+  const requiredCols = ['package_id', 'name', 'description', 'price', 'status', 'created_at'];
+  for (const col of requiredCols) {
+    const { error: colError } = await supabaseClient.from('packages').select(col).limit(0);
+    if (colError) {
+      if (colError.code === '42703' || colError.message?.toLowerCase().includes('column') || colError.message?.toLowerCase().includes('does not exist')) {
+        const errorMsg = `❌ Database Error\n\nTable: packages\n\nMissing Column: ${col}\n\nReason: The column does not exist in the Supabase database.\n\nSuggested Fix: Create the column: ${col} in the table: packages`;
+        window.alert(errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
+  }
+
+  // 3. For INSERT/UPDATE operations, check the payload
+  if (operation === 'INSERT' || operation === 'UPDATE') {
+    if (!payload) {
+      const errorMsg = `❌ Mapping Error\n\nReason: Payload is missing.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (operation === 'INSERT') {
+      if (!payload.package_id) {
+        const errorMsg = `❌ Mapping Error\n\nField: Package ID\n\nReason: The frontend is not sending this value to Supabase.\n\nSuggested Fix: Include the **package_id** field in the INSERT and UPDATE payload.`;
+        window.alert(errorMsg);
+        throw new Error(errorMsg);
+      }
+    }
+
+    if (!payload.name) {
+      const errorMsg = `❌ Mapping Error\n\nField: Package Name\n\nReason: The frontend form is not sending this value to Supabase.\n\nSuggested Fix: Include the **name** field in the INSERT and UPDATE payload.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (payload.price === undefined || payload.price === null) {
+      const errorMsg = `❌ Mapping Error\n\nField: Price\n\nReason: The frontend form is not sending this value to Supabase.\n\nSuggested Fix: Include the **price** field in the INSERT and UPDATE payload.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (!payload.status) {
+      const errorMsg = `❌ Mapping Error\n\nField: Status\n\nReason: The frontend form is not sending this value to Supabase.\n\nSuggested Fix: Include the **status** field in the INSERT and UPDATE payload.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (payload.description === undefined || payload.description === null) {
+      const errorMsg = `❌ Mapping Error\n\nField: Description\n\nReason: The frontend form is not sending this value to Supabase.\n\nSuggested Fix: Include the **description** field in the INSERT and UPDATE payload.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+  }
+};
 
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [globalModalAlert, setGlobalModalAlert] = useState<{ message: string; title: string } | null>(null);
@@ -856,10 +495,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cached = localStorage.getItem('erp_lead_packages');
     return cached ? JSON.parse(cached) : [];
   });
-  const [packages, setPackages] = useState<Package[]>(() => {
-    const cached = localStorage.getItem('erp_packages');
-    return cached ? JSON.parse(cached) : INITIAL_PACKAGES;
-  });
+  const [packages, setPackages] = useState<Package[]>([]);
   const [orders, setOrders] = useState<Order[]>(() => {
     const cached = localStorage.getItem('erp_orders');
     return cached ? JSON.parse(cached) : [];
@@ -1219,7 +855,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'email', 'event_type', 'custom_event_type', 'custom_event_name', 'shoot_type', 'event_date', 'event_time', 'event_location', 'budget', 
         'sales_person', 'status', 'remarks', 'created_by', 'updated_by', 'updated_at', 
         'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status',
-        'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type',
+        'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 'Select_Package_Option',
         'package_price', 'deliverables_description', 'notes_special_customizations',
         'quotation_discount', 'additional_services_cost', 'total_pax', 'reference_source', 
         'lead_value', 'lead_score', 'booking_status'
@@ -1228,7 +864,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'order_id', 'lead_id', 'customer_name', 'mobile', 'event_type', 'custom_event_type', 'custom_event_name', 'shoot_type', 'event_date', 
         'event_time', 'event_location', 'package_name', 'quotation_amount', 'advance_received', 
         'balance_amount', 'order_status', 'current_stage', 'sales_person', 'created_at', 
-        'updated_by', 'updated_at', 'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 
+        'updated_by', 'updated_at', 'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 'Select_Package_Option', 
         'desired_event_shoot_type', 'reporting_time', 'package_price', 'deliverables_description', 
         'notes_special_customizations', 'quotation_discount', 'additional_services_cost',
         'total_pax', 'reference_source', 'lead_value', 'lead_score', 'booking_status'
@@ -1243,7 +879,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'tax_amount', 'final_amount', 'quotation_status', 'valid_until', 'terms_conditions', 
         'package_name', 'package_price', 'deliverables_description', 
         'notes_special_customizations', 'additional_services_cost', 
-        'whatsapp_number', 'address', 'shoot_type', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 
+        'whatsapp_number', 'address', 'shoot_type', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 'Select_Package_Option',
         'quotation_discount', 'total_pax', 'reference_source', 'lead_value', 'lead_score', 'booking_status',
         'created_at', 'created_by', 'updated_at'
       ],
@@ -1821,21 +1457,17 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       );
 
-      const dbPackagesPromise = supabaseClient.from('packages').select('*').then(
-        (res) => {
-          if (res.error) {
-            console.warn('Supabase packages load error:', res.error?.message);
-            const cached = localStorage.getItem('erp_packages');
-            return { data: cached ? JSON.parse(cached) : INITIAL_PACKAGES, error: null };
-          }
+      const dbPackagesPromise = (async () => {
+        try {
+          await validatePackagesDatabase('SELECT');
+          const res = await supabaseClient.from('packages').select('*').order('created_at', { ascending: false });
+          if (res.error) throw res.error;
           return res;
-        },
-        (err) => {
-          console.warn('Could not read packages from Supabase:', err);
-          const cached = localStorage.getItem('erp_packages');
-          return { data: cached ? JSON.parse(cached) : INITIAL_PACKAGES, error: null };
+        } catch (err: any) {
+          console.error('Packages database validation/fetch error:', err);
+          return { data: [], error: err };
         }
-      );
+      })();
 
       const dbStaffAssignmentsPromise = supabaseClient.from('staff_assignments').select('*').then(
         (res) => {
@@ -2143,12 +1775,38 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (packagesRes && packagesRes.data) {
         if (packagesRes.data.length === 0 && !packagesRes.error) {
           console.log('Detected empty packages table, seeding INITIAL_PACKAGES into Supabase...');
-          await supabaseClient.from('packages').upsert(INITIAL_PACKAGES);
-          setPackages(INITIAL_PACKAGES);
-          localStorage.setItem('erp_packages', JSON.stringify(INITIAL_PACKAGES));
+          const mappedInitialPackages = INITIAL_PACKAGES.map(pkg => {
+            const extraData = {
+              category: pkg.category,
+              deliverables: pkg.deliverables,
+              team_members: pkg.team_members || '',
+              seasonal_offer: pkg.seasonal_offer || '',
+              terms_conditions: pkg.terms_conditions || '',
+              event_type: pkg.event_type || '',
+              duration: pkg.duration || '',
+              package_includes: pkg.package_includes || ''
+            };
+            return {
+              package_id: pkg.package_id,
+              name: pkg.package_name,
+              description: JSON.stringify(extraData),
+              price: pkg.price,
+              status: pkg.status,
+              created_at: pkg.created_at || new Date().toISOString()
+            };
+          });
+          await supabaseClient.from('packages').upsert(mappedInitialPackages);
+          
+          const mapped = INITIAL_PACKAGES.map(pkg => ({
+            ...pkg,
+            created_at: pkg.created_at || new Date().toISOString()
+          }));
+          setPackages(mapped);
+          localStorage.setItem('erp_packages', JSON.stringify(mapped));
         } else {
-          setPackages(packagesRes.data as Package[]);
-          localStorage.setItem('erp_packages', JSON.stringify(packagesRes.data));
+          const mapped = packagesRes.data.map(mapDbRecordToPackage);
+          setPackages(mapped);
+          localStorage.setItem('erp_packages', JSON.stringify(mapped));
         }
       }
 
@@ -2630,6 +2288,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     notes: (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) ? (extra.notes || '') : item.notes
                   };
                 }
+                if (table === 'packages') {
+                  mappedItem = mapDbRecordToPackage(item);
+                }
                 const exists = prev.some(x => x[key] === mappedItem[key]);
                 if (exists) return prev;
                 return [mappedItem, ...prev];
@@ -2673,6 +2334,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     ...extra,
                     notes: (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) ? (extra.notes || '') : item.notes
                   };
+                }
+                if (table === 'packages') {
+                  mappedItem = mapDbRecordToPackage(item);
                 }
                 return prev.map(x => (x[key] === mappedItem[key] ? mappedItem : x));
               });
@@ -4865,49 +4529,149 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addPackage = async (pkg: Omit<Package, 'package_id'>) => {
-    const package_id = `PKG-${pkg.category.substring(0, 1).toUpperCase()}${Math.floor(100 + Math.random() * 900)}`;
+    const package_id = `PKG-${(pkg.category || 'W').substring(0, 1).toUpperCase()}${Math.floor(100 + Math.random() * 900)}`;
     const newPkg: Package = {
       ...pkg,
       package_id,
       created_at: new Date().toISOString()
     };
-    
-    // Add to state & local cache
-    setPackages((prev) => {
-      const next = [newPkg, ...prev];
-      localStorage.setItem('erp_packages', JSON.stringify(next));
-      return next;
-    });
-    
-    // Try to insert into Supabase
+
+    const extraData = {
+      category: newPkg.category,
+      deliverables: newPkg.deliverables,
+      team_members: newPkg.team_members || '',
+      seasonal_offer: newPkg.seasonal_offer || '',
+      terms_conditions: newPkg.terms_conditions || '',
+      event_type: newPkg.event_type || '',
+      duration: newPkg.duration || '',
+      package_includes: newPkg.package_includes || ''
+    };
+
+    const dbPayload = {
+      package_id: newPkg.package_id,
+      name: newPkg.package_name,
+      description: JSON.stringify(extraData),
+      price: newPkg.price,
+      status: newPkg.status,
+      created_at: newPkg.created_at
+    };
+
+    // 1. Perform Database Schema Validation before the operation
+    try {
+      await validatePackagesDatabase('INSERT', dbPayload);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+
     try {
       if (supabaseClient) {
-        await supabaseClient.from('packages').insert(newPkg);
-        // fetchFromDb().catch(console.error); // Disabled to prevent full reload
+        const { error } = await supabaseClient.from('packages').insert(dbPayload);
+        if (error) throw error;
+
+        // 2. Post-Save Verification
+        const { data: verifyData, error: verifyError } = await supabaseClient.from('packages').select('*').eq('package_id', package_id);
+        if (verifyError || !verifyData || verifyData.length === 0) {
+          throw new Error(verifyError?.message || 'Record not found after creation');
+        }
+
+        const savedRec = verifyData[0];
+        if (!savedRec.package_id || !savedRec.name || savedRec.price === null || !savedRec.status || savedRec.description === null) {
+          throw new Error('Verification failed: Post-save verification detected NULL required fields.');
+        }
+
+        const savedPkg = mapDbRecordToPackage(savedRec);
+        
+        // Update local React state only after successful post-save verification!
+        setPackages((prev) => [savedPkg, ...prev]);
+
+        window.alert('Package Created Successfully');
+        logActivity(`Created Package: ${savedPkg.package_name}`, 'Sales', package_id, 'Active', 'Active');
+        return package_id;
+      } else {
+        throw new Error('Supabase client is not initialized.');
       }
-    } catch (err) {
-      console.warn('Fallback to local: could not insert package to Supabase:', err);
+    } catch (err: any) {
+      console.error(err);
+      window.alert(`❌ Database Error\n\nTable: packages\n\nReason: ${err.message || err}`);
+      throw err;
     }
-    
-    logActivity(`Created Package: ${newPkg.package_name}`, 'Sales', package_id, 'Active', 'Active');
-    return package_id;
   };
 
   const updatePackage = async (packageId: string, updates: Partial<Package>) => {
-    // Optimistic state update
-    setPackages((prev) => {
-      const next = prev.map((p) => p.package_id === packageId ? { ...p, ...updates } : p);
-      localStorage.setItem('erp_packages', JSON.stringify(next));
-      return next;
-    });
-    
+    const existing = packages.find(p => p.package_id === packageId);
+    if (!existing) {
+      const errorMsg = `Package with ID ${packageId} not found in state.`;
+      window.alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const merged = { ...existing, ...updates };
+
+    const extraData = {
+      category: merged.category,
+      deliverables: merged.deliverables,
+      team_members: merged.team_members || '',
+      seasonal_offer: merged.seasonal_offer || '',
+      terms_conditions: merged.terms_conditions || '',
+      event_type: merged.event_type || '',
+      duration: merged.duration || '',
+      package_includes: merged.package_includes || ''
+    };
+
+    const dbPayload = {
+      package_id: packageId,
+      name: merged.package_name,
+      description: JSON.stringify(extraData),
+      price: merged.price,
+      status: merged.status,
+      created_at: merged.created_at || new Date().toISOString()
+    };
+
+    // 1. Perform Database Schema Validation before the operation
+    try {
+      await validatePackagesDatabase('UPDATE', dbPayload);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+
     try {
       if (supabaseClient) {
-        const { error } = await supabaseClient.from('packages').update(updates).eq('package_id', packageId);
+        const { error } = await supabaseClient.from('packages').update({
+          name: dbPayload.name,
+          description: dbPayload.description,
+          price: dbPayload.price,
+          status: dbPayload.status
+        }).eq('package_id', packageId);
+        
         if (error) throw error;
+
+        // 2. Post-Save Verification
+        const { data: verifyData, error: verifyError } = await supabaseClient.from('packages').select('*').eq('package_id', packageId);
+        if (verifyError || !verifyData || verifyData.length === 0) {
+          throw new Error(verifyError?.message || 'Record not found after update');
+        }
+
+        const savedRec = verifyData[0];
+        if (!savedRec.package_id || !savedRec.name || savedRec.price === null || !savedRec.status || savedRec.description === null) {
+          throw new Error('Verification failed: Post-save verification detected NULL required fields.');
+        }
+
+        const updatedPkg = mapDbRecordToPackage(savedRec);
+
+        // Update local React state only after successful post-save verification!
+        setPackages((prev) => prev.map((p) => p.package_id === packageId ? updatedPkg : p));
+
+        window.alert('Package Updated Successfully');
+        logActivity(`Updated Package: ${updatedPkg.package_name}`, 'Sales', packageId, 'Active', 'Active');
+      } else {
+        throw new Error('Supabase client is not initialized.');
       }
-    } catch (err) {
-      console.warn('Could not update package in Supabase:', err);
+    } catch (err: any) {
+      console.error(err);
+      window.alert(`❌ Database Error\n\nTable: packages\n\nReason: ${err.message || err}`);
+      throw err;
     }
   };
 

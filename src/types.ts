@@ -142,6 +142,7 @@ export interface Lead {
   pincode?: string;
   client_residence_address?: string;
   desired_event_shoot_type?: string;
+  Select_Package_Option?: string;
   package_price?: number;
   deliverables_description?: string;
   notes_special_customizations?: string;
@@ -201,6 +202,7 @@ export interface Order {
   pincode?: string;
   client_residence_address?: string;
   desired_event_shoot_type?: string;
+  Select_Package_Option?: string;
   package_price?: number;
   deliverables_description?: string;
   notes_special_customizations?: string;
