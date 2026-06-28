@@ -12,12 +12,42 @@ import { formatINR, formatIndianPhoneNumber, validateIndianMobile, formatTime12H
 import { SalesCalendar } from './SalesCalendar';
 import { jsPDF } from 'jspdf';
 
+const getLogoBase64FromUrl = (url: string): Promise<{ base64: string; aspect: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        try {
+          const dataURL = canvas.toDataURL('image/png');
+          const aspect = img.naturalWidth / img.naturalHeight;
+          resolve({ base64: dataURL, aspect });
+        } catch (err) {
+          reject(err);
+        }
+      } else {
+        reject(new Error('Failed to get 2D context'));
+      }
+    };
+    img.onerror = (e) => {
+      reject(e);
+    };
+    img.src = url;
+  });
+};
+
 const generateQuotationPDF = (
   lead: any,
   activePkgs: any[],
   quoteNum: string,
   termsText: string,
   logoBase64?: string,
+  logoAspect = 1,
   editableInclusions?: Record<string, string[]>,
   editableDeliverables?: Record<string, string[]>,
   discountValue = 0,
@@ -141,7 +171,7 @@ const generateQuotationPDF = (
       });
     } else if (pkg.inclusions) {
       const incList = typeof pkg.inclusions === 'string'
-        ? pkg.inclusions.split(',').map((s: string) => s.trim()).filter(Boolean)
+        ? pkg.inclusions.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
         : Array.isArray(pkg.inclusions) ? pkg.inclusions : [];
       incList.forEach((inc: string) => {
         allInclusions.push({ package: pkgName, item: inc });
@@ -154,7 +184,7 @@ const generateQuotationPDF = (
       });
     } else if (pkg.deliverables) {
       const delList = typeof pkg.deliverables === 'string'
-        ? pkg.deliverables.split(',').map((s: string) => s.trim()).filter(Boolean)
+        ? pkg.deliverables.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)
         : Array.isArray(pkg.deliverables) ? pkg.deliverables : [];
       delList.forEach((del: string) => {
         allDeliverables.push({ package: pkgName, item: del });
@@ -203,7 +233,7 @@ const generateQuotationPDF = (
     const getTableSimHeight = (items: any[]) => {
       let h = 4 + 7.5; 
       items.forEach((item) => {
-        const wrappedName = doc.splitTextToSize(item.name || '', 95);
+        const wrappedName = doc.splitTextToSize(item.name || '', 172);
         h += Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
       });
       return h;
@@ -217,7 +247,7 @@ const generateQuotationPDF = (
       } else {
         let currentTableY = simY + 4 + 7.5;
         baseServices.forEach((item) => {
-          const wrappedName = doc.splitTextToSize(item.name || '', 95);
+          const wrappedName = doc.splitTextToSize(item.name || '', 172);
           const rowH = Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
           if (currentTableY + rowH > 250) {
             currentTableY = 52 + 7.5;
@@ -238,7 +268,7 @@ const generateQuotationPDF = (
       } else {
         let currentTableY = simY + 4 + 7.5;
         additionalServices.forEach((item) => {
-          const wrappedName = doc.splitTextToSize(item.name || '', 95);
+          const wrappedName = doc.splitTextToSize(item.name || '', 172);
           const rowH = Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
           if (currentTableY + rowH > 250) {
             currentTableY = 52 + 7.5;
@@ -359,14 +389,26 @@ const generateQuotationPDF = (
     pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
     pageDoc.rect(0, 41, 210, 1.2, 'F');
 
-    let logoY = 8;
+    let logoY = 6;
+    let logoW = 18;
+    let logoH = 18;
     let hasLogo = false;
+    
     if (logoBase64 && logoBase64.startsWith('data:image')) {
+      const maxLogoW = 24;
+      const maxLogoH = 18;
+      logoW = maxLogoH * logoAspect;
+      logoH = maxLogoH;
+      if (logoW > maxLogoW) {
+        logoW = maxLogoW;
+        logoH = maxLogoW / logoAspect;
+      }
+      logoY = (30 - logoH) / 2;
       try {
-        pageDoc.addImage(logoBase64, 'PNG', 15, logoY, 18, 18);
+        pageDoc.addImage(logoBase64, 'PNG', 15, logoY, logoW, logoH);
         hasLogo = true;
       } catch (e) {
-        console.warn('Failed to add logo image to PDF, drawing fallback badge:', e);
+        console.warn('Failed to add logo image to PDF:', e);
       }
     }
 
@@ -379,23 +421,27 @@ const generateQuotationPDF = (
       pageDoc.setFontSize(11);
       pageDoc.setTextColor(255, 255, 255);
       pageDoc.text('P', 22.2, logoY + 12.2);
+      logoW = 18;
+      logoY = 8;
     }
+
+    const brandingX = 15 + logoW + 5;
 
     // Left block: Company Branding & Location Info
     pageDoc.setFont('helvetica', 'bold');
     pageDoc.setFontSize(13.5);
     pageDoc.setTextColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.text('PHOTOCREW PICTURES', 38, logoY + 3);
+    pageDoc.text('PHOTOCREW PICTURES', brandingX, logoY + 3);
 
     pageDoc.setFont('helvetica', 'normal');
     pageDoc.setFontSize(7);
     pageDoc.setTextColor(185, 185, 185);
-    pageDoc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', 38, logoY + 7.5);
+    pageDoc.text('PREMIUM PHOTOGRAPHY STUDIO & VISUAL PRODUCTION', brandingX, logoY + 7.5);
     
     pageDoc.setFontSize(7);
     pageDoc.setTextColor(150, 150, 150);
-    pageDoc.text('No. 45, 1st Floor, 80 Feet Road, VijayNagar, Bangalore - 560040', 38, logoY + 12);
-    pageDoc.text('GSTIN: 29AAFCP5894N1ZN (Registered Karnataka)', 38, logoY + 16.5);
+    pageDoc.text('No. 45, 1st Floor, 80 Feet Road, VijayNagar, Bangalore - 560040', brandingX, logoY + 12);
+    pageDoc.text('GSTIN: 29AAFCP5894N1ZN (Registered Karnataka)', brandingX, logoY + 16.5);
 
     // Right block: Studio Contact Info
     pageDoc.setFont('helvetica', 'normal');
@@ -572,7 +618,7 @@ const generateQuotationPDF = (
   const drawTable = (title: string, items: { id: string; name: string; qty: number; price: number; isAdditional?: boolean }[]) => {
     let tableH = 4 + 7.5; 
     items.forEach((item) => {
-      const wrappedName = doc.splitTextToSize(item.name || '', 95);
+      const wrappedName = doc.splitTextToSize(item.name || '', 172);
       tableH += Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
     });
 
@@ -598,9 +644,7 @@ const generateQuotationPDF = (
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(255, 255, 255);
-    doc.text('SERVICE / ITEM SPECIFICATIONS', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    doc.text('QTY', 125, currentY + 4.8, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    doc.text('AMOUNT (\u20B9)', 191, currentY + 4.8, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text('SERVICE / DELIVERABLES', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
 
     currentY += 7.5;
 
@@ -620,7 +664,7 @@ const generateQuotationPDF = (
     }
 
     items.forEach((item, index) => {
-      const wrappedName = doc.splitTextToSize(item.name || '', 95);
+      const wrappedName = doc.splitTextToSize(item.name || '', 172);
       const rowHeight = Math.max(7.5, wrappedName.length * cfg.rowTextHeight + cfg.rowPadding);
 
       if (currentY + rowHeight > 250) {
@@ -632,9 +676,7 @@ const generateQuotationPDF = (
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(255, 255, 255);
-        doc.text('SERVICE / ITEM SPECIFICATIONS (CONTINUED)', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-        doc.text('QTY', 125, currentY + 4.8, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-        doc.text('AMOUNT (\u20B9)', 191, currentY + 4.8, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+        doc.text('SERVICE / DELIVERABLES (CONTINUED)', 19, currentY + 4.8, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
         currentY += 7.5;
       }
 
@@ -645,8 +687,6 @@ const generateQuotationPDF = (
 
       doc.line(15, currentY, 15, currentY + rowHeight);
       doc.line(195, currentY, 195, currentY + rowHeight);
-      doc.line(115, currentY, 115, currentY + rowHeight);
-      doc.line(135, currentY, 135, currentY + rowHeight);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
@@ -655,13 +695,6 @@ const generateQuotationPDF = (
       wrappedName.forEach((line: string, i: number) => {
         doc.text(line, 19, currentY + 4.3 + (i * cfg.rowTextHeight), { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
       });
-
-      doc.text(String(item.qty || 1), 125, currentY + (rowHeight / 2) + 1.1, { align: 'center', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-
-      const itemAmt = Number(item.qty || 1) * Number(item.price || 0);
-      const isBundledBase = !item.isAdditional && item.price === 0;
-      const amtStr = isBundledBase ? 'Bundled' : itemAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      doc.text(amtStr, 191, currentY + (rowHeight / 2) + 1.1, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
 
       doc.line(15, currentY + rowHeight, 195, currentY + rowHeight);
       currentY += rowHeight;
@@ -841,28 +874,49 @@ const generateQuotationPDF = (
   doc.setLineWidth(0.25);
   doc.roundedRect(15, currentY, 180, cfg.paymentCardHeight, 1.5, 1.5, 'D');
 
-  const bankDetails = [
+  const col1Details = [
     { label: 'Account Name', val: 'PHOTOCREW PICTURES' },
     { label: 'Bank Name',    val: 'HDFC BANK' },
-    { label: 'Account No.',  val: '50200103134840' },
+    { label: 'Account No.',  val: '50200103134840' }
+  ];
+
+  const col2Details = [
     { label: 'IFSC Code',    val: 'HDFC0000312' },
     { label: 'Branch',       val: 'Vijayanagar, Bangalore' }
   ];
 
-  bankDetails.forEach((item, idx) => {
-    const startOffset = cfg.paymentCardHeight === 29 ? 5.5 : 4.5;
-    const rowSpacing = cfg.paymentCardHeight === 29 ? 4.5 : 3.6;
+  // Draw Column 1
+  col1Details.forEach((item, idx) => {
+    const startOffset = cfg.paymentCardHeight === 29 ? 6.5 : 5.5;
+    const rowSpacing = cfg.paymentCardHeight === 29 ? 6.5 : 5.5;
     const itemY = currentY + startOffset + (idx * rowSpacing);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
     doc.text(item.label, 20, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    doc.text(':', 44, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text(':', 45, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(item.val, 47, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text(item.val, 48, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+  });
+
+  // Draw Column 2
+  col2Details.forEach((item, idx) => {
+    const startOffset = cfg.paymentCardHeight === 29 ? 6.5 : 5.5;
+    const rowSpacing = cfg.paymentCardHeight === 29 ? 6.5 : 5.5;
+    const itemY = currentY + startOffset + (idx * rowSpacing);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(item.label, 110, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    doc.text(':', 130, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(item.val, 133, itemY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
   });
   
   currentY += cfg.paymentCardHeight + cfg.secSpacing;
@@ -978,7 +1032,9 @@ const generateQuotationPDF = (
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    drawPageHeader(doc);
+    if (i === 1) {
+      drawPageHeader(doc);
+    }
     drawPageFooter(doc, i, totalPages);
   }
 
@@ -1058,19 +1114,15 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   } = useRole();
 
   const [logoBase64, setLogoBase64] = useState<string>('');
+  const [logoAspectRatio, setLogoAspectRatio] = useState<number>(1);
 
   React.useEffect(() => {
     const preloadLogo = async () => {
       try {
-        const response = await fetch('/app-icon-v3.png');
-        if (response.ok) {
-          const blob = await response.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setLogoBase64(reader.result as string);
-          };
-          reader.readAsDataURL(blob);
-        }
+        const logoUrl = 'https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png';
+        const result = await getLogoBase64FromUrl(logoUrl);
+        setLogoBase64(result.base64);
+        setLogoAspectRatio(result.aspect);
       } catch (e) {
         console.warn('Failed to pre-load logo image:', e);
       }
@@ -2015,18 +2067,35 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   const getSelectedPkgsInfo = (isEdit: boolean) => {
     if (isEdit) {
-      const primaryPkg = packages.find(p => p.package_id === wizardLeadData.selected_package_id);
+      const finalPkgId = wizardLeadData.selected_package_id || wizardLeadData.Select_Package_Option || selectedLead?.Select_Package_Option || '';
+      const primaryPkg = packages.find(p => p.package_id === finalPkgId);
       return [{
         package_name: primaryPkg?.package_name || 'Selected Package',
-        package_id: wizardLeadData.selected_package_id || 'selected_pkg',
-        package_cost: Number(wizardLeadData.package_cost) || Number(primaryPkg?.price) || 0
+        package_id: finalPkgId || 'selected_pkg',
+        package_cost: Number(wizardLeadData.package_cost) || Number(primaryPkg?.price) || 0,
+        deliverables: wizardLeadData.deliverables || primaryPkg?.deliverables || '',
+        inclusions: primaryPkg?.package_includes || '',
+        team_members: primaryPkg?.team_members || '',
+        seasonal_offer: primaryPkg?.seasonal_offer || '',
+        terms_conditions: primaryPkg?.terms_conditions || '',
+        event_type: primaryPkg?.event_type || '',
+        duration: primaryPkg?.duration || '',
+        category: primaryPkg?.category || ''
       }];
     } else {
-      const selectedPkgs = PACKAGES_LIST.flatMap(cat => cat.items).filter(item => selectedPkgIds.includes(item.id));
+      const selectedPkgs = (packages || []).filter(item => selectedPkgIds.includes(item.package_id));
       return selectedPkgs.map(p => ({
-        package_name: p.name,
-        package_id: p.id,
-        package_cost: pkgPrices[p.id] !== undefined ? pkgPrices[p.id] : p.cost
+        package_name: p.package_name,
+        package_id: p.package_id,
+        package_cost: pkgPrices[p.package_id] !== undefined ? pkgPrices[p.package_id] : p.price,
+        deliverables: pkgDeliverables[p.package_id] || p.deliverables || '',
+        inclusions: p.package_includes || '',
+        team_members: p.team_members || '',
+        seasonal_offer: p.seasonal_offer || '',
+        terms_conditions: p.terms_conditions || '',
+        event_type: p.event_type || '',
+        duration: p.duration || '',
+        category: p.category || ''
       }));
     }
   };
@@ -2190,7 +2259,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     }
   };
 
-  const handlePreviewQuotePDF = (isEdit: boolean) => {
+  const handlePreviewQuotePDF = async (isEdit: boolean) => {
     try {
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
@@ -2203,12 +2272,24 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
       const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       
+      let currentLogo = logoBase64;
+      let currentAspect = logoAspectRatio;
+      try {
+        const logoUrl = 'https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png';
+        const result = await getLogoBase64FromUrl(logoUrl);
+        currentLogo = result.base64;
+        currentAspect = result.aspect;
+      } catch (e) {
+        console.warn("Failed to wait-load logo for preview, using preloaded:", e);
+      }
+
       const doc = generateQuotationPDF(
         leadObj,
         activePkgs,
         quotNum,
         quotationTerms,
-        logoBase64,
+        currentLogo,
+        currentAspect,
         editableInclusions,
         editableDeliverables,
         quoteDiscount,
@@ -2225,7 +2306,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     }
   };
 
-  const handleDownloadQuotePDF = (isEdit: boolean) => {
+  const handleDownloadQuotePDF = async (isEdit: boolean) => {
     try {
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
@@ -2238,12 +2319,24 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
       const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       
+      let currentLogo = logoBase64;
+      let currentAspect = logoAspectRatio;
+      try {
+        const logoUrl = 'https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png';
+        const result = await getLogoBase64FromUrl(logoUrl);
+        currentLogo = result.base64;
+        currentAspect = result.aspect;
+      } catch (e) {
+        console.warn("Failed to wait-load logo for download, using preloaded:", e);
+      }
+
       const doc = generateQuotationPDF(
         leadObj,
         activePkgs,
         quotNum,
         quotationTerms,
-        logoBase64,
+        currentLogo,
+        currentAspect,
         editableInclusions,
         editableDeliverables,
         quoteDiscount,
@@ -2955,9 +3048,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       lead_source: lead.lead_source || 'Reference',
       shoot_type: lead.shoot_type || '',
       // Step 3
-      selected_package_id: latestQuote?.package_id || primaryLP?.package_id || '',
-      package_cost: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : 0),
-      package_price: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : 0),
+      selected_package_id: latestQuote?.package_id || primaryLP?.package_id || lead.Select_Package_Option || '',
+      package_cost: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : (matchedPkg ? Number(matchedPkg.price) : 0)),
+      package_price: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : (matchedPkg ? Number(matchedPkg.price) : 0)),
       deliverables: latestQuote?.deliverables_description || primaryLP?.deliverables_description || matchedPkg?.deliverables || '',
       deliverables_description: latestQuote?.deliverables_description || primaryLP?.deliverables_description || matchedPkg?.deliverables || '',
       notes_special_customizations: latestQuote?.notes_special_customizations || primaryLP?.notes_special_customizations || '',
@@ -7192,79 +7285,96 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                               </option>
                             ))}
                           </select>
-                          {(!wizardLeadData.selected_package_id || wizardLeadData.selected_package_id.trim() === '') && (
+                          {!(wizardLeadData.selected_package_id || wizardLeadData.Select_Package_Option) && (
                             <p className="text-rose-450 font-bold text-xs mt-1.5 font-mono animate-pulse flex items-center gap-1.5">
                               ⚠️ Please select a package before continuing.
                             </p>
                           )}
                         </div>
 
-                        {packages.find(p => p.package_id === wizardLeadData.selected_package_id) && (() => {
-                          const pData = packages.find(p => p.package_id === wizardLeadData.selected_package_id)!;
+                        {(() => {
+                          const selectedPkg = packages.find(p => p.package_id === (wizardLeadData.selected_package_id || wizardLeadData.Select_Package_Option));
+                          if (!selectedPkg) return null;
                           return (
-                            <div className="bg-indigo-950/20 border border-indigo-500/20 rounded-xl p-4 space-y-3 font-sans text-xs animate-fade-in">
-                              <h4 className="font-bold text-indigo-400 uppercase font-mono tracking-wide text-[10px]">⚡ Auto-Filled Package Specifications</h4>
+                            <div className="space-y-4 animate-fade-in">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                  <span className="text-slate-500 block uppercase font-bold text-[9px] font-mono">Catalog Regular Price</span>
-                                  <strong className="text-slate-200 text-xs font-bold font-mono">₹{Number(pData.price).toLocaleString('en-IN')}</strong>
+                                  <label className="block text-[11px] font-bold text-slate-450 mb-1.5 uppercase font-mono tracking-wider">Package Name</label>
+                                  <input
+                                    type="text"
+                                    value={selectedPkg.package_name || ''}
+                                    disabled
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-400 font-medium cursor-not-allowed"
+                                  />
                                 </div>
                                 <div>
-                                  <span className="text-slate-500 block uppercase font-bold text-[9px] font-mono">Staff & Team Members</span>
-                                  <span className="text-slate-300 font-medium">{pData.team_members || 'N/A'}</span>
+                                  <label className="block text-[11px] font-bold text-slate-455 mb-1.5 uppercase font-mono tracking-wider">Package Category</label>
+                                  <input
+                                    type="text"
+                                    value={selectedPkg.category || 'Wedding Packages'}
+                                    disabled
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-400 font-medium cursor-not-allowed"
+                                  />
                                 </div>
-                                {pData.deliverables && (
-                                  <div className="sm:col-span-2 border-t border-indigo-500/10 pt-3">
-                                    <span className="text-slate-500 block uppercase font-bold text-[9px] font-mono mb-1.5">Package Base Deliverables Included</span>
-                                    <div className="flex flex-wrap gap-2">
-                                      {pData.deliverables.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean).map((del, i) => (
-                                        <span key={i} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg px-2 py-1 text-[11px] font-medium flex items-center gap-1">
-                                          <span>✨</span> {del}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Package Price (Editable) *</label>
+                                <input
+                                  type="number"
+                                  value={wizardLeadData.package_cost !== undefined ? wizardLeadData.package_cost : selectedPkg.price}
+                                  disabled={isLeadLocked}
+                                  onChange={(e) => setWizardLeadData({ ...wizardLeadData, package_cost: Math.max(0, parseInt(e.target.value) || 0) })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-amber-400 font-mono font-bold"
+                                  required
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-455 mb-1.5 uppercase font-mono tracking-wider">Deliverables Description / Base Package Deliverables (Auto-filled)</label>
+                                <textarea
+                                  rows={3}
+                                  value={selectedPkg.deliverables || ''}
+                                  disabled
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-xs text-slate-400 cursor-not-allowed font-mono"
+                                  placeholder="Package deliverables description..."
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-455 mb-1.5 uppercase font-mono tracking-wider">Package Inclusions / Included Services (Auto-filled)</label>
+                                <textarea
+                                  rows={2}
+                                  value={selectedPkg.package_includes || selectedPkg.team_members || ''}
+                                  disabled
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-xs text-slate-400 cursor-not-allowed font-mono"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-455 mb-1.5 uppercase font-mono tracking-wider">Package Notes & Customizations (Auto-filled)</label>
+                                <textarea
+                                  rows={2}
+                                  value={selectedPkg.seasonal_offer || 'None'}
+                                  disabled
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-xs text-slate-400 cursor-not-allowed font-mono"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Notes & Special Customizations</label>
+                                <textarea
+                                  rows={2}
+                                  value={wizardLeadData.notes || ''}
+                                  disabled={isLeadLocked}
+                                  onChange={(e) => setWizardLeadData({ ...wizardLeadData, notes: e.target.value })}
+                                  className="w-full bg-slate-955 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-slate-200"
+                                  placeholder="Special client requirements, location adjustments..."
+                                />
                               </div>
                             </div>
                           );
                         })()}
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Package Price (Editable) *</label>
-                          <input
-                            type="number"
-                            value={wizardLeadData.package_cost || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, package_cost: Math.max(0, parseInt(e.target.value) || 0) })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-amber-400 font-mono font-bold"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Deliverables Description</label>
-                          <textarea
-                            rows={3}
-                            value={wizardLeadData.deliverables || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, deliverables: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-slate-200"
-                            placeholder="Specify album types, cinematic edit length or raw materials guidelines..."
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">Notes & Special Customizations</label>
-                          <textarea
-                            rows={2}
-                            value={wizardLeadData.notes || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, notes: e.target.value })}
-                            className="w-full bg-slate-955 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-slate-200"
-                            placeholder="Special client requirements, location adjustments..."
-                          />
-                        </div>
                       </div>
                     </div>
                   )}
