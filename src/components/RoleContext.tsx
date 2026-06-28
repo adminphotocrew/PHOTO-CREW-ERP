@@ -856,8 +856,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'sales_person', 'status', 'remarks', 'created_by', 'updated_by', 'updated_at', 
         'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status',
         'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 'Select_Package_Option',
-        'package_price', 'deliverables_description', 'notes_special_customizations',
-        'quotation_discount', 'additional_services_cost', 'total_pax', 'reference_source', 
+        'total_pax', 'reference_source', 
         'lead_value', 'lead_score', 'booking_status'
       ],
       orders: [

@@ -343,23 +343,52 @@ const generateQuotationPDF = (
       simY += remarksH + cfg.secSpacing;
     }
 
-    const termsH = 4.5;
-    if (simY + termsH > 250) {
+    // 8. TERMS & CONDITIONS (Boxed)
+    if (simY + 4.5 > 250) {
       simY = 52;
       simPageCount++;
     }
-    simY += termsH;
+    simY += 4.5; // heading
 
-    termsToRender.forEach((term, idx) => {
-      const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '');
-      const wrapped = doc.splitTextToSize(cleanTerm, 174);
-      const termH = (wrapped.length * cfg.termsSpacing) + 2;
-      if (simY + termH > 250) {
-        simY = 52;
-        simPageCount++;
+    let simTermsIndex = 0;
+    while (simTermsIndex < termsToRender.length) {
+      let tempY = simY + 4; // top padding of box
+      let collectedOnPage = 0;
+
+      while (simTermsIndex < termsToRender.length) {
+        const term = termsToRender[simTermsIndex];
+        const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '');
+        const wrapped = doc.splitTextToSize(cleanTerm, 164);
+        const termH = (wrapped.length * cfg.termsSpacing) + 3; // spacing between terms
+
+        if (tempY + termH > 248) {
+          if (collectedOnPage === 0) {
+            // Force break page
+            simY = 52;
+            simPageCount++;
+            tempY = simY + 4;
+            continue;
+          }
+          break; // Stop adding terms on this page, box will end here
+        }
+        collectedOnPage++;
+        tempY += termH;
+        simTermsIndex++;
       }
-      simY += termH;
-    });
+
+      if (collectedOnPage > 0) {
+        const boxH = tempY - simY + 2; // including bottom padding
+        simY = simY + boxH + 4; // ending of this box plus some margin
+      }
+    }
+
+    // 9. PHOTOCREW PICTURES FOOTER (Always Last, at footerY = 255)
+    // If the last content ending is past 250, the footer moves to the next page!
+    if (simY > 250) {
+      simY = 52;
+      simPageCount++;
+    }
+    simY = 275; // Since footer is drawn at 255 on the final page, last page height is 255 + 20 = 275.
 
     return { pageCount: simPageCount, lastPageY: simY };
   };
@@ -472,6 +501,18 @@ const generateQuotationPDF = (
   const drawPageFooter = (pageDoc: typeof doc, pageNum: number, totalPages: number) => {
     let footerY = 260;
     
+    if (totalPages > 1) {
+      pageDoc.setFont('helvetica', 'normal');
+      pageDoc.setFontSize(7);
+      pageDoc.setTextColor(148, 163, 184);
+      pageDoc.text(`Page ${pageNum} of ${totalPages}`, 195, footerY + 14, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
+    }
+
+    pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
+    pageDoc.rect(0, 292, 210, 5, 'F');
+  };
+
+  const drawPhotoCrewFooter = (pageDoc: typeof doc, footerY: number) => {
     pageDoc.setDrawColor(226, 232, 240);
     pageDoc.setLineWidth(0.3);
     pageDoc.line(15, footerY, 195, footerY);
@@ -499,16 +540,6 @@ const generateQuotationPDF = (
     pageDoc.setFontSize(8);
     pageDoc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
     pageDoc.text('Authorized Signatory', 195, footerY + 12, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-
-    if (totalPages > 1) {
-      pageDoc.setFont('helvetica', 'normal');
-      pageDoc.setFontSize(7);
-      pageDoc.setTextColor(148, 163, 184);
-      pageDoc.text(`Page ${pageNum} of ${totalPages}`, 195, footerY + 14, { align: 'right', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    }
-
-    pageDoc.setFillColor(goldColor[0], goldColor[1], goldColor[2]);
-    pageDoc.rect(0, 292, 210, 5, 'F');
   };
 
   const createNewPage = () => {
@@ -1001,34 +1032,75 @@ const generateQuotationPDF = (
   doc.text('TERMS & CONDITIONS', 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
   currentY += 4.5;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
+  let termsIndex = 0;
+  while (termsIndex < termsToRender.length) {
+    let boxStartY = currentY;
+    let tempY = currentY + 4; // top padding of box
+    let pageTerms = [];
 
-  termsToRender.forEach((term, idx) => {
-    const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '');
-    const prefix = `${idx + 1}. `;
-    const wrapped = doc.splitTextToSize(cleanTerm, 174);
-    const termHeight = (wrapped.length * cfg.termsSpacing) + 2;
+    while (termsIndex < termsToRender.length) {
+      const term = termsToRender[termsIndex];
+      const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '');
+      const prefix = `${termsIndex + 1}. `;
+      const wrapped = doc.splitTextToSize(cleanTerm, 164); // fits beautifully inside 180mm box with margins and padding
+      const termHeight = (wrapped.length * cfg.termsSpacing) + 3; // spacing between terms
 
-    if (currentY + termHeight > 250) {
-      currentY = createNewPage();
+      if (tempY + termHeight > 248) {
+        if (pageTerms.length === 0) {
+          // Force break page if not even one term fits
+          currentY = createNewPage();
+          boxStartY = currentY;
+          tempY = currentY + 4;
+          continue;
+        }
+        break; // Stop adding terms to this page, box will end here
+      }
+      pageTerms.push({ prefix, wrapped, termHeight });
+      tempY += termHeight;
+      termsIndex++;
     }
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text(prefix, 15, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-    
-    doc.setFont('helvetica', 'normal');
-    wrapped.forEach((line: string) => {
-      doc.text(line, 21, currentY, { wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-      currentY += cfg.termsSpacing;
-    });
-    currentY += 2; // Extra space between items
-  });
+    if (pageTerms.length > 0) {
+      const boxHeight = tempY - boxStartY + 2; // including bottom padding of box
+      
+      // Draw a dedicated bordered content box for the terms on this page
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(226, 232, 240); // Light gray border
+      doc.setLineWidth(0.25);
+      doc.roundedRect(15, boxStartY, 180, boxHeight, 1.5, 1.5, 'FD'); // Rounded corners, filled with white, and bordered
 
-  // Apply Brand Headers and Footers to ALL pages
+      let textOffset = boxStartY + 5; // Start with top padding
+      pageTerms.forEach((pt) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.2);
+        doc.setTextColor(100, 116, 139);
+        doc.text(pt.prefix, 20, textOffset); // Left-aligned prefix
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.2);
+        pt.wrapped.forEach((line: string, lineIdx: number) => {
+          doc.text(line, 25, textOffset + (lineIdx * cfg.termsSpacing)); // Left-aligned wrapped text
+        });
+        textOffset += (pt.wrapped.length * cfg.termsSpacing) + 3; // Add spacing between terms
+      });
+
+      currentY = boxStartY + boxHeight + 4; // Spacing after the box
+    }
+  }
+
+  // 9. PHOTOCREW PICTURES FOOTER (Always Last)
+  // Check if we have enough space for the footer on the current final page.
+  // If not, we create a new page for it.
+  if (currentY > 250) {
+    currentY = createNewPage();
+  }
+
+  // Draw the one-time brand company footer on the final page
+  const finalPageNum = (doc as any).internal.getNumberOfPages();
+  doc.setPage(finalPageNum);
+  drawPhotoCrewFooter(doc, 255);
+
+  // Apply Brand Headers and Page Number Footers to ALL pages
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
