@@ -1389,6 +1389,86 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     setTimeout(() => setCrmToast(null), 3000);
   };
 
+  const logStatusUpdateError = (params: {
+    leadId: string | null;
+    orderId: string | null;
+    oldStatus: string | null;
+    newStatus: string | null;
+    updatePayload: any;
+    insertPayload: any;
+    dbResponse: any;
+    fullError: any;
+  }) => {
+    console.group("%c CRM STATUS UPDATE ERROR LOG ", "background: #f43f5e; color: white; font-weight: bold; padding: 4px;");
+    console.log("Lead ID:", params.leadId);
+    console.log("Order ID:", params.orderId);
+    console.log("Old Status:", params.oldStatus);
+    console.log("New Status:", params.newStatus);
+    console.log("Supabase UPDATE payload:", params.updatePayload);
+    console.log("Supabase INSERT payload:", params.insertPayload);
+    console.log("Database response:", params.dbResponse);
+    console.log("Full error message:", params.fullError);
+    console.groupEnd();
+  };
+
+  const parseStatusUpdateError = (errorMsg: string): { reason: string; suggestedFix: string } => {
+    const msg = errorMsg.toLowerCase();
+    
+    let reason = errorMsg;
+    let suggestedFix = "Please contact support or review the database connections and tables.";
+
+    if (msg.includes("relation \"leads\" does not exist") || msg.includes("table name: leads\nmissing")) {
+      reason = "Table 'leads' does not exist in the database schema.";
+      suggestedFix = "Please ensure the 'leads' table is created in your Supabase database using the SQL editor.";
+    } else if (msg.includes("relation \"lead_status_history\" does not exist") || msg.includes("relation \"public.lead_status_history\" does not exist")) {
+      reason = "Table 'lead_status_history' does not exist in the database schema.";
+      suggestedFix = "Create the 'lead_status_history' table in your Supabase database using: \n\nCREATE TABLE lead_status_history (\n  id SERIAL PRIMARY KEY,\n  lead_id TEXT,\n  order_id TEXT,\n  old_status TEXT,\n  new_status TEXT,\n  changed_by TEXT,\n  changed_by_role TEXT,\n  remarks TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);";
+    } else if (msg.includes("column \"current_status\"") || msg.includes("column leads.current_status") || msg.includes("missing column name: current_status")) {
+      reason = "Missing column \"current_status\" in table \"leads\".";
+      suggestedFix = "Create the \"current_status\" column or update the database mapping using: \n\nALTER TABLE leads ADD COLUMN current_status TEXT;";
+    } else if (msg.includes("column \"new_status\"") || msg.includes("column lead_status_history.new_status")) {
+      reason = "Missing column \"new_status\" in table \"lead_status_history\".";
+      suggestedFix = "Add the missing 'new_status' column to 'lead_status_history' table using: \n\nALTER TABLE lead_status_history ADD COLUMN new_status TEXT;";
+    } else if (msg.includes("rls policy denied") || msg.includes("row-level security") || msg.includes("violates row-level security")) {
+      reason = `RLS policy denied UPDATE on table "leads".`;
+      suggestedFix = "Update the RLS policy to allow authenticated users to update lead records.";
+    } else if (msg.includes("permission denied") || msg.includes("insufficient privilege")) {
+      reason = `Permission denied by database. Details: ${errorMsg}`;
+      suggestedFix = "Ensure the API client role has correct permissions (SELECT/INSERT/UPDATE) granted on the table.";
+    } else if (msg.includes("not found") && msg.includes("leads")) {
+      reason = `Lead ID invalid or lead record not found. Details: ${errorMsg}`;
+      suggestedFix = "Verify that the Lead ID exists in the 'leads' table and has not been deleted.";
+    } else if (msg.includes("lead_status_history insert failed because \"lead_id\" is null") || msg.includes("lead_id is null") || msg.includes("lead_id\" is null")) {
+      reason = `"lead_status_history" insert failed because "lead_id" is NULL.`;
+      suggestedFix = "Pass a valid \"lead_id\" before inserting the status history.";
+    } else if (msg.includes("foreign key constraint")) {
+      reason = `Foreign key constraint failed. Details: ${errorMsg}`;
+      suggestedFix = "Check if the referenced records (e.g. lead_id, order_id) exist in their parent tables first.";
+    } else if (msg.includes("duplicate key") || msg.includes("unique constraint")) {
+      reason = `Unique constraint violation. Details: ${errorMsg}`;
+      suggestedFix = "Ensure that the record ID being inserted is unique and does not already exist.";
+    } else if (msg.includes("network error") || msg.includes("failed to fetch") || msg.includes("database connection failed")) {
+      reason = `Network error or failed to reach the database connection.`;
+      suggestedFix = "Please check your internet connection or verify if your server/Supabase instances are active.";
+    } else if (msg.includes("required field") || msg.includes("null value in column")) {
+      reason = `Required database field is missing. Details: ${errorMsg}`;
+      suggestedFix = "Ensure all required fields are filled and not null before submitting.";
+    } else {
+      const tableMatch = errorMsg.match(/table "([^"]+)"|relation "([^"]+)"/);
+      const colMatch = errorMsg.match(/column "([^"]+)"/);
+      if (tableMatch || colMatch) {
+        const tableName = tableMatch ? (tableMatch[1] || tableMatch[2]) : "unknown table";
+        const colName = colMatch ? colMatch[1] : "";
+        reason = `Database operation failed on table "${tableName}"` + (colName ? ` for column "${colName}".` : ".");
+        suggestedFix = `Verify the schema of "${tableName}" table. If "${colName}" column is missing, add it using ALTER TABLE ${tableName} ADD COLUMN ${colName} TEXT;`;
+      }
+    }
+
+    return { reason, suggestedFix };
+  };
+
+  const [statusError, setStatusError] = useState<{ title: string; reason: string; suggestedFix: string } | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [unlockingRecordId, setUnlockingRecordId] = useState<string | null>(null);
   const [unlockReason, setUnlockReason] = useState('Data Correction');
@@ -3249,15 +3329,35 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         setSelectedLead(null);
       }
     } catch (err: any) {
-      console.warn("Save failed:", err?.message || err);
-      const errMsg = err.message || String(err);
-      let displayedMsg = errMsg;
-      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-        displayedMsg = "Database connection failed.";
-      } else {
-        displayedMsg = "Status update failed.";
-      }
-      showToastMsg(displayedMsg, "error");
+      console.error("Save failed:", err);
+      const errMsg = err?.message || String(err);
+      const parsed = parseStatusUpdateError(errMsg);
+      
+      const oldStatus = selectedLead ? (selectedLead.current_status || selectedLead.status || 'New Lead') : null;
+      const newStatus = wizardLeadData?.status || null;
+      
+      logStatusUpdateError({
+        leadId: selectedLead?.lead_id || null,
+        orderId: null,
+        oldStatus,
+        newStatus,
+        updatePayload: {
+          budget: Number(wizardLeadData?.package_cost || wizardLeadData?.budget || 0),
+          package_price: Number(wizardLeadData?.package_cost || 0),
+          remarks: wizardLeadData?.remarks || wizardLeadData?.notes || '',
+          Select_Package_Option: wizardLeadData?.selected_package_id || wizardLeadData?.Select_Package_Option || ''
+        },
+        insertPayload: null,
+        dbResponse: null,
+        fullError: err
+      });
+
+      setStatusError({
+        title: "CRM Multi-step Wizard Status Update Failed",
+        reason: parsed.reason,
+        suggestedFix: parsed.suggestedFix
+      });
+      showToastMsg(parsed.reason, "error");
     } finally {
       setIsSaving(false);
     }
@@ -3793,14 +3893,35 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       setActiveTab('list');
     } catch (err: any) {
       console.error("Step 5 status save failed:", err);
-      const errMsg = err.message || String(err);
-      let displayedMsg = errMsg;
-      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-        displayedMsg = "Database connection failed.";
-      } else {
-        displayedMsg = "Status update failed.";
-      }
-      alert(displayedMsg);
+      const errMsg = err?.message || String(err);
+      const parsed = parseStatusUpdateError(errMsg);
+
+      const targetLd = leads.find(l => l.lead_id === createdLeadId);
+      const oldStatus = targetLd ? (targetLd.current_status || targetLd.status || 'New Lead') : null;
+      const newStatus = salesStatus || null;
+
+      logStatusUpdateError({
+        leadId: createdLeadId || null,
+        orderId: null,
+        oldStatus,
+        newStatus,
+        updatePayload: {
+          status: salesStatus,
+          budget: finalTotal,
+          package_price: finalTotal,
+          Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
+        },
+        insertPayload: null,
+        dbResponse: null,
+        fullError: err
+      });
+
+      setStatusError({
+        title: "Lead Stage Transition Failed",
+        reason: parsed.reason,
+        suggestedFix: parsed.suggestedFix
+      });
+      alert(parsed.reason);
     } finally {
       setIsSaving(false);
     }
@@ -3846,14 +3967,40 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       setActiveTab('list');
     } catch (err: any) {
       console.error("Failed to commit confirmed order details:", err);
-      const errMsg = err.message || String(err);
-      let displayedMsg = errMsg;
-      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-        displayedMsg = "Database connection failed.";
-      } else {
-        displayedMsg = "Status update failed.";
-      }
-      alert(displayedMsg);
+      const errMsg = err?.message || String(err);
+      const parsed = parseStatusUpdateError(errMsg);
+
+      const targetLd = leads.find(l => l.lead_id === createdLeadId);
+      const oldStatus = targetLd ? (targetLd.current_status || targetLd.status || 'New Lead') : null;
+
+      logStatusUpdateError({
+        leadId: createdLeadId || null,
+        orderId: null,
+        oldStatus,
+        newStatus: 'Order Confirmed',
+        updatePayload: {
+          status: 'Order Confirmed',
+          event_date: confirmedEventDate,
+          event_time: confirmedEventTime,
+          reporting_time: reportingTime,
+        },
+        insertPayload: {
+          order_status: 'Confirmed',
+          current_stage: 'Order Confirmed',
+          package_name: selectedPkgs.map(p => p.name).join(' + ') || 'Custom Configured Coverage',
+          quotation_amount: finalPackageAmount,
+          advance_received: advanceReceived,
+        },
+        dbResponse: null,
+        fullError: err
+      });
+
+      setStatusError({
+        title: "Order Confirmation Pipeline Transition Failed",
+        reason: parsed.reason,
+        suggestedFix: parsed.suggestedFix
+      });
+      alert(parsed.reason);
     } finally {
       setIsSaving(false);
     }
@@ -3900,14 +4047,37 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         alert("Order Confirmed Successfully.");
       } catch (err: any) {
         console.error("Failed to convert lead:", err);
-        const errMsg = err.message || String(err);
-        let displayedMsg = errMsg;
-        if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-          displayedMsg = "Database connection failed.";
-        } else {
-          displayedMsg = "Status update failed.";
-        }
-        alert(displayedMsg);
+        const errMsg = err?.message || String(err);
+        const parsed = parseStatusUpdateError(errMsg);
+
+        const oldStatus = selectedLead ? (selectedLead.current_status || selectedLead.status || 'New Lead') : null;
+
+        logStatusUpdateError({
+          leadId: selectedLead?.lead_id || null,
+          orderId: null,
+          oldStatus,
+          newStatus: 'Order Confirmed',
+          updatePayload: {
+            status: 'Order Confirmed',
+            remarks: followUpForm.call_notes
+          },
+          insertPayload: {
+            order_status: 'Confirmed',
+            current_stage: 'Order Confirmed',
+            package_name: selectedLead.event_type + ' Premium Package',
+            quotation_amount: Number(followUpForm.quotation_amount),
+            advance_received: Number(followUpForm.advance_received),
+          },
+          dbResponse: null,
+          fullError: err
+        });
+
+        setStatusError({
+          title: "Follow-up Transition to Order Confirmed Failed",
+          reason: parsed.reason,
+          suggestedFix: parsed.suggestedFix
+        });
+        alert(parsed.reason);
       } finally {
         setIsSaving(false);
       }
@@ -3945,14 +4115,32 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       alert('CRM Updated Successfully.');
     } catch (err: any) {
       console.error("Failed to update follow-up:", err);
-      const errMsg = err.message || String(err);
-      let displayedMsg = errMsg;
-      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-        displayedMsg = "Database connection failed.";
-      } else {
-        displayedMsg = "Status update failed.";
-      }
-      alert(displayedMsg);
+      const errMsg = err?.message || String(err);
+      const parsed = parseStatusUpdateError(errMsg);
+
+      const oldStatus = selectedLead ? (selectedLead.current_status || selectedLead.status || 'New Lead') : null;
+
+      logStatusUpdateError({
+        leadId: selectedLead?.lead_id || null,
+        orderId: null,
+        oldStatus,
+        newStatus: followUpForm.status,
+        updatePayload: {
+          status: followUpForm.status,
+          budget: Number(followUpForm.quotation_amount),
+          remarks: followUpForm.call_notes
+        },
+        insertPayload: null,
+        dbResponse: null,
+        fullError: err
+      });
+
+      setStatusError({
+        title: "Follow-up Pipeline Status Update Failed",
+        reason: parsed.reason,
+        suggestedFix: parsed.suggestedFix
+      });
+      alert(parsed.reason);
     } finally {
       setIsSaving(false);
     }
@@ -4000,14 +4188,39 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       alert("Order Confirmed Successfully.");
     } catch (err: any) {
       console.error("Failed to convert order:", err);
-      const errMsg = err.message || String(err);
-      let displayedMsg = errMsg;
-      if (errMsg.toLowerCase().includes("database") || errMsg.toLowerCase().includes("connection") || errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("supabase")) {
-        displayedMsg = "Database connection failed.";
-      } else {
-        displayedMsg = "Status update failed.";
-      }
-      alert(displayedMsg);
+      const errMsg = err?.message || String(err);
+      const parsed = parseStatusUpdateError(errMsg);
+
+      const oldStatus = selectedLead ? (selectedLead.current_status || selectedLead.status || 'New Lead') : null;
+
+      logStatusUpdateError({
+        leadId: selectedLead?.lead_id || null,
+        orderId: null,
+        oldStatus,
+        newStatus: 'Order Confirmed',
+        updatePayload: {
+          status: 'Order Confirmed',
+          event_date: confirmForm.event_date,
+          event_time: confirmForm.event_time,
+          reporting_time: undefined,
+        },
+        insertPayload: {
+          order_status: 'Confirmed',
+          current_stage: 'Order Confirmed',
+          package_name: confirmForm.package_name,
+          quotation_amount: Number(confirmForm.quotation_amount),
+          advance_received: Number(confirmForm.advance_received),
+        },
+        dbResponse: null,
+        fullError: err
+      });
+
+      setStatusError({
+        title: "Action Button Order Confirmation Failed",
+        reason: parsed.reason,
+        suggestedFix: parsed.suggestedFix
+      });
+      alert(parsed.reason);
     } finally {
       setIsSaving(false);
     }
@@ -4089,6 +4302,45 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   return (
     <div id="sales_module" className="space-y-6">
+      {statusError && (
+        <div className="fixed inset-0 bg-slate-955/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-red-500/40 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-4 flex items-center gap-3">
+              <span className="p-2.5 bg-red-500/20 text-red-400 rounded-xl text-lg">⚠️</span>
+              <div>
+                <h3 className="font-bold text-slate-100 text-sm font-sans">{statusError.title || 'Status Update Failed'}</h3>
+                <p className="text-[10px] text-red-400 font-mono tracking-wider">DATABASE SCHEMA / INTEGRITY EXCEPTION</p>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wider block">Reason:</span>
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 text-xs text-red-300 font-mono leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto">
+                  {statusError.reason}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wider block">Suggested Fix / Schema Migration:</span>
+                <div className="bg-emerald-950/20 border border-emerald-500/25 rounded-xl p-3 text-xs text-emerald-300 font-sans leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto">
+                  {statusError.suggestedFix}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/40 border-t border-slate-800 px-6 py-3.5 flex justify-end">
+              <button
+                onClick={() => setStatusError(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer border border-slate-700"
+              >
+                Dismiss Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

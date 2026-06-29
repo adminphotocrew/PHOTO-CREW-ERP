@@ -7,11 +7,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPA
 const supabase = createClient(url, serviceRoleKey);
 
 async function run() {
-  console.log("Using SUPABASE_URL:", url);
-  console.log("Service Role / Anon Key available:", !!serviceRoleKey);
-
-  // Let's find an existing lead to try updating
-  const { data: leads, error: fetchErr } = await supabase.from('leads').select('lead_id, status, current_status, remarks').limit(1);
+  const { data: leads, error: fetchErr } = await supabase.from('leads').select('lead_id, status, current_status').limit(1);
   if (fetchErr || !leads || leads.length === 0) {
     console.error("Failed to fetch leads for testing:", fetchErr);
     return;
@@ -20,14 +16,13 @@ async function run() {
   const lead = leads[0];
   console.log("Target lead:", lead);
 
-  // Let's attempt an update with typical fields
   const updates = {
-    status: 'Follow Up',
-    current_status: 'Follow Up',
-    updated_at: new Date().toISOString()
+    deliverables_description: 'Test description ' + Math.random(),
+    notes_special_customizations: 'Test customization ' + Math.random(),
+    package_price: 15000
   };
 
-  console.log("Attempting to update lead status/current_status to Follow Up...");
+  console.log("Attempting to update lead with deliverables_description, notes_special_customizations, package_price...");
   const { data: updateData, error: updateErr } = await supabase
     .from('leads')
     .update(updates)

@@ -87,13 +87,105 @@ async function startServer() {
     return serverSupabase;
   };
 
+  // Helper to dynamically strip stale/missing columns that cause schema cache mismatch errors
+  const healPayload = (table: string, payload: any, errorMsg: string): any | null => {
+    if (!payload || typeof payload !== 'object') return null;
+    if (table !== 'leads' && table !== 'orders' && table !== 'quotations' && table !== 'lead_packages') return null;
+    
+    const lowerMsg = errorMsg.toLowerCase();
+    let healed = false;
+    const nextPayload = { ...payload };
+
+    // Common columns that might be missing or cause schema cache errors
+    const potentialStaleCols = [
+      'deliverables_description',
+      'notes_special_customizations',
+      'package_price',
+      'package_cost',
+      'total_pax',
+      'reference_source',
+      'lead_value',
+      'lead_score',
+      'booking_status',
+      'reporting_time',
+      'quotation_discount',
+      'additional_services_cost',
+      'whatsapp_number',
+      'client_residence_address',
+      'city',
+      'state',
+      'pincode',
+      'desired_event_shoot_type',
+      'Select_Package_Option'
+    ];
+
+    // If the error explicitly mentions a column, remove it
+    const colMatch = errorMsg.match(/column '([^']+)'|column "([^"]+)"/i) || 
+                     errorMsg.match(/Could not find the '([^']+)' column/i) ||
+                     errorMsg.match(/Could not find the "([^"]+)" column/i);
+    
+    if (colMatch) {
+      const colName = colMatch[1] || colMatch[2];
+      if (colName && colName in nextPayload) {
+        console.warn(`[Server Self-Healing] Found specific stale column "${colName}". Stripping...`);
+        const val = nextPayload[colName];
+        delete nextPayload[colName];
+        
+        // Save the stripped value to remarks/notes
+        const currentRemarks = nextPayload.remarks || nextPayload.notes || '';
+        const annotation = `[System Fallback - ${colName}]: ${val}`;
+        if (nextPayload.remarks !== undefined) {
+          nextPayload.remarks = currentRemarks ? `${currentRemarks}\n${annotation}` : annotation;
+        } else if (nextPayload.notes !== undefined) {
+          nextPayload.notes = currentRemarks ? `${currentRemarks}\n${annotation}` : annotation;
+        } else {
+          nextPayload.remarks = annotation;
+        }
+        healed = true;
+      }
+    }
+
+    // Also strip any known potential columns if mentioned in the general error message
+    for (const col of potentialStaleCols) {
+      if (lowerMsg.includes(col.toLowerCase()) && col in nextPayload) {
+        console.warn(`[Server Self-Healing] Stripping matching stale column "${col}" from error message...`);
+        const val = nextPayload[col];
+        delete nextPayload[col];
+        
+        const currentRemarks = nextPayload.remarks || nextPayload.notes || '';
+        const annotation = `[System Fallback - ${col}]: ${val}`;
+        if (nextPayload.remarks !== undefined) {
+          nextPayload.remarks = currentRemarks ? `${currentRemarks}\n${annotation}` : annotation;
+        } else if (nextPayload.notes !== undefined) {
+          nextPayload.notes = currentRemarks ? `${currentRemarks}\n${annotation}` : annotation;
+        } else {
+          nextPayload.remarks = annotation;
+        }
+        healed = true;
+      }
+    }
+
+    return healed ? nextPayload : null;
+  };
+
   app.post('/api/db/insert', async (req, res) => {
     const { table, record } = req.body;
     try {
       const db = getServerSupabase();
       console.log(`[Server DB Insert] Inserting into ${table}`, record);
-      const { data, error } = await db.from(table).insert(record).select();
+      let { data, error } = await db.from(table).insert(record).select();
       if (error) {
+        // Try healing the payload if it's a schema cache mismatch error
+        const healed = healPayload(table, record, error.message);
+        if (healed) {
+          console.log(`[Server Self-Healing retry] Retrying insert with healed record:`, healed);
+          const retryRes = await db.from(table).insert(healed).select();
+          if (!retryRes.error) {
+            return res.json({ success: true, data: retryRes.data });
+          }
+          error = retryRes.error; // Keep latest error
+        }
+
         if (!['activity_logs', 'notifications', 'analytics_snapshots', 'login_logs'].includes(table)) {
           console.error(`[Server DB Insert Error] ${table}`, error);
         }
@@ -113,8 +205,19 @@ async function startServer() {
     try {
       const db = getServerSupabase();
       console.log(`[Server DB Update] Updating ${table} where ${matchColumn}=${matchValue}`, updates);
-      const { data, error } = await db.from(table).update(updates).eq(matchColumn, matchValue).select();
+      let { data, error } = await db.from(table).update(updates).eq(matchColumn, matchValue).select();
       if (error) {
+        // Try healing the payload if it's a schema cache mismatch error
+        const healed = healPayload(table, updates, error.message);
+        if (healed) {
+          console.log(`[Server Self-Healing retry] Retrying update with healed updates:`, healed);
+          const retryRes = await db.from(table).update(healed).eq(matchColumn, matchValue).select();
+          if (!retryRes.error) {
+            return res.json({ success: true, data: retryRes.data });
+          }
+          error = retryRes.error; // Keep latest error
+        }
+
         if (!['activity_logs', 'notifications', 'analytics_snapshots', 'login_logs'].includes(table)) {
           console.error(`[Server DB Update Error] ${table}`, error);
         }
@@ -134,8 +237,19 @@ async function startServer() {
     try {
       const db = getServerSupabase();
       console.log(`[Server DB Upsert] Upserting into ${table}`, record);
-      const { data, error } = await db.from(table).upsert(record).select();
+      let { data, error } = await db.from(table).upsert(record).select();
       if (error) {
+        // Try healing the payload if it's a schema cache mismatch error
+        const healed = healPayload(table, record, error.message);
+        if (healed) {
+          console.log(`[Server Self-Healing retry] Retrying upsert with healed record:`, healed);
+          const retryRes = await db.from(table).upsert(healed).select();
+          if (!retryRes.error) {
+            return res.json({ success: true, data: retryRes.data });
+          }
+          error = retryRes.error; // Keep latest error
+        }
+
         if (!['activity_logs', 'notifications', 'analytics_snapshots', 'login_logs'].includes(table)) {
           console.error(`[Server DB Upsert Error] ${table}`, error);
         }

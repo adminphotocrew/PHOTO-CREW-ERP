@@ -3054,7 +3054,23 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     quotationAmount?: number, 
     negotiationNotes?: string
   ) => {
+    if (!leadId || typeof leadId !== 'string' || leadId.trim() === '') {
+      throw new Error('lead_id is missing or invalid.');
+    }
+
     const targetLead = leads.find((ld) => ld.lead_id === leadId);
+    if (supabaseClient) {
+      const { data: dbLead, error: dbLeadErr } = await supabaseClient.from('leads').select('lead_id').eq('lead_id', leadId).maybeSingle();
+      if (dbLeadErr) {
+        throw new Error(`Failed to check if lead exists in 'leads' table. Supabase Error: ${dbLeadErr.message}`);
+      }
+      if (!dbLead) {
+        throw new Error(`Lead record with ID "${leadId}" was not found in the "leads" table.`);
+      }
+    } else if (!targetLead) {
+      throw new Error(`Lead record with ID "${leadId}" was not found in local cache.`);
+    }
+
     const previousStage = targetLead ? (targetLead.current_status || targetLead.status || 'New Lead') : 'New Lead';
     const timestamp = new Date().toISOString();
 
@@ -3074,6 +3090,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (status !== previousStage) {
       const linkedOrder = orders.find(o => o.lead_id === leadId);
       const orderId = linkedOrder?.order_id || null;
+
+      if (status === 'Order Confirmed' && !orderId) {
+        throw new Error(`"order_id" is required for "Order Confirmed" status, but it was not found or is missing.`);
+      }
       
       const roleParts = (currentUserName && currentUserName.includes('|')) 
         ? currentUserName.split('|') 
@@ -3092,7 +3112,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: timestamp
       };
 
-      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
+      const resHist = await pushInsert('lead_status_history', newHist);
+      if (!resHist?.success) {
+        throw new Error(`"lead_status_history" insert failed. Error: ${resHist?.error || "Unknown error"}`);
+      }
       setStatusHistory(prev => [...prev, newHist]);
     }
 
@@ -3130,8 +3153,22 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reportingTime?: string,
     transactionId?: string
   ) => {
+    if (!leadId || typeof leadId !== 'string' || leadId.trim() === '') {
+      throw new Error('lead_id is missing or invalid.');
+    }
+
     const targetLead = leads.find((ld) => ld.lead_id === leadId);
-    if (!targetLead) return '';
+    if (supabaseClient) {
+      const { data: dbLead, error: dbLeadErr } = await supabaseClient.from('leads').select('lead_id').eq('lead_id', leadId).maybeSingle();
+      if (dbLeadErr) {
+        throw new Error(`Failed to check if lead exists in 'leads' table. Supabase Error: ${dbLeadErr.message}`);
+      }
+      if (!dbLead) {
+        throw new Error(`Lead record with ID "${leadId}" was not found in the "leads" table.`);
+      }
+    } else if (!targetLead) {
+      throw new Error(`Lead record with ID "${leadId}" was not found in local cache.`);
+    }
 
     const resolvedRemarks = `${targetLead.remarks || ''}\n[Booking Confirmed Update ${new Date().toISOString().split('T')[0]}]: ${notes || 'No extra notes'}. Payment Mode: ${paymentMode || 'N/A'}`;
     const timestamp = new Date().toISOString();
@@ -3166,6 +3203,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!masterOrderId) {
       masterOrderId = existingOrder ? existingOrder.order_id : `ORD-${Math.floor(1012 + Math.random() * 800)}`;
+    }
+
+    if (!masterOrderId) {
+      throw new Error(`"order_id" could not be generated or found for Order Confirmation.`);
     }
     
     if (orderExistsInDb) {
@@ -3266,14 +3307,16 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
         transaction_id: transactionId || undefined,
       };
-      await pushInsert('payments', newPayment);
+      const rPay = await pushInsert('payments', newPayment);
+      if (!rPay?.success) throw new Error("Failed to insert Payment: " + rPay?.error);
     } else if (existingPaymentId) {
-      await pushUpdate('payments', 'payment_id', existingPaymentId, {
+      const rPay = await pushUpdate('payments', 'payment_id', existingPaymentId, {
         quotation_amount: quotationAmount,
         advance_received: advanceReceived,
         balance_due: quotationAmount - advanceReceived,
         payment_status: advanceReceived >= quotationAmount ? 'Fully Paid' : (advanceReceived > 0 ? 'Partially Paid' : 'Pending'),
       });
+      if (!rPay?.success) throw new Error("Failed to update Payment: " + rPay?.error);
     }
 
     // Operations
@@ -3305,11 +3348,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const rOp = await pushInsert('operations', newOp);
       if (!rOp?.success) throw new Error("Failed to insert Operations: " + rOp?.error);
     } else if (existingOpId) {
-      await pushUpdate('operations', 'operation_id', existingOpId, {
+      const rOp = await pushUpdate('operations', 'operation_id', existingOpId, {
         reporting_time: reportingTime || '08:00',
         remarks: notes || '',
         updated_by: currentUserName,
       });
+      if (!rOp?.success) throw new Error("Failed to update Operations: " + rOp?.error);
     }
 
     // Insert into lead_status_history
@@ -3332,7 +3376,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: timestamp
       };
 
-      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
+      const resHist = await pushInsert('lead_status_history', newHist);
+      if (!resHist?.success) {
+        throw new Error(`"lead_status_history" insert failed. Error: ${resHist?.error || "Unknown error"}`);
+      }
       setStatusHistory(prev => [...prev, newHist]);
     }
 
@@ -5031,10 +5078,26 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateLead = async (leadId: string, updates: Partial<Lead>) => {
+    if (!leadId || typeof leadId !== 'string' || leadId.trim() === '') {
+      throw new Error('lead_id is missing or invalid.');
+    }
+
+    const prevLead = leads.find(l => l.lead_id === leadId);
+    if (supabaseClient) {
+      const { data: dbLead, error: dbLeadErr } = await supabaseClient.from('leads').select('lead_id').eq('lead_id', leadId).maybeSingle();
+      if (dbLeadErr) {
+        throw new Error(`Failed to check if lead exists in 'leads' table. Supabase Error: ${dbLeadErr.message}`);
+      }
+      if (!dbLead) {
+        throw new Error(`Lead record with ID "${leadId}" was not found in the "leads" table.`);
+      }
+    } else if (!prevLead) {
+      throw new Error(`Lead record with ID "${leadId}" was not found in local cache.`);
+    }
+
     const timestamp = new Date().toISOString();
     const finalUpdates = { ...updates };
     
-    const prevLead = leads.find(l => l.lead_id === leadId);
     const oldStatus = prevLead ? (prevLead.current_status || prevLead.status || 'New Lead') : 'New Lead';
     
     const anyStatus = finalUpdates.status || finalUpdates.current_status;
@@ -5065,6 +5128,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (newStatus && newStatus !== oldStatus) {
       const linkedOrder = orders.find(o => o.lead_id === leadId);
       const orderId = linkedOrder?.order_id || null;
+
+      if (newStatus === 'Order Confirmed' && !orderId) {
+        throw new Error(`"order_id" is required for "Order Confirmed" status, but it was not found or is missing.`);
+      }
       
       const roleParts = (currentUserName && currentUserName.includes('|')) 
         ? currentUserName.split('|') 
@@ -5083,7 +5150,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: timestamp
       };
 
-      await pushInsert('lead_status_history', newHist).catch(err => console.warn("Failed to insert lead status history:", err?.message || err));
+      const resHist = await pushInsert('lead_status_history', newHist);
+      if (!resHist?.success) {
+        throw new Error(`"lead_status_history" insert failed. Error: ${resHist?.error || "Unknown error"}`);
+      }
       setStatusHistory(prev => [...prev, newHist]);
     }
 
