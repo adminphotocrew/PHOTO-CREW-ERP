@@ -857,7 +857,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'assigned_editor', 'assigned_editors', 'production_role', 'delivery_target_date', 'current_status',
         'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 'Select_Package_Option',
         'total_pax', 'reference_source', 
-        'lead_value', 'lead_score', 'booking_status'
+        'lead_value', 'lead_score', 'booking_status', 'reporting_time', 'package_price', 'deliverables_description', 
+        'notes_special_customizations', 'quotation_discount', 'additional_services_cost'
       ],
       orders: [
         'order_id', 'lead_id', 'customer_name', 'mobile', 'event_type', 'custom_event_type', 'custom_event_name', 'shoot_type', 'event_date', 
@@ -956,10 +957,38 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return cloned;
   };
 
+  const verifyLeadsColumns = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!supabaseClient) return { success: true };
+    const requiredColumns = ['reporting_time', 'reference_source', 'total_pax', 'Select_Package_Option'];
+    for (const col of requiredColumns) {
+      try {
+        const { error } = await supabaseClient.from('leads').select(col).limit(0);
+        if (error) {
+          const isMissing = error.code === 'PGRST106' || error.code === '42703' || error.message?.toLowerCase().includes('column') || error.message?.toLowerCase().includes('does not exist');
+          if (isMissing) {
+            return {
+              success: false,
+              error: `Table name: leads\nMissing column name: ${col}\nSuggested fix: Please add the missing column '${col}' to the 'leads' table in your Supabase database using: ALTER TABLE leads ADD COLUMN ${col === 'total_pax' ? 'INTEGER' : 'TEXT'};`
+            };
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[verifyLeadsColumns] Failed check for ${col}:`, err);
+      }
+    }
+    return { success: true };
+  };
+
   // Synchronous CRUD wrappers for updating Supabase in backgrounds
   const pushInsert = async (table: string, record: any): Promise<{ success: boolean; error?: string; localFallback?: boolean }> => {
     if (!supabaseClient) return { success: true };
     try {
+      if (table === 'leads') {
+        const checkResult = await verifyLeadsColumns();
+        if (!checkResult.success) {
+          return { success: false, error: checkResult.error };
+        }
+      }
       const sanitized = stripClientOnlyFields(table, record);
       if (table === 'leads') {
         const anyStatus = sanitized.status || sanitized.current_status || record.status || record.current_status || 'New Lead';
@@ -1056,6 +1085,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const pushUpdate = async (table: string, matchColumn: string, matchValue: any, updates: any): Promise<{ success: boolean; error?: string; localFallback?: boolean }> => {
     if (!supabaseClient) return { success: true };
     try {
+      if (table === 'leads') {
+        const checkResult = await verifyLeadsColumns();
+        if (!checkResult.success) {
+          return { success: false, error: checkResult.error };
+        }
+      }
       const sanitized = stripClientOnlyFields(table, updates);
       console.log(`[pushUpdate START] table: ${table}, match: ${matchColumn}=${matchValue}`, sanitized);
 
@@ -5008,6 +5043,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       finalUpdates.current_status = anyStatus;
     }
     const res = await pushUpdate('leads', 'lead_id', leadId, { ...finalUpdates, updated_at: timestamp });
+    if (!res?.success) {
+      throw new Error(res?.error || "Failed to update lead in database.");
+    }
     
     setLeads((prev) =>
       prev.map((ld) => {

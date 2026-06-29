@@ -198,12 +198,12 @@ const generateQuotationPDF = (
 
   const defaultTerms = [
     'Payments are non-refundable.',
-    'Crew food arrangements must be provided by the client.',
-    '50% advance payment is required, and the remaining 50% must be paid before collecting the raw footage.',
-    'If the event duration exceeds the agreed schedule, an additional charge of \u20B93,000 per service per hour will apply.',
-    'We expect 90% of the total payment immediately after the event is completed, and the remaining 10% before the final deliverables are handed over.',
-    'Pen drive and hard disk are not included in the package.',
-    'Edited photos and videos will be shared through a Google Drive link.'
+    'Crew food arrangements from client side.',
+    '50% advance and remaining 50% before collecting the raw data.',
+    'If the duration extends, ₹3,000 per service per hour additional charges are applicable.',
+    'We expect 90% of the payment once the event is completed and the remaining 10% before the final deliverables are ready.',
+    'Pendrive and Hard Disk are not included.',
+    'Edited data will be shared via Google Drive link.'
   ];
 
   const termsToRender = termsText.split('\n').map(t => t.trim()).filter(Boolean).length > 0
@@ -357,7 +357,7 @@ const generateQuotationPDF = (
 
       while (simTermsIndex < termsToRender.length) {
         const term = termsToRender[simTermsIndex];
-        const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '').replace(/₹/g, 'Rs.').replace(/\u20B9/g, 'Rs.').replace(/\s+/g, ' ').trim();
+        const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '').replace(/[₹\u20B9\u20b9]/g, 'Rs.').replace(/\s+/g, ' ').trim();
         const wrapped = doc.splitTextToSize(cleanTerm, 163);
         const termH = (wrapped.length * cfg.termsSpacing) + 3; // spacing between terms
 
@@ -952,75 +952,6 @@ const generateQuotationPDF = (
   
   currentY += cfg.paymentCardHeight + cfg.secSpacing;
 
-    if (custRemarks || teamRemarks) {
-      let wrappedCust: string[] = [];
-      let wrappedTeam: string[] = [];
-      let boxHeight = 4; 
-
-      if (custRemarks) {
-        wrappedCust = doc.splitTextToSize(custRemarks, 170);
-        boxHeight += 4.5 + (wrappedCust.length * cfg.notesPadding);
-      }
-      if (teamRemarks) {
-        wrappedTeam = doc.splitTextToSize(teamRemarks, 170);
-        boxHeight += 4.5 + (wrappedTeam.length * cfg.notesPadding) + (custRemarks ? 4 : 0);
-      }
-      boxHeight += 2; 
-
-      const remarksTotalH = 4.5 + boxHeight;
-      if (currentY + remarksTotalH > 250) {
-        currentY = createNewPage();
-      }
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
-      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
-      doc.text('NOTES & SPECIAL INSTRUCTIONS', 15, currentY, { maxWidth: 180, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-      currentY += 4.5;
-
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'F');
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(15, currentY, 180, boxHeight, 1.5, 1.5, 'D');
-
-      doc.setFillColor(79, 70, 229);
-      doc.rect(15, currentY, 1.5, boxHeight, 'F');
-
-      let textOffset = currentY + 5;
-      if (custRemarks) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.2);
-        doc.setTextColor(71, 85, 105);
-        doc.text('CUSTOMER CONVERSATION SCOPE:', 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-        textOffset += 4.5;
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 116, 139);
-        wrappedCust.forEach(line => {
-          doc.text(line, 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-          textOffset += cfg.notesPadding;
-        });
-      }
-
-      if (teamRemarks) {
-        if (custRemarks) textOffset += 2;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.2);
-        doc.setTextColor(71, 85, 105);
-        doc.text('INTERNAL PRIVATE CRM NOTES:', 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-        textOffset += 4.5;
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 116, 139);
-        wrappedTeam.forEach(line => {
-          doc.text(line, 19, textOffset, { maxWidth: 170, align: 'left', wordWrap: true, breakWords: true, overflow: 'wrap', autoHeight: true } as any);
-          textOffset += cfg.notesPadding;
-        });
-      }
-
-      currentY += boxHeight + cfg.secSpacing;
-    }
-
   // 8. TERMS AND CONDITIONS
   if (currentY + 4.5 > 250) {
     currentY = createNewPage();
@@ -1040,7 +971,7 @@ const generateQuotationPDF = (
 
     while (termsIndex < termsToRender.length) {
       const term = termsToRender[termsIndex];
-      const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '').replace(/₹/g, 'Rs.').replace(/\u20B9/g, 'Rs.').replace(/\s+/g, ' ').trim();
+      const cleanTerm = term.replace(/^\d+[\.\s\-)]+\s*/, '').replace(/[₹\u20B9\u20b9]/g, 'Rs.').replace(/\s+/g, ' ').trim();
       const prefix = `${termsIndex + 1}. `;
       const wrapped = doc.splitTextToSize(cleanTerm, 163); // fits beautifully inside 180mm box with margins and padding
       const termHeight = (wrapped.length * cfg.termsSpacing) + 3; // spacing between terms
@@ -1716,7 +1647,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     if (selectedPkgIds.length > 0) {
       setCreateForm(prev => ({
         ...prev,
-        budget: finalTotal
+        budget: finalTotal,
+        Select_Package_Option: selectedPkgIds[0] || ''
+      }));
+    } else {
+      setCreateForm(prev => ({
+        ...prev,
+        Select_Package_Option: ''
       }));
     }
   }, [finalTotal, selectedPkgIds]);
@@ -1762,12 +1699,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
   // Quotation System State
   const [quotationTerms, setQuotationTerms] = useState(
     "1. Payments are non-refundable.\n" +
-    "2. Crew food arrangements must be provided by the client.\n" +
-    "3. 50% advance payment is required, and the remaining 50% must be paid before collecting the raw footage.\n" +
-    "4. If the event duration exceeds the agreed schedule, an additional charge of ₹3,000 per service per hour will apply.\n" +
-    "5. We expect 90% of the total payment immediately after the event is completed, and the remaining 10% before the final deliverables are handed over.\n" +
-    "6. Pen drive and hard disk are not included in the package.\n" +
-    "7. Edited photos and videos will be shared through a Google Drive link."
+    "2. Crew food arrangements from client side.\n" +
+    "3. 50% advance and remaining 50% before collecting the raw data.\n" +
+    "4. If the duration extends, ₹3,000 per service per hour additional charges are applicable.\n" +
+    "5. We expect 90% of the payment once the event is completed and the remaining 10% before the final deliverables are ready.\n" +
+    "6. Pendrive and Hard Disk are not included.\n" +
+    "7. Edited data will be shared via Google Drive link."
   );
   const [generatedPDFBlobUrl, setGeneratedPDFBlobUrl] = useState<string>('');
   const [activeQuoteNum, setActiveQuoteNum] = useState<string>('');
@@ -2616,13 +2553,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 <p className="text-[10px] text-slate-500 italic px-2 font-mono">No base package deliverables configured.</p>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/40">
-                  <table className="w-full text-left text-xs min-w-[500px]">
+                  <table className="w-full text-left text-xs min-w-[300px]">
                     <thead>
                       <tr className="bg-slate-900/80 text-slate-400 font-mono text-[10px] uppercase border-b border-slate-800">
-                        <th className="py-2.5 px-3">Deliverable Name</th>
-                        <th className="py-2.5 px-2 text-center w-20">Qty</th>
-                        <th className="py-2.5 px-2 text-right w-28">Amount (₹)</th>
-                        <th className="py-2.5 px-2 text-right w-28">Total (₹)</th>
+                        <th className="py-2.5 px-3">Service / Deliverables</th>
                         <th className="py-2.5 px-3 text-center w-20">Action</th>
                       </tr>
                     </thead>
@@ -2637,27 +2571,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                               className="w-full bg-slate-950/80 border border-slate-800 focus:border-cyan-500 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
                               placeholder="Deliverable Name..."
                             />
-                          </td>
-                          <td className="py-2 px-2 text-center">
-                            <input
-                              type="number"
-                              min={1}
-                              value={item.qty}
-                              onChange={(e) => handleEditServiceItem(item.id, { qty: Math.max(1, Number(e.target.value)) })}
-                              className="w-14 bg-slate-950/80 border border-slate-800 text-center focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-right">
-                            <input
-                              type="number"
-                              min={0}
-                              value={item.price}
-                              onChange={(e) => handleEditServiceItem(item.id, { price: Math.max(0, Number(e.target.value)) })}
-                              className="w-24 bg-slate-950/80 border border-slate-800 text-right focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-right text-slate-400 font-mono font-medium">
-                            ₹{(item.qty * item.price).toLocaleString('en-IN')}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <button
@@ -2686,13 +2599,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 <p className="text-[10px] text-slate-500 italic px-2 font-mono pb-1">No custom additional deliverables added yet.</p>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/40">
-                  <table className="w-full text-left text-xs min-w-[500px]">
+                  <table className="w-full text-left text-xs min-w-[300px]">
                     <thead>
                       <tr className="bg-slate-900/80 text-slate-400 font-mono text-[10px] uppercase border-b border-slate-800">
-                        <th className="py-2.5 px-3">Deliverable Name</th>
-                        <th className="py-2.5 px-2 text-center w-20">Qty</th>
-                        <th className="py-2.5 px-2 text-right w-28">Amount (₹)</th>
-                        <th className="py-2.5 px-2 text-right w-28">Total (₹)</th>
+                        <th className="py-2.5 px-3">Service / Deliverables</th>
                         <th className="py-2.5 px-3 text-center w-20">Action</th>
                       </tr>
                     </thead>
@@ -2707,27 +2617,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                               className="w-full bg-slate-950/80 border border-slate-800 focus:border-cyan-500 rounded px-2 py-1 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
                               placeholder="Deliverable Name..."
                             />
-                          </td>
-                          <td className="py-2 px-2 text-center">
-                            <input
-                              type="number"
-                              min={1}
-                              value={item.qty}
-                              onChange={(e) => handleEditServiceItem(item.id, { qty: Math.max(1, Number(e.target.value)) })}
-                              className="w-14 bg-slate-950/80 border border-slate-800 text-center focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-right">
-                            <input
-                              type="number"
-                              min={0}
-                              value={item.price}
-                              onChange={(e) => handleEditServiceItem(item.id, { price: Math.max(0, Number(e.target.value)) })}
-                              className="w-24 bg-slate-950/80 border border-slate-800 text-right focus:border-cyan-500 rounded px-1.5 py-1 text-xs text-slate-100 font-mono focus:outline-none"
-                            />
-                          </td>
-                          <td className="py-2 px-2 text-right text-slate-400 font-mono font-medium">
-                            ₹{(item.qty * item.price).toLocaleString('en-IN')}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <button
@@ -3121,8 +3010,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       shoot_type: lead.shoot_type || '',
       // Step 3
       selected_package_id: latestQuote?.package_id || primaryLP?.package_id || lead.Select_Package_Option || '',
-      package_cost: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : (matchedPkg ? Number(matchedPkg.price) : 0)),
-      package_price: latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : (matchedPkg ? Number(matchedPkg.price) : 0)),
+      package_cost: lead.package_price || latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : (matchedPkg ? Number(matchedPkg.price) : 0)),
+      package_price: lead.package_price || latestQuote?.package_price || (primaryLP ? Number(primaryLP.package_cost) : (matchedPkg ? Number(matchedPkg.price) : 0)),
       deliverables: latestQuote?.deliverables_description || primaryLP?.deliverables_description || matchedPkg?.deliverables || '',
       deliverables_description: latestQuote?.deliverables_description || primaryLP?.deliverables_description || matchedPkg?.deliverables || '',
       notes_special_customizations: latestQuote?.notes_special_customizations || primaryLP?.notes_special_customizations || '',
