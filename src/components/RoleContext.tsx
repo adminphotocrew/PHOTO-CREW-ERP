@@ -988,6 +988,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!checkResult.success) {
           return { success: false, error: checkResult.error };
         }
+        // Verify both columns are included in the INSERT payload
+        if (!('total_pax' in record) || !('reference_source' in record)) {
+          return {
+            success: false,
+            error: `Table Name: leads\nColumn Name: total_pax / reference_source\nMissing Mapping: Both columns must be included in the INSERT payload.\nSuggested Fix: Please include 'total_pax' and 'reference_source' in the insert payload.`
+          };
+        }
       }
       const sanitized = stripClientOnlyFields(table, record);
       if (table === 'leads') {
@@ -1089,6 +1096,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const checkResult = await verifyLeadsColumns();
         if (!checkResult.success) {
           return { success: false, error: checkResult.error };
+        }
+        // Verify both columns are included in the UPDATE payload
+        if (!('total_pax' in updates) || !('reference_source' in updates)) {
+          return {
+            success: false,
+            error: `Table Name: leads\nColumn Name: total_pax / reference_source\nMissing Mapping: Both columns must be included in the UPDATE payload.\nSuggested Fix: Please include 'total_pax' and 'reference_source' in the update payload.`
+          };
         }
       }
       const sanitized = stripClientOnlyFields(table, updates);
@@ -2995,6 +3009,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sales_person: currentUserName,
       status: 'New Lead',
       created_by: currentUserName,
+      total_pax: leadDetails.total_pax !== undefined ? Number(leadDetails.total_pax) : 0,
+      reference_source: leadDetails.reference_source || '',
     };
     
     console.log('Lead Payload', newLead);
@@ -5097,6 +5113,23 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const timestamp = new Date().toISOString();
     const finalUpdates = { ...updates };
+    
+    // Ensure total_pax and reference_source are always included in the update payload to satisfy validation
+    if (prevLead) {
+      if (!('total_pax' in finalUpdates)) {
+        finalUpdates.total_pax = prevLead.total_pax || 0;
+      }
+      if (!('reference_source' in finalUpdates)) {
+        finalUpdates.reference_source = prevLead.reference_source || '';
+      }
+    } else {
+      if (!('total_pax' in finalUpdates)) {
+        finalUpdates.total_pax = 0;
+      }
+      if (!('reference_source' in finalUpdates)) {
+        finalUpdates.reference_source = '';
+      }
+    }
     
     const oldStatus = prevLead ? (prevLead.current_status || prevLead.status || 'New Lead') : 'New Lead';
     

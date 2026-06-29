@@ -3222,6 +3222,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           city: wizardLeadData.city,
           state: wizardLeadData.state,
           pincode: wizardLeadData.pincode,
+          total_pax: wizardLeadData.total_pax !== '' && wizardLeadData.total_pax !== undefined ? Number(wizardLeadData.total_pax) : 0,
+          reference_source: wizardLeadData.reference_source || '',
           Select_Package_Option: wizardLeadData.Select_Package_Option || wizardLeadData.selected_package_id || ''
         });
         showToastMsg("CRM Updated Successfully.", "success");
@@ -3743,6 +3745,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           state: createForm.state,
           pincode: createForm.pincode,
           client_residence_address: createForm.client_residence_address,
+          total_pax: createForm.total_pax !== '' && createForm.total_pax !== undefined ? Number(createForm.total_pax) : 0,
+          reference_source: createForm.reference_source || '',
           remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
           Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
         });
