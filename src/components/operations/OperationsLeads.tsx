@@ -271,9 +271,7 @@ export const OperationsLeads: React.FC = () => {
   };
 
   const filteredOrders = useMemo(() => {
-    const baseSource = (statusFilter === 'Event Completed' || statusFilter === 'All' || statusFilter === 'Event Scheduled') 
-      ? orders 
-      : operationsOrders;
+    const baseSource = operationsOrders;
 
     return baseSource.filter(o => {
       // Search term validation (Search by Customer Name, Order ID, Mobile Number)
@@ -639,11 +637,11 @@ export const OperationsLeads: React.FC = () => {
   };
 
   const stats = useMemo(() => {
-    const totalLeads = orders.length;
+    const totalLeads = operationsOrders.length;
     
-    const scheduled = orders.filter(o => o.current_stage === 'Event Scheduled').length;
+    const scheduled = operationsOrders.filter(o => o.current_stage === 'Event Scheduled').length;
     
-    const completed = orders.filter(o => isCompletedEvent(o)).length;
+    const completed = operationsOrders.filter(o => isCompletedEvent(o)).length;
     
     const pending = operationsOrders.filter(o => 
       o.current_stage === 'Order Confirmed' || 
@@ -735,7 +733,7 @@ export const OperationsLeads: React.FC = () => {
             </h3>
           </div>
           <span className="text-[10px] font-mono text-zinc-500">
-            {orders.filter(o => o.current_stage === 'Order Confirmed' || o.current_stage === 'New Order Received').length} Pending Action
+            {operationsOrders.filter(o => o.current_stage === 'Order Confirmed' || o.current_stage === 'New Order Received').length} Pending Action
           </span>
         </div>
 
@@ -757,7 +755,7 @@ export const OperationsLeads: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-zinc-900">
               {(() => {
-                const newOrdersList = orders.filter(o => o.current_stage === 'Order Confirmed' || o.current_stage === 'New Order Received');
+                const newOrdersList = operationsOrders.filter(o => o.current_stage === 'Order Confirmed' || o.current_stage === 'New Order Received');
                 if (newOrdersList.length === 0) {
                   return (
                     <tr>

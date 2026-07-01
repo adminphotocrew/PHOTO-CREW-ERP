@@ -752,6 +752,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
       return o;
+    }).filter(o => {
+      // STOLID FIX: Ensure ONLY confirmed bookings with valid post-sales stages stay in the orders list
+      const parentLead = leads.find(l => l.lead_id === o.lead_id);
+      if (!parentLead) return true; // Keep orphaned orders just in case
+      const isBookingConfirmed = parentLead.booking_status === 'Confirmed' || o.order_status === 'Confirmed' || o.order_status === 'Completed' || o.order_status === 'Delivered' || o.order_status === 'Closed';
+      return postSalesStages.includes(parentLead.status) && isBookingConfirmed;
     });
   }, [orders, leads]);
 
