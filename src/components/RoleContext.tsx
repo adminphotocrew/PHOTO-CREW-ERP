@@ -218,6 +218,28 @@ export const mapFromDbStaffId = (uuid: string): string => {
   return uuid;
 };
 
+// Stable UUID translator mapping helpers because Supabase 'public.equipment' equipment_id is UUID
+export const mapToDbEquipmentId = (id: string): string => {
+  if (id && id.startsWith('EQ-')) {
+    const num = id.substring(3).padStart(12, '0');
+    return `66666666-6666-6666-6666-${num}`;
+  }
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return id;
+  }
+  return `66666666-6666-6666-6666-999999999999`;
+};
+
+export const mapFromDbEquipmentId = (uuid: string): string => {
+  if (uuid && uuid.startsWith('66666666-6666-6666-6666-')) {
+    const suffix = uuid.replace('66666666-6666-6666-6666-', '');
+    if (suffix === '999999999999') return 'EQ-temp';
+    const num = parseInt(suffix, 10);
+    return `EQ-${num}`;
+  }
+  return uuid;
+};
+
 export const mapUserFieldsFromDb = (u: any): any => {
   if (!u) return u;
   return {
@@ -1049,6 +1071,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (table === 'operations_staff' && sanitized.staff_id) {
         sanitized.staff_id = mapToDbStaffId(sanitized.staff_id);
       }
+      if (table === 'equipment' && sanitized.equipment_id) {
+        sanitized.equipment_id = mapToDbEquipmentId(sanitized.equipment_id);
+      }
       if (table === 'leads') {
         const anyStatus = sanitized.status || sanitized.current_status || record.status || record.current_status || 'New Lead';
         sanitized.status = anyStatus;
@@ -1152,6 +1177,14 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         if (sanitized.staff_id) {
           sanitized.staff_id = mapToDbStaffId(sanitized.staff_id);
+        }
+      }
+      if (table === 'equipment') {
+        if (matchColumn === 'equipment_id' && matchValue) {
+          finalMatchValue = mapToDbEquipmentId(matchValue);
+        }
+        if (sanitized.equipment_id) {
+          sanitized.equipment_id = mapToDbEquipmentId(sanitized.equipment_id);
         }
       }
       if (table === 'leads') {
@@ -1396,6 +1429,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalMatchValue = matchValue;
       if (table === 'operations_staff' && matchColumn === 'staff_id' && matchValue) {
         finalMatchValue = mapToDbStaffId(matchValue);
+      }
+      if (table === 'equipment' && matchColumn === 'equipment_id' && matchValue) {
+        finalMatchValue = mapToDbEquipmentId(matchValue);
       }
       // Remove from local fallback store
       const localKey = `erp_local_${table}`;
@@ -2090,8 +2126,27 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         setStaff(mappedStaff);
       }
-      if (equipRes && equipRes.data) {
-        setEquipment(equipRes.data);
+      let finalEquipment = (equipRes && equipRes.data) ? equipRes.data : [];
+      if (equipRes && equipRes.data && equipRes.data.length === 0 && INITIAL_EQUIPMENT && INITIAL_EQUIPMENT.length > 0) {
+        console.log('Equipment table is empty in database. Seeding initial equipment on-the-fly...');
+        const mappedSeed = INITIAL_EQUIPMENT.map(e => {
+          const sanitized = stripClientOnlyFields('equipment', e);
+          sanitized.equipment_id = mapToDbEquipmentId(e.equipment_id);
+          return sanitized;
+        });
+        await supabaseClient.from('equipment').upsert(mappedSeed).then(
+          () => console.log('Successfully seeded equipment.'),
+          (err) => console.warn('Failed seeding equipment:', err)
+        );
+        finalEquipment = mappedSeed;
+      }
+
+      if (finalEquipment && finalEquipment.length > 0) {
+        const mappedEquipment = finalEquipment.map((eq: any) => ({
+          ...eq,
+          equipment_id: mapFromDbEquipmentId(eq.equipment_id)
+        }));
+        setEquipment(mappedEquipment);
       }
 
       // Sync specialties and editor assignments from Supabase if they exist
@@ -2334,6 +2389,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (table === 'packages') {
                   mappedItem = mapDbRecordToPackage(item);
                 }
+                if (table === 'equipment') {
+                  mappedItem = {
+                    ...item,
+                    equipment_id: mapFromDbEquipmentId(item.equipment_id)
+                  };
+                }
                 const exists = prev.some(x => x[key] === mappedItem[key]);
                 if (exists) return prev;
                 return [mappedItem, ...prev];
@@ -2381,6 +2442,12 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 if (table === 'packages') {
                   mappedItem = mapDbRecordToPackage(item);
+                }
+                if (table === 'equipment') {
+                  mappedItem = {
+                    ...item,
+                    equipment_id: mapFromDbEquipmentId(item.equipment_id)
+                  };
                 }
                 return prev.map(x => (x[key] === mappedItem[key] ? mappedItem : x));
               });
