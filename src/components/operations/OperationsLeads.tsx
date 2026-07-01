@@ -1983,18 +1983,35 @@ export const OperationsLeads: React.FC = () => {
           const reportingTime = op?.reporting_time || '08:00';
           const specialNotes = op?.remarks || 'Please report on time with fully charged gears.';
           
+          const kits = op?.equipment_kit ? op.equipment_kit.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+          const equipmentLines = kits.map(kitName => {
+            const eq = equipment?.find(e => e.equipment_name === kitName);
+            if (eq) {
+              const codeStr = eq.equipment_id ? ` [Code: ${eq.equipment_id}]` : '';
+              const qtyStr = eq.quantity !== undefined && eq.quantity !== null && eq.quantity > 0 ? ` [Qty: ${eq.quantity}]` : '';
+              return `* ${eq.equipment_name}${codeStr}${qtyStr}`;
+            }
+            return `* ${kitName}`;
+          });
+          const assignedEquipmentList = equipmentLines.length > 0 ? equipmentLines.join('\n') : '* None assigned';
+
           const textMessage = `Event Assignment Notification
 
-Customer: ${order.customer_name}
-Order ID: ${order.order_id}
+Event ID / Order ID: ${order.order_id}
+Customer Name: ${order.customer_name}
 Event Type: ${order.event_type}
 Event Date: ${order.event_date}
-Reporting Time: ${reportingTime}
 Event Time: ${order.event_time}
-Location: ${order.event_location}
-Assigned Role: ${role}
-Package: ${order.package_name || 'Standard Pro Shoot'}
-Notes: ${specialNotes}
+Event Location: ${order.event_location}
+Reporting Time: ${reportingTime}
+Assigned Staff Name: ${name}
+Assigned Staff Role: ${role}
+
+Assigned Equipment:
+${assignedEquipmentList}
+
+Contact Number: ${order.mobile || 'N/A'}
+Special Instructions: ${specialNotes}
 
 Please report on time and update status through the portal.`;
 
@@ -2011,19 +2028,35 @@ Please report on time and update status through the portal.`;
             .map(a => `- ${a.staff_role}: ${a.staff_name}`)
             .join('\n');
             
+          const kits = op?.equipment_kit ? op.equipment_kit.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+          const equipmentLines = kits.map(kitName => {
+            const eq = equipment?.find(e => e.equipment_name === kitName);
+            if (eq) {
+              const codeStr = eq.equipment_id ? ` [Code: ${eq.equipment_id}]` : '';
+              const qtyStr = eq.quantity !== undefined && eq.quantity !== null && eq.quantity > 0 ? ` [Qty: ${eq.quantity}]` : '';
+              return `* ${eq.equipment_name}${codeStr}${qtyStr}`;
+            }
+            return `* ${kitName}`;
+          });
+          const assignedEquipmentList = equipmentLines.length > 0 ? equipmentLines.join('\n') : '* None assigned';
+
           const textMessage = `Event Assignment Notification (Complete Crew)
 
-Customer: ${order.customer_name}
-Order ID: ${order.order_id}
+Event ID / Order ID: ${order.order_id}
+Customer Name: ${order.customer_name}
 Event Type: ${order.event_type}
 Event Date: ${order.event_date}
-Reporting Time: ${reportingTime}
 Event Time: ${order.event_time}
-Location: ${order.event_location}
+Event Location: ${order.event_location}
+Reporting Time: ${reportingTime}
 Crew Lineup:
 ${crewSummary}
-Package: ${order.package_name || 'Standard Pro Shoot'}
-Notes: ${specialNotes}
+
+Assigned Equipment:
+${assignedEquipmentList}
+
+Contact Number: ${order.mobile || 'N/A'}
+Special Instructions: ${specialNotes}
 
 Please report on time and update status through the portal.`;
 
