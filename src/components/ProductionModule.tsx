@@ -1742,14 +1742,31 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
 
                         const op = operations?.find(o => o.order_id === order.order_id);
                         const matchedSa = staffAssignments ? staffAssignments.filter(sa => sa.order_id === order.order_id) : [];
-                        const assignedTeamList = [
-                          op?.photographer_assigned,
-                          op?.videographer_assigned,
-                          op?.drone_operator_assigned,
-                          op?.assistant_assigned,
-                          ...matchedSa.map(a => a.staff_name)
-                        ].filter(Boolean);
-                        const assignedTeamText = assignedTeamList.length > 0 ? Array.from(new Set(assignedTeamList)).join(', ') : 'No Team Assigned';
+
+                        const roleMap: Record<string, string[]> = {};
+                        const addStaff = (role: string, name: string | null | undefined) => {
+                          if (!name || name.trim() === '' || name.toLowerCase() === 'unassigned' || name.toLowerCase() === 'none') return;
+                          if (!roleMap[role]) {
+                            roleMap[role] = [];
+                          }
+                          if (!roleMap[role].includes(name.trim())) {
+                            roleMap[role].push(name.trim());
+                          }
+                        };
+
+                        if (op) {
+                          addStaff('Photographer', op.photographer_assigned);
+                          addStaff('Videographer', op.videographer_assigned);
+                          addStaff('Drone Operator', op.drone_operator_assigned);
+                          addStaff('Assistant', op.assistant_assigned);
+                        }
+
+                        matchedSa.forEach(sa => {
+                          if (sa.assignment_status !== 'Cancelled') {
+                            const role = sa.staff_role || 'Staff';
+                            addStaff(role, sa.staff_name);
+                          }
+                        });
 
                         const prodStatus = getProductionStatus(prod);
 
@@ -1759,21 +1776,62 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             <td className="p-3 font-sans font-bold text-white">{order.customer_name}</td>
                             <td className="p-3 text-zinc-300 font-sans">{order.event_type === 'Other' ? (order.custom_event_name || order.custom_event_type || 'Other') : order.event_type}</td>
                             <td className="p-3 text-zinc-400">{order.event_date || 'N/A'}</td>
-                            <td className="p-3 font-sans text-zinc-350">{assignedTeamText}</td>
-                            <td className="p-3">
-                              {rf?.server_path ? (
-                                <a
-                                  href={rf.server_path}
-                                  target="_blank"
-                                  referrerPolicy="no-referrer"
-                                  className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[200px] break-words"
-                                  title={rf.server_path}
-                                >
-                                  <span>🔗</span> Open Drive Link
-                                </a>
+                            <td className="p-3 font-sans text-zinc-330">
+                              {Object.keys(roleMap).length > 0 ? (
+                                <div className="space-y-1.5 text-left">
+                                  {Object.entries(roleMap).map(([role, names]) => (
+                                    <div key={role} className="text-[10.5px]">
+                                      <span className="font-bold text-zinc-400 block">{role}:</span>
+                                      <ul className="list-disc pl-4 space-y-0.5 text-white font-medium">
+                                        {names.map(name => (
+                                          <li key={name}>{name}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
                               ) : (
-                                <span className="text-zinc-650 italic">No link</span>
+                                <span className="text-zinc-650 italic">No Team Assigned</span>
                               )}
+                            </td>
+                            <td className="p-3">
+                              {(() => {
+                                const serverPath = rf?.server_path || '';
+                                const isDriveLinkAvailable = serverPath.trim() !== '' && (serverPath.startsWith('http://') || serverPath.startsWith('https://'));
+
+                                if (isDriveLinkAvailable) {
+                                  return (
+                                    <a
+                                      href={serverPath}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      referrerPolicy="no-referrer"
+                                      className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[200px] break-words"
+                                      title={serverPath}
+                                    >
+                                      <span>🔗</span> Open Drive Link
+                                    </a>
+                                  );
+                                }
+
+                                const uploadNotes = rf?.upload_notes || '';
+                                const hasHardDisk = uploadNotes.includes('Hard Disk Received: YES');
+                                const hasMemoryCard = uploadNotes.includes('Memory Card Received: YES');
+
+                                if (hasHardDisk && hasMemoryCard) {
+                                  return <span className="text-zinc-300 font-medium">Hard Disk & Memory Card Received</span>;
+                                } else if (hasHardDisk) {
+                                  return <span className="text-zinc-300 font-medium">Hard Disk Received</span>;
+                                } else if (hasMemoryCard) {
+                                  return <span className="text-zinc-300 font-medium">Memory Card Received</span>;
+                                }
+
+                                if (rf?.raw_received) {
+                                  return <span className="text-zinc-300 font-medium">Physical Media Received</span>;
+                                }
+
+                                return <span className="text-zinc-650 italic">No link</span>;
+                              })()}
                             </td>
                             <td className="p-3">
                               <StatusText status={prodStatus} />
@@ -1969,22 +2027,46 @@ _Please access the PhotoCrew ERP Dashboard to synchronize progress._`;
                             {order.event_date || 'N/A'}
                           </td>
 
-                          {/* Raw Footage Link */}
-                          <td className="p-4 text-left font-sans">
-                            {rf?.server_path ? (
-                              <a
-                                href={rf.server_path}
-                                target="_blank"
-                                referrerPolicy="no-referrer"
-                                className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[150px] break-words"
-                                title={rf.server_path}
-                              >
-                                <span>🔗</span> Open Drive
-                              </a>
-                            ) : (
-                              <span className="text-zinc-650 italic">No link</span>
-                            )}
-                          </td>
+                           {/* Raw Footage Link */}
+                           <td className="p-4 text-left font-sans">
+                             {(() => {
+                               const serverPath = rf?.server_path || '';
+                               const isDriveLinkAvailable = serverPath.trim() !== '' && (serverPath.startsWith('http://') || serverPath.startsWith('https://'));
+
+                               if (isDriveLinkAvailable) {
+                                 return (
+                                   <a
+                                     href={serverPath}
+                                     target="_blank"
+                                     rel="noopener noreferrer"
+                                     referrerPolicy="no-referrer"
+                                     className="text-purple-400 hover:text-purple-300 underline font-semibold flex items-center gap-1.5 cursor-pointer max-w-[150px] break-words"
+                                     title={serverPath}
+                                   >
+                                     <span>🔗</span> Open Drive Link
+                                   </a>
+                                 );
+                               }
+
+                               const uploadNotes = rf?.upload_notes || '';
+                               const hasHardDisk = uploadNotes.includes('Hard Disk Received: YES');
+                               const hasMemoryCard = uploadNotes.includes('Memory Card Received: YES');
+
+                               if (hasHardDisk && hasMemoryCard) {
+                                 return <span className="text-zinc-300 font-medium">Hard Disk & Memory Card Received</span>;
+                               } else if (hasHardDisk) {
+                                 return <span className="text-zinc-300 font-medium">Hard Disk Received</span>;
+                               } else if (hasMemoryCard) {
+                                 return <span className="text-zinc-300 font-medium">Memory Card Received</span>;
+                               }
+
+                               if (rf?.raw_received) {
+                                 return <span className="text-zinc-300 font-medium">Physical Media Received</span>;
+                               }
+
+                               return <span className="text-zinc-650 italic">No link</span>;
+                             })()}
+                           </td>
 
                           {/* Editor Assigned */}
                           <td className="p-4 text-left font-sans">
