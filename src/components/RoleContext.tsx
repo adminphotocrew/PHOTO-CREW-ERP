@@ -196,6 +196,28 @@ export const mapFromDbUserId = (uuid: string): string => {
   return uuid;
 };
 
+// Stable UUID translator mapping helpers because Supabase 'public.operations_staff' staff_id is UUID
+export const mapToDbStaffId = (id: string): string => {
+  if (id && id.startsWith('STF-')) {
+    const num = id.substring(4).padStart(12, '0');
+    return `55555555-5555-5555-5555-${num}`;
+  }
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return id;
+  }
+  return `55555555-5555-5555-5555-999999999999`;
+};
+
+export const mapFromDbStaffId = (uuid: string): string => {
+  if (uuid && uuid.startsWith('55555555-5555-5555-5555-')) {
+    const suffix = uuid.replace('55555555-5555-5555-5555-', '');
+    if (suffix === '999999999999') return 'STF-temp';
+    const num = parseInt(suffix, 10);
+    return `STF-${String(num).padStart(3, '0')}`;
+  }
+  return uuid;
+};
+
 export const mapUserFieldsFromDb = (u: any): any => {
   if (!u) return u;
   return {
@@ -895,7 +917,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'order_id', 'lead_id', 'customer_name', 'mobile', 'event_type', 'custom_event_type', 'custom_event_name', 'shoot_type', 'event_date', 
         'event_time', 'event_location', 'package_name', 'quotation_amount', 'advance_received', 
         'balance_amount', 'order_status', 'current_stage', 'sales_person', 'created_at', 
-        'updated_by', 'updated_at', 'whatsapp_number', 'address', 'client_residence_address', 'city', 'state', 'pincode', 'Select_Package_Option', 
+        'updated_by', 'updated_at', 'whatsapp_number', 'client_residence_address', 'city', 'state', 'pincode', 'Select_Package_Option', 
         'desired_event_shoot_type', 'reporting_time', 'package_price', 'deliverables_description', 
         'notes_special_customizations', 'quotation_discount', 'additional_services_cost',
         'total_pax', 'reference_source', 'lead_value', 'lead_score', 'booking_status'
@@ -910,7 +932,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'tax_amount', 'final_amount', 'quotation_status', 'valid_until', 'terms_conditions', 
         'package_name', 'package_price', 'deliverables_description', 
         'notes_special_customizations', 'additional_services_cost', 
-        'whatsapp_number', 'address', 'shoot_type', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 'Select_Package_Option',
+        'whatsapp_number', 'shoot_type', 'client_residence_address', 'city', 'state', 'pincode', 'desired_event_shoot_type', 'Select_Package_Option',
         'quotation_discount', 'total_pax', 'reference_source', 'lead_value', 'lead_score', 'booking_status',
         'created_at', 'created_by', 'updated_at'
       ],
@@ -1005,6 +1027,9 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       const sanitized = stripClientOnlyFields(table, record);
+      if (table === 'operations_staff' && sanitized.staff_id) {
+        sanitized.staff_id = mapToDbStaffId(sanitized.staff_id);
+      }
       if (table === 'leads') {
         const anyStatus = sanitized.status || sanitized.current_status || record.status || record.current_status || 'New Lead';
         sanitized.status = anyStatus;
@@ -1101,6 +1126,15 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabaseClient) return { success: true };
     try {
       const sanitized = stripClientOnlyFields(table, updates);
+      let finalMatchValue = matchValue;
+      if (table === 'operations_staff') {
+        if (matchColumn === 'staff_id' && matchValue) {
+          finalMatchValue = mapToDbStaffId(matchValue);
+        }
+        if (sanitized.staff_id) {
+          sanitized.staff_id = mapToDbStaffId(sanitized.staff_id);
+        }
+      }
       if (table === 'leads') {
         const leadId = matchColumn === 'lead_id' ? matchValue : null;
         const prevLead = leads.find(l => l.lead_id === leadId);
@@ -1160,7 +1194,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const response = await fetch('/api/db/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table, matchColumn, matchValue, updates: sanitized })
+          body: JSON.stringify({ table, matchColumn, matchValue: finalMatchValue, updates: sanitized })
         });
         if (response.ok) {
           const resJson = await response.json();
@@ -1169,7 +1203,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updateDiagnosticMetric('update', 'ok');
 
             if (table === 'leads') {
-              const leadId = matchValue;
+              const leadId = finalMatchValue;
               const prevLead = leads.find(l => l.lead_id === leadId);
               const oldStatus = prevLead ? (prevLead.current_status || prevLead.status || 'New Lead') : 'New Lead';
               const anyStatus = sanitized.status || sanitized.current_status || updates.status || updates.current_status;
@@ -1206,7 +1240,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn(`[pushUpdate Proxy ERROR] failed to reach server for ${table}, falling back...`, proxyErr);
       }
 
-      let { error, data } = await supabaseClient.from(table).update(sanitized).eq(matchColumn, matchValue).select();
+      let { error, data } = await supabaseClient.from(table).update(sanitized).eq(matchColumn, finalMatchValue).select();
       
       // Automatic unified fallback for database check constraints or value exceptions
       if (error && (
@@ -1340,6 +1374,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const pushDelete = async (table: string, matchColumn: string, matchValue: any): Promise<{ success: boolean; error?: string }> => {
     if (!supabaseClient) return { success: true };
     try {
+      let finalMatchValue = matchValue;
+      if (table === 'operations_staff' && matchColumn === 'staff_id' && matchValue) {
+        finalMatchValue = mapToDbStaffId(matchValue);
+      }
       // Remove from local fallback store
       const localKey = `erp_local_${table}`;
       const existingLocalStr = localStorage.getItem(localKey);
@@ -1356,7 +1394,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const response = await fetch('/api/db/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table, matchColumn, matchValue })
+          body: JSON.stringify({ table, matchColumn, matchValue: finalMatchValue })
         });
         if (response.ok) {
           const resJson = await response.json();
@@ -1375,7 +1413,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn(`[pushDelete Proxy ERROR] failed to reach server for ${table}, falling back...`, proxyErr);
       }
 
-      const { error } = await supabaseClient.from(table).delete().eq(matchColumn, matchValue);
+      const { error } = await supabaseClient.from(table).delete().eq(matchColumn, finalMatchValue);
       if (error) {
         if (['activity_logs', 'notifications', 'analytics_snapshots'].includes(table)) {
           return { success: true };
@@ -2001,7 +2039,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         ];
         
-        await supabaseClient.from('operations_staff').upsert(initialStaffSeed).then(
+        const mappedSeed = initialStaffSeed.map(s => ({ ...s, staff_id: mapToDbStaffId(s.staff_id) }));
+        await supabaseClient.from('operations_staff').upsert(mappedSeed).then(
           () => console.log('Successfully seeded operations_staff.'),
           (err) => console.warn('Failed seeding operations_staff:', err)
         );
@@ -2021,6 +2060,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return {
             ...st,
             ...extra,
+            staff_id: mapFromDbStaffId(st.staff_id),
             notes: (st.notes && st.notes.trim().startsWith('{') && st.notes.trim().endsWith('}')) ? (extra.notes || '') : st.notes
           };
         });
@@ -2263,6 +2303,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   mappedItem = {
                     ...item,
                     ...extra,
+                    staff_id: mapFromDbStaffId(item.staff_id),
                     notes: (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) ? (extra.notes || '') : item.notes
                   };
                 }
@@ -2310,6 +2351,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   mappedItem = {
                     ...item,
                     ...extra,
+                    staff_id: mapFromDbStaffId(item.staff_id),
                     notes: (item.notes && item.notes.trim().startsWith('{') && item.notes.trim().endsWith('}')) ? (extra.notes || '') : item.notes
                   };
                 }
