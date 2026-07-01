@@ -1668,6 +1668,49 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       lead_score: '',
       booking_status: '',
     });
+    setWizardLeadData({
+      customer_name: '',
+      mobile: '',
+      whatsapp_number: '',
+      email: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      client_residence_address: '',
+      desired_event_shoot_type: '',
+      event_type: '',
+      custom_event_name: '',
+      event_date: '',
+      event_time: '',
+      reporting_time: '',
+      event_location: '',
+      lead_source: '',
+      shoot_type: '',
+      selected_package_id: '',
+      package_cost: 0,
+      deliverables: '',
+      notes: '',
+      budget: 0,
+      final_quoted_amount: 0,
+      remarks: '',
+      next_follow_up_date: '',
+      status: '' as CurrentStage,
+      confirmed_event_date: '',
+      confirmed_event_time: '',
+      final_amount: 0,
+      advance_received: 0,
+      package_price: 0,
+      deliverables_description: '',
+      notes_special_customizations: '',
+      quotation_discount: 0,
+      additional_services_cost: 0,
+      total_pax: 0,
+      reference_source: '',
+      lead_value: 0,
+      lead_score: 0,
+      booking_status: 'Pending',
+    });
     setOtherSource('');
     setSelectedPkgIds([]);
     setLeadDiscount('');
@@ -1675,6 +1718,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     
     // Reset wizard fields
     setWizardStep(1);
+    setCrmWizardStep(1);
     setCreatedLeadId(null);
     setPkgPrices({});
     setPkgDeliverables({});
@@ -7530,17 +7574,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             onChange={(e) => setWizardLeadData({ ...wizardLeadData, total_pax: parseInt(e.target.value) || 0 })}
                             className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
                             placeholder="e.g. 500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider font-mono">Reference Source</label>
-                          <input
-                            type="text"
-                            value={wizardLeadData.reference_source || ''}
-                            disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, reference_source: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white"
-                            placeholder="e.g. Instagram, Friend name..."
                           />
                         </div>
                       </div>
