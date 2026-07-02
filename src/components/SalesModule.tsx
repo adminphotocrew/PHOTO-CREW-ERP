@@ -2579,7 +2579,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     }
   };
 
-  const handleSendWhatsAppQuote = async (isEdit: boolean) => {
+  const handleSendWhatsAppQuote = (isEdit: boolean) => {
     try {
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
@@ -2597,65 +2597,22 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       const pkgNames = activePkgs.map(p => p.package_name).join(' + ') || 'Selected Package';
       const phone = leadObj.whatsapp_number || leadObj.mobile || '';
       
-      const message = `*PHOTOCREW PICTURES* 📸\n\n` +
-        `Hi *${leadObj.customer_name || 'Client'}*,\n` +
-        `Thank you for choosing Photocrew Pictures! We have generated your custom quote *${quotNum}* for your upcoming *${leadObj.event_type || 'Event'}* shoot.\n\n` +
-        `*Quote Details:*\n` +
-        `• Selected Package: ${pkgNames}\n` +
+      const message = `*Quotation Details*\n\n` +
+        `Hello *${leadObj.customer_name || 'Client'}*,\n\n` +
+        `Thank you for choosing us. Please find your quotation details below:\n\n` +
+        `• Quotation No: ${quotNum}\n` +
+        `• Event: ${leadObj.event_type || 'Event'}\n` +
+        `• Event Date: ${leadObj.event_date || 'N/A'}\n` +
+        `• Package: ${pkgNames}\n` +
         `• Package Amount: ₹${basePkgSum.toLocaleString('en-IN')}\n` +
-        `• Discount Applied: ₹${quoteDiscount.toLocaleString('en-IN')}\n` +
-        `• Additional Services: ₹${quoteAdditional.toLocaleString('en-IN')}\n` +
-        `• *Final Quotation Amount: ₹${finalAmt.toLocaleString('en-IN')}*\n\n` +
-        `Kindly review the quotation details. Feel free to contact us for any edits/adjustments!\n\n` +
-        `Warm Regards,\n` +
-        `*Photocrew Sales Team*`;
+        `• Discount: ₹${quoteDiscount.toLocaleString('en-IN')}\n` +
+        `• Additional Charges: ₹${quoteAdditional.toLocaleString('en-IN')}\n` +
+        `• Final Amount: ₹${finalAmt.toLocaleString('en-IN')}\n\n` +
+        `Please let us know if you have any questions. Thank you!`;
 
-      let currentLogo = logoBase64;
-      let currentAspect = logoAspectRatio;
-      try {
-        const logoUrl = 'https://aqifyxsimhqayfjwzzwj.supabase.co/storage/v1/object/public/img/logo.png';
-        const result = await getLogoBase64FromUrl(logoUrl);
-        currentLogo = result.base64;
-        currentAspect = result.aspect;
-      } catch (e) {
-        console.warn("Failed to wait-load logo for download, using preloaded:", e);
-      }
-
-      const doc = generateQuotationPDF(
-        leadObj,
-        activePkgs,
-        quotNum,
-        quotationTerms,
-        currentLogo,
-        currentAspect,
-        editableInclusions,
-        editableDeliverables,
-        quoteDiscount,
-        quoteAdditional,
-        quoteServices
-      );
-      
-      const pdfBlob = doc.output('blob');
-      const file = new File([pdfBlob], `Quotation_${quotNum}.pdf`, { type: 'application/pdf' });
-      
       const cleanPhone = phone.replace(/[^0-9]/g, '');
       const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: `Quotation ${quotNum}`,
-            text: message,
-          });
-          return;
-        } catch (e) {
-          console.error("Share failed", e);
-        }
-      }
-
-      // Fallback
-      doc.save(`Quotation_${quotNum}.pdf`);
       window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
     } catch (err) {
       console.error("WhatsApp quote failed:", err);
