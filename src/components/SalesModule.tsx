@@ -3699,7 +3699,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     return result;
   };
 
-  const handleSaveEventForm = (isCrm: boolean = !!selectedLead) => {
+  const handleSaveEventForm = (isCrm: boolean = !!selectedLead, addAnother: boolean = false) => {
     if (!eventForm.event_type) {
       showToastMsg("Event Type is required.", "error");
       return;
@@ -3732,6 +3732,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       event_end_date: eventForm.event_date
     };
 
+    const savedEventType = eventForm.event_type;
+
     if (isCrm) {
       if (editingEventId) {
         setCrmEvents(prev => prev.map(ev => ev.id === editingEventId ? { ...eventData, id: editingEventId } : ev));
@@ -3759,7 +3761,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     }
 
     setEditingEventId(null);
-    setShowEventForm(false);
+
+    if (addAnother) {
+      setEventForm({
+        event_type: savedEventType,
+        event_name: '',
+        event_shoot_type: 'Photography',
+        event_date: '',
+        event_start_time: '',
+        event_end_time: '',
+        event_location: '',
+        google_maps_link: '',
+        guest_pax: 100,
+        staff_pax: 2,
+        event_start_date: '',
+        event_end_date: ''
+      });
+      setShowEventForm(true);
+    } else {
+      setShowEventForm(false);
+    }
   };
 
   const handleEditEvent = (ev: LeadEvent) => {
@@ -3792,8 +3813,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   const handleAddNewEventClick = (isCrm: boolean = !!selectedLead) => {
     setEditingEventId(null);
+    const list = isCrm ? crmEvents : createEvents;
+    const lastEventType = list.length > 0 ? list[list.length - 1].event_type : '';
     setEventForm({
-      event_type: '',
+      event_type: lastEventType || '',
       event_name: '',
       event_shoot_type: 'Photography',
       event_date: '',
@@ -3811,6 +3834,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   const renderEventDetailsSection = (isCrm: boolean) => {
     const eventsList = isCrm ? crmEvents : createEvents;
+    const isFormVisible = showEventForm || eventsList.length === 0;
 
     return (
       <div className="space-y-4">
@@ -3928,7 +3952,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         )}
 
         {/* Inline Event Form */}
-        {showEventForm ? (
+        {isFormVisible ? (
           <div className="bg-slate-900/60 border border-slate-850 rounded-xl p-4 space-y-4 animate-fade-in text-left">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <span className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
@@ -4113,8 +4137,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                     />
                   </div>
 
-                  {/* Save Event Button */}
-                  <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
+                  {/* Save Event Buttons */}
+                  <div className="sm:col-span-2 flex flex-wrap justify-end gap-2 pt-2">
                     {eventsList.length > 0 && (
                       <button
                         type="button"
@@ -4127,13 +4151,32 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         Cancel
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleSaveEventForm(isCrm)}
-                      className="bg-cyan-600 hover:bg-cyan-500 text-slate-100 font-bold px-4 py-2 rounded-lg text-xs transition-colors shadow-sm"
-                    >
-                      {editingEventId ? 'Update Event' : 'Save & Add Event'}
-                    </button>
+                    {editingEventId ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEventForm(isCrm, false)}
+                        className="bg-cyan-600 hover:bg-cyan-500 text-slate-100 font-bold px-4 py-2 rounded-lg text-xs transition-colors shadow-sm"
+                      >
+                        Update Event
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEventForm(isCrm, false)}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold px-4 py-2 rounded-lg text-xs transition-colors shadow-sm"
+                        >
+                          Save Event
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEventForm(isCrm, true)}
+                          className="bg-cyan-600 hover:bg-cyan-500 text-slate-100 font-bold px-4 py-2 rounded-lg text-xs transition-colors shadow-sm"
+                        >
+                          Save & Add Another Event
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
