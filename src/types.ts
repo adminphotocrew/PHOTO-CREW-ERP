@@ -130,6 +130,7 @@ export interface Lead {
   lead_id: string;
   customer_id?: string;
   created_date: string;
+  created_at?: string;
   lead_source: string;
   customer_name: string;
   mobile: string;

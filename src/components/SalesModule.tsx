@@ -2581,42 +2581,66 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
   const handleSendWhatsAppQuote = (isEdit: boolean) => {
     try {
+      console.log(`[handleSendWhatsAppQuote] Starting for isEdit=${isEdit}`);
       const leadObj = getLeadInfoForQuote(isEdit);
       const activePkgs = getSelectedPkgsInfo(isEdit);
 
       const missingFields = validateLeadForQuotation(leadObj, activePkgs);
       if (missingFields.length > 0) {
+        console.warn(`[handleSendWhatsAppQuote] Missing fields for quotation:`, missingFields);
         showToastMsg(`Quotation Incomplete! Please enter the following fields: ${missingFields.join(', ')}`, "error");
         return;
       }
+
+      const phone = leadObj.whatsapp_number || leadObj.mobile || '';
+      if (!phone || phone.trim() === '') {
+         console.error("[handleSendWhatsAppQuote] Validation failed: WhatsApp/Mobile number is missing.");
+         showToastMsg("Client's mobile number is missing. Please provide a valid phone number.", "error");
+         return;
+      }
+
+      // Check format and extract digits
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone.length < 10) {
+         console.error(`[handleSendWhatsAppQuote] Validation failed: Phone number is too short (${phone}) -> digits only: ${cleanPhone}`);
+         showToastMsg("Phone number is invalid. It must contain at least 10 digits.", "error");
+         return;
+      }
+
+      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
       const basePkgSum = dynamicBaseSum;
       const finalAmt = dynamicFinalAmt;
       const quotNum = activeQuoteNum || `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       
       const pkgNames = activePkgs.map(p => p.package_name).join(' + ') || 'Selected Package';
-      const phone = leadObj.whatsapp_number || leadObj.mobile || '';
       
       const message = `*Quotation Details*\n\n` +
         `Hello *${leadObj.customer_name || 'Client'}*,\n\n` +
         `Thank you for choosing us. Please find your quotation details below:\n\n` +
         `• Quotation No: ${quotNum}\n` +
-        `• Event: ${leadObj.event_type || 'Event'}\n` +
+        `• Event Type: ${leadObj.event_type || 'Event'}\n` +
         `• Event Date: ${leadObj.event_date || 'N/A'}\n` +
-        `• Package: ${pkgNames}\n` +
+        `• Package Name: ${pkgNames}\n` +
         `• Package Amount: ₹${basePkgSum.toLocaleString('en-IN')}\n` +
         `• Discount: ₹${quoteDiscount.toLocaleString('en-IN')}\n` +
         `• Additional Charges: ₹${quoteAdditional.toLocaleString('en-IN')}\n` +
-        `• Final Amount: ₹${finalAmt.toLocaleString('en-IN')}\n\n` +
+        `• Final Quotation Amount: ₹${finalAmt.toLocaleString('en-IN')}\n\n` +
         `Please let us know if you have any questions. Thank you!`;
 
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-
-      window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
-    } catch (err) {
-      console.error("WhatsApp quote failed:", err);
-      alert("Failed to send WhatsApp quote.");
+      console.log(`[handleSendWhatsAppQuote] Generating WhatsApp link for ${formattedPhone}...`);
+      const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+      
+      const windowRef = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      if (windowRef) {
+         console.log(`[handleSendWhatsAppQuote] Successfully opened WhatsApp for ${formattedPhone}`);
+      } else {
+         console.error(`[handleSendWhatsAppQuote] Failed to open WhatsApp window (Popup blocker might be active). URL: ${whatsappUrl}`);
+         showToastMsg("Failed to open WhatsApp. Please check if pop-ups are blocked by your browser.", "error");
+      }
+    } catch (err: any) {
+      console.error("[handleSendWhatsAppQuote] Unexpected error occurred:", err);
+      showToastMsg(`Failed to send WhatsApp quote: ${err.message || 'Unknown error'}`, "error");
     }
   };
 
@@ -3198,7 +3222,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       budget: latestQuote?.quotation_amount || lead.budget || 0,
       final_quoted_amount: latestQuote?.final_amount || (primaryLP ? Number(primaryLP.final_amount) : 0),
       remarks: lead.remarks || '',
-      next_follow_up_date: lead.updated_at ? lead.updated_at.split('T')[0] : new Date().toISOString().split('T')[0],
+      next_follow_up_date: '',
       // Step 5
       status: lead.status || 'New Lead',
       // Order Confirmed Rule fields
@@ -3410,7 +3434,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
             selectedLead.lead_id,
             wizardLeadData.status,
             wizardLeadData.remarks || 'Status updated from CRM Multi-step Desk',
-            wizardLeadData.next_follow_up_date || new Date().toISOString().split('T')[0],
+            wizardLeadData.next_follow_up_date || '',
             Number(wizardLeadData.final_quoted_amount || wizardLeadData.budget),
             wizardLeadData.remarks
           );
@@ -4191,7 +4215,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         selectedLead.lead_id,
         followUpForm.status,
         followUpForm.call_notes,
-        followUpForm.next_follow_up_date || new Date().toISOString().split('T')[0],
+        followUpForm.next_follow_up_date || '',
         Number(followUpForm.quotation_amount),
         followUpForm.negotiation_notes
       );
@@ -4394,7 +4418,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     }
 
     return matchesSearch && matchesSource && matchesStatus && matchesSales && matchesDate && matchesDateRange;
-  }).sort((a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime());
+  }).sort((a, b) => {
+    const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.updated_at ? new Date(b.updated_at).getTime() : new Date(b.created_date).getTime());
+    const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.updated_at ? new Date(a.updated_at).getTime() : new Date(a.created_date).getTime());
+    return timeB - timeA;
+  });
 
   return (
     <div id="sales_module" className="space-y-6">

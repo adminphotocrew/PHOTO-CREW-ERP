@@ -1699,7 +1699,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         leadEquipmentHistoryRes
       ] = await Promise.all([
         supabaseClient.from('users').select('*'),
-        supabaseClient.from('leads').select('*').order('created_date', { ascending: false }),
+        supabaseClient.from('leads').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('orders').select('*').order('created_at', { ascending: false }),
         dbOperationsPromise,
         dbRawFootagePromise,
@@ -2930,6 +2930,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: leadDetails.email || '',
       lead_id: leadId,
       created_date: new Date().toISOString().split('T')[0],
+      updated_at: new Date().toISOString(),
       sales_person: currentUserName,
       status: 'New Lead',
       created_by: currentUserName,
