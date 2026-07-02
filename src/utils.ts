@@ -363,3 +363,38 @@ export function normalizeCategory(cat: string): string {
   return trimmed;
 }
 
+import { LeadEvent } from './types';
+
+/**
+ * Serializes LeadEvent array to append to text notes
+ */
+export function serializeLeadEvents(events: LeadEvent[], textNotes: string = ''): string {
+  const marker = '\n\n---EVENTS_JSON---';
+  let cleanNotes = textNotes || '';
+  if (cleanNotes.includes('---EVENTS_JSON---')) {
+    cleanNotes = cleanNotes.split('---EVENTS_JSON---')[0].trim();
+  }
+  return cleanNotes + marker + JSON.stringify(events);
+}
+
+/**
+ * Deserializes LeadEvent array from text notes
+ */
+export function deserializeLeadEvents(textNotes: string | undefined): { events: LeadEvent[], notes: string } {
+  if (!textNotes) return { events: [], notes: '' };
+  if (!textNotes.includes('---EVENTS_JSON---')) {
+    return { events: [], notes: textNotes };
+  }
+  const parts = textNotes.split('---EVENTS_JSON---');
+  const notes = parts[0].trim();
+  try {
+    const events = JSON.parse(parts[1].trim());
+    if (Array.isArray(events)) {
+      return { events, notes };
+    }
+  } catch (e) {
+    console.warn("Failed to parse serialized lead events:", e);
+  }
+  return { events: [], notes: textNotes };
+}
+

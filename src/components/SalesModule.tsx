@@ -5,7 +5,7 @@ import { supabaseClient } from '../supabaseClient';
 import { 
   Plus, Edit, CheckSquare, Search, Filter, Ban, X, Phone, Mail, MapPin, Calendar, DollarSign, Clock, Users, ArrowRight, ChevronDown, Check, Package, Trash2
 } from 'lucide-react';
-import { Lead, CurrentStage, LeadPackage, EVENT_TYPES, PACKAGE_CATEGORIES } from '../types';
+import { Lead, CurrentStage, LeadPackage, EVENT_TYPES, PACKAGE_CATEGORIES, LeadEvent } from '../types';
 import { StatusText } from './ui/StatusText';
 import { CameraLensStatsCard, CameraLensTheme } from './CameraLensStatsCard';
 import { formatINR, formatIndianPhoneNumber, validateIndianMobile, formatTime12Hour, getCustomers, triggerAutoScrollAndFocus, normalizeCategory } from '../utils';
@@ -1615,9 +1615,22 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     Select_Package_Option: '',
     total_pax: '',
     reference_source: '',
-    lead_value: '',
     lead_score: '',
     booking_status: '',
+  });
+
+  const [createEvents, setCreateEvents] = useState<LeadEvent[]>([]);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [eventForm, setEventForm] = useState<Omit<LeadEvent, 'id'>>({
+    event_name: '',
+    event_date: '',
+    event_start_date: '',
+    event_end_date: '',
+    event_location: '',
+    event_shoot_type: 'Photography',
+    guest_pax: 100,
+    staff_pax: 2
   });
 
   const [wizardStep, setWizardStep] = useState(1);
@@ -1669,6 +1682,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       lead_score: '',
       booking_status: '',
     });
+    setCreateEvents([]);
     setWizardLeadData({
       customer_name: '',
       mobile: '',
@@ -3268,8 +3282,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           setIsSaving(false);
           return;
         }
-        if (!validateIndianMobile(wizardLeadData.mobile)) {
-          showToastMsg("Please enter a valid Indian mobile number (10 digits starting with 6-9).", "error");
+        const mobileVal = (wizardLeadData.mobile || '').trim();
+        if (!/^\d{10}$/.test(mobileVal)) {
+          showToastMsg("Please enter a valid 10-digit mobile number.", "error");
           setIsSaving(false);
           return;
         }
@@ -3580,6 +3595,67 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
     return result;
   };
 
+  const handleSaveEventForm = () => {
+    if (!eventForm.event_name.trim()) {
+      showToastMsg("Event Name is required.", "error");
+      return;
+    }
+    if (!eventForm.event_date) {
+      showToastMsg("Date is required.", "error");
+      return;
+    }
+
+    if (editingEventId) {
+      setCreateEvents(prev => prev.map(ev => ev.id === editingEventId ? { ...eventForm, id: editingEventId } : ev));
+      showToastMsg("Event updated in list.", "success");
+    } else {
+      const newEv: LeadEvent = {
+        ...eventForm,
+        id: `EV-${Math.floor(1000 + Math.random() * 9000)}`
+      };
+      setCreateEvents(prev => [...prev, newEv]);
+      showToastMsg("Event added to list.", "success");
+    }
+
+    setEditingEventId(null);
+    setShowEventForm(false);
+  };
+
+  const handleEditEvent = (ev: LeadEvent) => {
+    setEditingEventId(ev.id);
+    setEventForm({
+      event_name: ev.event_name,
+      event_date: ev.event_date,
+      event_start_date: ev.event_start_date || ev.event_date,
+      event_end_date: ev.event_end_date || ev.event_date,
+      event_location: ev.event_location,
+      event_shoot_type: ev.event_shoot_type,
+      guest_pax: ev.guest_pax,
+      staff_pax: ev.staff_pax
+    });
+    setShowEventForm(true);
+  };
+
+  const handleDeleteEvent = (id: string) => {
+    setCreateEvents(prev => prev.filter(ev => ev.id !== id));
+    showToastMsg("Event removed from list.", "success");
+  };
+
+  const handleAddNewEventClick = () => {
+    setEditingEventId(null);
+    setEventForm({
+      event_name: '',
+      event_date: createForm.event_date || new Date().toISOString().split('T')[0],
+      event_start_date: createForm.event_date || new Date().toISOString().split('T')[0],
+      event_end_date: createForm.event_date || new Date().toISOString().split('T')[0],
+      event_location: createForm.event_location || '',
+      event_shoot_type: createForm.desired_event_shoot_type || 'Photography',
+      guest_pax: createForm.total_pax !== '' ? Number(createForm.total_pax) : 100,
+      staff_pax: 2
+    });
+    setShowEventForm(true);
+  };
+
   const handleWizardNext = async () => {
     if (isSaving) return;
 
@@ -3703,8 +3779,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         }
       }
 
-      if (!validateIndianMobile(createForm.mobile)) {
-        showToastMsg("Please enter a valid Indian mobile number starting with 6, 7, 8, or 9 (10 digits).", "error");
+      const mobileVal = (createForm.mobile || '').trim();
+      if (!/^\d{10}$/.test(mobileVal)) {
+        showToastMsg("Please enter a valid 10-digit mobile number.", "error");
         return;
       }
       if (createForm.email && createForm.email.trim() !== '') {
@@ -3820,6 +3897,22 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
         const finalCustomEventName = createForm.event_type === 'Other' ? createForm.custom_event_name : undefined;
         const finalCustomEventType = createForm.event_type === 'Other' ? createForm.custom_event_name : undefined;
 
+        let finalEvents = [...createEvents];
+        if (finalEvents.length === 0) {
+          finalEvents = [{
+            id: `EV-${Math.floor(1000 + Math.random() * 9000)}`,
+            event_name: finalEventType === 'Other' ? (createForm.custom_event_name || 'Main Event') : finalEventType,
+            event_date: createForm.event_date || new Date().toISOString().split('T')[0],
+            event_start_date: createForm.event_date || new Date().toISOString().split('T')[0],
+            event_end_date: createForm.event_date || new Date().toISOString().split('T')[0],
+            event_location: createForm.event_location || 'TBD',
+            event_shoot_type: createForm.desired_event_shoot_type || 'Photography',
+            guest_pax: createForm.total_pax !== '' ? Number(createForm.total_pax) : 100,
+            staff_pax: 2
+          }];
+          setCreateEvents(finalEvents);
+        }
+
         await updateLead(createdLeadId!, {
           event_type: finalEventType,
           custom_event_name: finalCustomEventName,
@@ -3840,7 +3933,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
           total_pax: createForm.total_pax !== '' && createForm.total_pax !== undefined ? Number(createForm.total_pax) : 0,
           reference_source: createForm.reference_source || '',
           remarks: getRemarksPayload(createForm.remarks, internalNotes, followUpDate, createForm.whatsapp_number, createForm.address, createForm.city, createForm.client_residence_address),
-          Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || ''
+          Select_Package_Option: createForm.Select_Package_Option || selectedPkgIds[0] || '',
+          events: finalEvents
         });
         setWizardStep(3);
         showToastMsg("Event details saved successfully.", "success");
@@ -5420,7 +5514,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                       )}
                     </div>
 
-                    {/* Row 2: Package Price | Status */}
+                    {/* Row 2: Package Price | Team Members Included */}
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Package Price (INR)</label>
                       <input
@@ -5433,55 +5527,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 font-semibold mb-1">Status</label>
-                      <select
-                        value={pkgForm.status}
-                        onChange={(e) => setPkgForm({ ...pkgForm, status: e.target.value as 'Active' | 'Inactive' })}
-                        className="w-full bg-slate-950 border border-slate-855 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-
-                    {/* Row 3: Package Duration */}
-
-                    <div>
-                      <label className="block text-slate-400 font-semibold mb-1">Package Duration</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 1 Day, 2 Days, 8 Hours"
-                        value={pkgForm.duration}
-                        onChange={(e) => setPkgForm({ ...pkgForm, duration: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-855 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans"
-                      />
-                    </div>
-
-                    {/* Row 4: Package Includes | Deliverables */}
-                    <div>
-                      <label className="block text-slate-400 font-semibold mb-1">Package Includes</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Photobook, Drone coverage, Raw shots drive copy"
-                        value={pkgForm.package_includes}
-                        onChange={(e) => setPkgForm({ ...pkgForm, package_includes: e.target.value })}
-                        className="w-full bg-slate-955 border border-slate-800 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-400 font-semibold mb-1">Deliverables</label>
-                      <textarea
-                        placeholder="e.g. 2 Candid Photographers, 1 Cinematic Videographer, Standard Album..."
-                        value={pkgForm.deliverables}
-                        onChange={(e) => setPkgForm({ ...pkgForm, deliverables: e.target.value })}
-                        rows={1}
-                        className="w-full bg-slate-955 border border-slate-800 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans resize-y"
-                      />
-                    </div>
-
-                    {/* Extra Fields: Team Members Included | Seasonal Offer */}
-                    <div>
                       <label className="block text-slate-400 font-semibold mb-1">Team Members Included</label>
                       <input
                         type="text"
@@ -5492,25 +5537,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-slate-400 font-semibold mb-1">Seasonal Offer</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Free 1-min pre-wedding teaser"
-                        value={pkgForm.seasonal_offer}
-                        onChange={(e) => setPkgForm({ ...pkgForm, seasonal_offer: e.target.value })}
-                        className="w-full bg-slate-955 border border-slate-800 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans"
-                      />
-                    </div>
-
-                    {/* Terms & Conditions (Spanning both cols) */}
+                    {/* Deliverables (Spanning both cols) */}
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 font-semibold mb-1">Terms & Conditions</label>
+                      <label className="block text-slate-400 font-semibold mb-1">Deliverables</label>
                       <textarea
-                        placeholder="e.g. 55% advance for booking confirmation. Prices exclude travel outside city limits..."
-                        value={pkgForm.terms_conditions}
-                        onChange={(e) => setPkgForm({ ...pkgForm, terms_conditions: e.target.value })}
-                        rows={2}
+                        placeholder="e.g. 2 Candid Photographers, 1 Cinematic Videographer, Standard Album..."
+                        value={pkgForm.deliverables}
+                        onChange={(e) => setPkgForm({ ...pkgForm, deliverables: e.target.value })}
+                        rows={3}
                         className="w-full bg-slate-955 border border-slate-800 rounded-lg py-1.5 px-3 text-slate-200 focus:outline-none focus:border-emerald-500 font-sans resize-y"
                       />
                     </div>
@@ -5885,10 +5919,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         placeholder="e.g. 9876543210"
                         value={createForm.mobile}
                         onChange={(e) => {
-                          const val = e.target.value;
+                          const val = e.target.value.replace(/[^\d]/g, '').slice(0, 10);
                           setCreateForm({ ...createForm, mobile: val });
-                          const cleanNum = val.replace(/[^\d]/g, '').slice(-10);
-                          if (cleanNum.length === 10) {
+                          if (val.length === 10) {
                             handleCheckExistingCustomer('phone', val);
                           }
                         }}
@@ -6108,6 +6141,237 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                         />
                       </div>
                     </div>
+
+                    {/* NEW EVENT DETAILS MULTIPLE EVENTS SECTION */}
+                    {createForm.event_type && (
+                      <div className="sm:col-span-2 border-t border-slate-800/60 pt-4 mt-2 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
+                            Event Details ({createEvents.length} Event{createEvents.length !== 1 ? 's' : ''})
+                          </h4>
+                          {!showEventForm && (
+                            <button
+                              type="button"
+                              onClick={handleAddNewEventClick}
+                              className="inline-flex items-center gap-1 bg-cyan-600 hover:bg-cyan-500 text-slate-900 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Add Another Event
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Event list of cards */}
+                        {createEvents.length > 0 && (
+                          <div className="grid grid-cols-1 gap-3">
+                            {createEvents.map((ev, idx) => (
+                              <div
+                                key={ev.id || idx}
+                                className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md hover:border-slate-700 transition-all text-left"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-cyan-400">{ev.event_name}</span>
+                                    <span className="bg-slate-800 text-slate-300 text-[10px] font-semibold px-2 py-0.5 rounded font-mono">
+                                      {ev.event_shoot_type}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-slate-404">
+                                    <div>
+                                      <span className="font-semibold text-slate-300">Date:</span> {ev.event_date}
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold text-slate-300">Duration:</span> {ev.event_start_date} to {ev.event_end_date}
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <span className="font-semibold text-slate-300">Location:</span> {ev.event_location || 'TBD'}
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold text-slate-300">Guests:</span> {ev.guest_pax} pax
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold text-slate-300">Staff Crew:</span> {ev.staff_pax} required
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditEvent(ev)}
+                                    className="p-1.5 text-slate-400 hover:text-cyan-400 bg-slate-850 hover:bg-slate-800 rounded-lg transition-all"
+                                    title="Edit Event"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteEvent(ev.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-400 bg-slate-850 hover:bg-slate-800 rounded-lg transition-all"
+                                    title="Delete Event"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Inline form for Adding / Editing Event */}
+                        {showEventForm && (
+                          <div className="bg-slate-900 border border-slate-850 rounded-xl p-4 space-y-4 animate-fade-in text-left">
+                            <h5 className="text-[11px] font-bold text-cyan-405 uppercase tracking-wider font-mono">
+                              {editingEventId ? 'Edit Event Details' : 'Add New Event'}
+                            </h5>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              {/* Event Name */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Event Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. Sangeet, Haldi, Reception"
+                                  value={eventForm.event_name}
+                                  onChange={(e) => setEventForm({ ...eventForm, event_name: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                                />
+                              </div>
+
+                              {/* Shoot Type */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Shoot Type *
+                                </label>
+                                <select
+                                  value={eventForm.event_shoot_type}
+                                  onChange={(e) => setEventForm({ ...eventForm, event_shoot_type: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none cursor-pointer"
+                                >
+                                  <option value="Photography">Photography</option>
+                                  <option value="Videography">Videography</option>
+                                  <option value="Photography + Videography">Photography + Videography Combo</option>
+                                  <option value="Drone Shoot">Drone Shoot</option>
+                                  <option value="Cinematic Shoot">Cinematic Shoot</option>
+                                  <option value="Live Streaming">Live Streaming</option>
+                                  <option value="Album Design">Album Design</option>
+                                  <option value="Custom Package">Custom Package</option>
+                                </select>
+                              </div>
+
+                              {/* Event Date */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Event Date *
+                                </label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={eventForm.event_date}
+                                  onChange={(e) => setEventForm({ ...eventForm, event_date: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none font-mono"
+                                />
+                              </div>
+
+                              {/* Location */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Venue / Location *
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. Grand Hyatt Ballroom"
+                                  value={eventForm.event_location}
+                                  onChange={(e) => setEventForm({ ...eventForm, event_location: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 placeholder-slate-600 focus:outline-none"
+                                />
+                              </div>
+
+                              {/* Start Date */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Start Date *
+                                </label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={eventForm.event_start_date}
+                                  onChange={(e) => setEventForm({ ...eventForm, event_start_date: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none font-mono"
+                                />
+                              </div>
+
+                              {/* End Date */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  End Date *
+                                </label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={eventForm.event_end_date}
+                                  onChange={(e) => setEventForm({ ...eventForm, event_end_date: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none font-mono"
+                                />
+                              </div>
+
+                              {/* Expected Guests */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Guest Pax (Expected Guests) *
+                                </label>
+                                <input
+                                  type="number"
+                                  required
+                                  min="0"
+                                  placeholder="e.g. 150"
+                                  value={eventForm.guest_pax === 0 ? '' : eventForm.guest_pax}
+                                  onChange={(e) => setEventForm({ ...eventForm, guest_pax: Number(e.target.value) || 0 })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 placeholder-slate-650 focus:outline-none font-mono"
+                                />
+                              </div>
+
+                              {/* Crew Required */}
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                  Staff Pax (Crew Required) *
+                                </label>
+                                <input
+                                  type="number"
+                                  required
+                                  min="0"
+                                  placeholder="e.g. 3"
+                                  value={eventForm.staff_pax === 0 ? '' : eventForm.staff_pax}
+                                  onChange={(e) => setEventForm({ ...eventForm, staff_pax: Number(e.target.value) || 0 })}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg py-1.5 px-3 text-xs text-slate-100 placeholder-slate-650 focus:outline-none font-mono"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2.5 pt-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setShowEventForm(false)}
+                                className="bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-semibold px-4 py-1.5 rounded-lg transition-all"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSaveEventForm}
+                                className="bg-cyan-600 hover:bg-cyan-500 text-slate-900 text-xs font-bold px-4 py-1.5 rounded-lg transition-all"
+                              >
+                                {editingEventId ? 'Update Event' : 'Add Event'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -7278,7 +7542,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                             type="text"
                             value={wizardLeadData.mobile || ''}
                             disabled={isLeadLocked}
-                            onChange={(e) => setWizardLeadData({ ...wizardLeadData, mobile: e.target.value })}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^\d]/g, '').slice(0, 10);
+                              setWizardLeadData({ ...wizardLeadData, mobile: val });
+                            }}
                             className="w-full bg-slate-955 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl py-2.5 px-4 text-xs text-white font-mono"
                             required
                           />

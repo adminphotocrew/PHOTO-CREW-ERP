@@ -3,6 +3,7 @@ import { User, Lead, LeadPackage, Order, Operation, RawFootage, Production, Paym
 import { INITIAL_USERS, INITIAL_LEADS, INITIAL_ORDERS, INITIAL_OPERATIONS, INITIAL_RAW_FOOTAGE, INITIAL_PRODUCTION, INITIAL_PAYMENTS, INITIAL_LOGS, INITIAL_EQUIPMENT } from '../data';
 
 import { supabaseClient, updateDiagnosticMetric } from '../supabaseClient';
+import { serializeLeadEvents, deserializeLeadEvents } from '../utils';
 
 interface RoleContextType {
   currentUser: User | null;
@@ -1893,11 +1894,13 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const latestHistoryStatus = sorted[0]?.new_status;
           
           const finalStatus = latestHistoryStatus || ld.current_status || rawStatus;
+          const parsed = deserializeLeadEvents(ld.notes_special_customizations);
           
           return {
             ...ld,
             status: finalStatus as CurrentStage,
-            current_status: finalStatus
+            current_status: finalStatus,
+            events: parsed.events
           };
         });
         setLeads(prev => {
@@ -2371,7 +2374,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       }
                     }
                   }
-                  mappedItem = { ...mappedItem, status: finalStatus as CurrentStage, current_status: finalStatus };
+                  const parsed = deserializeLeadEvents(mappedItem.notes_special_customizations);
+                  mappedItem = { ...mappedItem, status: finalStatus as CurrentStage, current_status: finalStatus, events: parsed.events };
                 }
                 if (table === 'orders') {
                   mappedItem = { ...mappedItem, current_stage: mappedItem.current_stage || mappedItem.order_status };
@@ -2425,7 +2429,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       }
                     }
                   }
-                  mappedItem = { ...mappedItem, status: finalStatus as CurrentStage, current_status: finalStatus };
+                  const parsed = deserializeLeadEvents(mappedItem.notes_special_customizations);
+                  mappedItem = { ...mappedItem, status: finalStatus as CurrentStage, current_status: finalStatus, events: parsed.events };
                 }
                 if (table === 'orders') {
                   mappedItem = { ...mappedItem, current_stage: mappedItem.current_stage || mappedItem.order_status };
@@ -2925,6 +2930,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const leadId = `LD-${Math.floor(9012 + Math.random() * 988)}`;
+    const serializedNotes = serializeLeadEvents(leadDetails.events || [], leadDetails.notes_special_customizations || '');
     const newLead: Lead = {
       ...leadDetails,
       email: leadDetails.email || '',
@@ -2936,7 +2942,11 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_by: currentUserName,
       total_pax: leadDetails.total_pax !== undefined ? Number(leadDetails.total_pax) : 0,
       reference_source: leadDetails.reference_source || '',
+      notes_special_customizations: serializedNotes
     };
+    
+    // Strip events property to prevent DB schema errors
+    delete (newLead as any).events;
     
     console.log('Lead Payload', newLead);
     const res = await pushInsert('leads', newLead);
@@ -5138,6 +5148,14 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const timestamp = new Date().toISOString();
     const finalUpdates = { ...updates };
     
+    if ('events' in finalUpdates) {
+      const notesToUse = finalUpdates.notes_special_customizations !== undefined 
+        ? finalUpdates.notes_special_customizations 
+        : (prevLead?.notes_special_customizations || '');
+      finalUpdates.notes_special_customizations = serializeLeadEvents(finalUpdates.events || [], notesToUse);
+      delete finalUpdates.events;
+    }
+    
     // Ensure total_pax and reference_source are always included in the update payload to satisfy validation
     if (prevLead) {
       if (!('total_pax' in finalUpdates)) {
@@ -5175,6 +5193,8 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...finalUpdates,
             updated_at: timestamp
           };
+          const parsed = deserializeLeadEvents(updated.notes_special_customizations);
+          updated.events = parsed.events;
           return updated;
         }
         return ld;

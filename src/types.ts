@@ -126,6 +126,18 @@ export interface User {
   username?: string;
 }
 
+export interface LeadEvent {
+  id: string;
+  event_name: string;
+  event_date: string;
+  event_start_date: string;
+  event_end_date: string;
+  event_location: string;
+  event_shoot_type: string;
+  guest_pax: number;
+  staff_pax: number;
+}
+
 export interface Lead {
   lead_id: string;
   customer_id?: string;
@@ -148,6 +160,7 @@ export interface Lead {
   sales_person: string;
   status: CurrentStage;
   remarks?: string;
+  events?: LeadEvent[];
   created_by: string;
   updated_by?: string;
   updated_at?: string;
