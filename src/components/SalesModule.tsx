@@ -4418,9 +4418,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
 
     return matchesSearch && matchesSource && matchesStatus && matchesSales && matchesDate && matchesDateRange;
   }).sort((a, b) => {
-    const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.updated_at ? new Date(b.updated_at).getTime() : new Date(b.created_date).getTime());
-    const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.updated_at ? new Date(a.updated_at).getTime() : new Date(a.created_date).getTime());
-    return timeB - timeA;
+    const getTime = (lead: any) => {
+      if (lead.created_at) return new Date(lead.created_at).getTime() || 0;
+      if (lead.updated_at) return new Date(lead.updated_at).getTime() || 0;
+      if (lead.created_date) return new Date(lead.created_date).getTime() || 0;
+      return 0;
+    };
+    return getTime(b) - getTime(a);
   });
 
   return (
@@ -4526,8 +4530,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
       </div>
 
       {/* Main Sandbox Area */}
-      {false && selectedLead && (
-        <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {selectedLead ? (
+        <div className="lg:grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Column A: Lead Details & Meta */}
           <div className="lg:col-span-4 bg-slate-850 rounded-xl border border-slate-800 p-5 space-y-4">
@@ -4678,6 +4682,60 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ activeSubTab: external
                 </fieldset>
               </form>
             ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-950 text-slate-400 font-mono text-[10px] uppercase tracking-wider">
+                  <th className="p-3 border-b border-slate-800">Lead ID</th>
+                  <th className="p-3 border-b border-slate-800">Customer</th>
+                  <th className="p-3 border-b border-slate-800">Mobile</th>
+                  <th className="p-3 border-b border-slate-800">Event</th>
+                  <th className="p-3 border-b border-slate-800">Stage</th>
+                  <th className="p-3 border-b border-slate-800">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-xs">
+                {filteredLeads.length > 0 ? (
+                  filteredLeads.map((lead: any) => {
+                    try {
+                      return (
+                        <tr key={lead.lead_id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                          <td className="p-3 font-mono text-slate-300">{lead.lead_id}</td>
+                          <td className="p-3 font-bold text-slate-100">{lead.customer_name}</td>
+                          <td className="p-3 font-mono text-slate-300">{lead.mobile}</td>
+                          <td className="p-3 text-slate-300">{lead.event_type} - {lead.event_date}</td>
+                          <td className="p-3 text-slate-400">{lead.current_stage || 'Unknown'}</td>
+                          <td className="p-3">
+                            <button
+                              onClick={() => setSelectedLead(lead)}
+                              className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded font-bold transition-all cursor-pointer"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    } catch (err) {
+                      return (
+                        <tr key={lead.lead_id || Math.random()} className="border-b border-slate-800/50 bg-red-900/10">
+                          <td colSpan={6} className="p-3 text-red-400 font-mono">Error rendering lead {lead.lead_id}</td>
+                        </tr>
+                      );
+                    }
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-mono text-[11px]">
+                      No leads found matching the current filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
